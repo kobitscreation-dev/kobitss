@@ -965,12 +965,14 @@
       if (btn) btn.textContent = 'Signing in…';
 
       try {
-        const endpoint = isSignUp ? '/api/v1/auth/register' : '/api/v1/auth/login';
+        const apiBase = window.KOBITS_API_URL || (window.location.hostname.includes('kobits.space') ? 'https://kobitss.onrender.com' : '');
+        const endpoint = apiBase + (isSignUp ? '/api/v1/auth/register' : '/api/v1/auth/login');
         const body = isSignUp ? { email, password, full_name: name, org_name: org } : { email, password };
         
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify(body)
         });
         
