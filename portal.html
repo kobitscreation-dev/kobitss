@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+  
+  
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kobits — AI Engineering Workspace</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    /* ================================================================
+       KOBITS DESIGN SYSTEM — CSS Custom Properties
+       ================================================================ */
+    :root {
+      /* Surfaces */
+      --kb-bg:           #09090B;
+      --kb-surface:      #111113;
+      --kb-elevated:     #18181B;
+      --kb-overlay:      #1C1C1F;
+
+      /* Borders */
+      --kb-border:       rgba(255,255,255,0.07);
+      --kb-border-mid:   rgba(255,255,255,0.10);
+      --kb-border-focus: rgba(91,141,239,0.50);
+
+      /* Text */
+      --kb-text-1:       #F4F4F5;
+      --kb-text-2:       #A1A1AA;
+      --kb-text-3:       #71717A;
+      --kb-text-4:       #3F3F46;
+
+      /* Brand accent */
+      --kb-accent:       #5B8DEF;
+      --kb-accent-dim:   rgba(91,141,239,0.12);
+      --kb-accent-hover: #4A7DE0;
+
+      /* Semantic status colors */
+      --kb-success:      #22C55E;
+      --kb-success-dim:  rgba(34,197,94,0.12);
+      --kb-warning:      #F59E0B;
+      --kb-warning-dim:  rgba(245,158,11,0.12);
+      --kb-error:        #EF4444;
+      --kb-error-dim:    rgba(239,68,68,0.12);
+      --kb-info:         #3B82F6;
+      --kb-info-dim:     rgba(59,130,246,0.12);
+      --kb-purple:       #A78BFA;
+      --kb-purple-dim:   rgba(167,139,250,0.12);
+      --kb-orange:       #F97316;
+      --kb-orange-dim:   rgba(249,115,22,0.12);
+      --kb-teal:         #14B8A6;
+      --kb-teal-dim:     rgba(20,184,166,0.12);
+
+      /* Typography */
+      --kb-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+      --kb-font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+
+      /* Spacing */
+      --kb-radius-sm: 4px;
+      --kb-radius:    6px;
+      --kb-radius-lg: 8px;
+    }
+
+    /* ================================================================
+       RESET + BASE
+       ================================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { height: 100%; }
+
+    body {
+      font-family: var(--kb-font-sans);
+      background: var(--kb-bg);
+      color: var(--kb-text-1);
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      height: 100%;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+
+    /* Focus */
+    :focus-visible { outline: 2px solid var(--kb-accent); outline-offset: 2px; border-radius: var(--kb-radius-sm); }
+
+    /* ================================================================
+       TYPOGRAPHY HELPERS
+       ================================================================ */
+    .kb-display   { font-size: 22px; font-weight: 600; line-height: 1.2; letter-spacing: -0.3px; color: var(--kb-text-1); }
+    .kb-title     { font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--kb-text-1); }
+    .kb-section   { font-size: 11px; font-weight: 500; line-height: 1; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kb-text-3); }
+    .kb-body      { font-size: 13px; font-weight: 400; line-height: 1.5; color: var(--kb-text-1); }
+    .kb-meta      { font-size: 11px; font-weight: 400; line-height: 1.4; color: var(--kb-text-2); }
+    .kb-micro     { font-size: 10px; font-weight: 500; line-height: 1; letter-spacing: 0.04em; color: var(--kb-text-3); }
+    .kb-code      { font-family: var(--kb-font-mono); font-size: 12px; line-height: 1.5; }
+
+    /* ================================================================
+       SIDEBAR NAVIGATION
+       ================================================================ */
+    .kb-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 8px;
+      border-radius: var(--kb-radius);
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--kb-text-3);
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      width: 100%;
+      text-align: left;
+      transition: color 120ms, background 120ms;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      position: relative;
+    }
+    .kb-nav-item:hover { color: var(--kb-text-1); background: rgba(255,255,255,0.04); }
+    .kb-nav-item.active {
+      color: var(--kb-text-1);
+      background: rgba(255,255,255,0.06);
+      font-weight: 500;
+    }
+    .kb-nav-item.active::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 4px; bottom: 4px;
+      width: 2px;
+      background: var(--kb-accent);
+      border-radius: 0 1px 1px 0;
+    }
+    .kb-nav-icon { width: 15px; height: 15px; shrink: 0; opacity: 0.7; }
+    .kb-nav-item.active .kb-nav-icon,
+    .kb-nav-item:hover .kb-nav-icon { opacity: 1; }
+
+    /* ================================================================
+       STATUS BADGES
+       ================================================================ */
+    .kb-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 1px 6px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1.6;
+      white-space: nowrap;
+      letter-spacing: 0.01em;
+    }
+    .kb-badge-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Status variants */
+    .kb-badge-active, .kb-badge-running, .kb-badge-completed, .kb-badge-success {
+      background: var(--kb-success-dim);
+      color: var(--kb-success);
+    }
+    .kb-badge-active .kb-badge-dot,
+    .kb-badge-running .kb-badge-dot,
+    .kb-badge-completed .kb-badge-dot,
+    .kb-badge-success .kb-badge-dot { background: var(--kb-success); animation: kb-pulse 2s infinite; }
+
+    .kb-badge-failed, .kb-badge-error, .kb-badge-blocked, .kb-badge-cancelled {
+      background: var(--kb-error-dim);
+      color: var(--kb-error);
+    }
+    .kb-badge-failed .kb-badge-dot,
+    .kb-badge-error .kb-badge-dot,
+    .kb-badge-blocked .kb-badge-dot,
+    .kb-badge-cancelled .kb-badge-dot { background: var(--kb-error); }
+
+    .kb-badge-awaiting-approval, .kb-badge-review, .kb-badge-waiting, .kb-badge-reviewing {
+      background: var(--kb-warning-dim);
+      color: var(--kb-warning);
+    }
+    .kb-badge-awaiting-approval .kb-badge-dot,
+    .kb-badge-review .kb-badge-dot,
+    .kb-badge-waiting .kb-badge-dot,
+    .kb-badge-reviewing .kb-badge-dot { background: var(--kb-warning); }
+
+    .kb-badge-pending, .kb-badge-planned, .kb-badge-queued, .kb-badge-in-progress, .kb-badge-assigned {
+      background: var(--kb-info-dim);
+      color: var(--kb-info);
+    }
+    .kb-badge-pending .kb-badge-dot,
+    .kb-badge-planned .kb-badge-dot,
+    .kb-badge-queued .kb-badge-dot,
+    .kb-badge-in-progress .kb-badge-dot,
+    .kb-badge-assigned .kb-badge-dot { background: var(--kb-info); }
+
+    .kb-badge-security { background: var(--kb-orange-dim); color: var(--kb-orange); }
+    .kb-badge-security .kb-badge-dot { background: var(--kb-orange); }
+
+    .kb-badge-memory, .kb-badge-learning { background: var(--kb-purple-dim); color: var(--kb-purple); }
+    .kb-badge-memory .kb-badge-dot { background: var(--kb-purple); }
+
+    .kb-badge-neutral, .kb-badge-offline, .kb-badge-idle, .kb-badge-draft {
+      background: rgba(255,255,255,0.05);
+      color: var(--kb-text-3);
+    }
+    .kb-badge-neutral .kb-badge-dot,
+    .kb-badge-offline .kb-badge-dot,
+    .kb-badge-idle .kb-badge-dot,
+    .kb-badge-draft .kb-badge-dot { background: var(--kb-text-3); }
+
+    /* Priority badges (flat, no dot) */
+    .kb-priority { padding: 1px 5px; border-radius: 3px; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+    .kb-priority-critical { background: var(--kb-error-dim); color: var(--kb-error); }
+    .kb-priority-high { background: var(--kb-orange-dim); color: var(--kb-orange); }
+    .kb-priority-medium { background: var(--kb-info-dim); color: var(--kb-info); }
+    .kb-priority-low { background: rgba(255,255,255,0.05); color: var(--kb-text-3); }
+
+    @keyframes kb-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ================================================================
+       CARDS
+       ================================================================ */
+    .kb-card {
+      background: var(--kb-surface);
+      border: 1px solid var(--kb-border);
+      border-radius: var(--kb-radius-lg);
+      padding: 16px;
+    }
+    .kb-card-sm {
+      background: var(--kb-surface);
+      border: 1px solid var(--kb-border);
+      border-radius: var(--kb-radius);
+      padding: 12px;
+    }
+
+    /* ================================================================
+       TABLE / ROW LIST
+       ================================================================ */
+    .kb-list { border: 1px solid var(--kb-border); border-radius: var(--kb-radius-lg); overflow: hidden; }
+    .kb-list-header {
+      display: grid;
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--kb-border);
+      background: var(--kb-surface);
+    }
+    .kb-row {
+      display: grid;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--kb-border);
+      cursor: pointer;
+      transition: background 100ms;
+      align-items: center;
+      min-height: 38px;
+    }
+    .kb-row:last-child { border-bottom: none; }
+    .kb-row:hover { background: rgba(255,255,255,0.025); }
+    .kb-row-active { background: var(--kb-accent-dim) !important; }
+
+    /* ================================================================
+       FORM INPUTS
+       ================================================================ */
+    .kb-input {
+      width: 100%;
+      background: var(--kb-elevated);
+      border: 1px solid var(--kb-border-mid);
+      border-radius: var(--kb-radius);
+      padding: 6px 10px;
+      font-family: var(--kb-font-sans);
+      font-size: 13px;
+      color: var(--kb-text-1);
+      outline: none;
+      transition: border-color 150ms;
+    }
+    .kb-input::placeholder { color: var(--kb-text-4); }
+    .kb-input:focus { border-color: var(--kb-border-focus); }
+
+    .kb-textarea {
+      width: 100%;
+      background: var(--kb-elevated);
+      border: 1px solid var(--kb-border-mid);
+      border-radius: var(--kb-radius);
+      padding: 10px 12px;
+      font-family: var(--kb-font-sans);
+      font-size: 14px;
+      color: var(--kb-text-1);
+      outline: none;
+      resize: vertical;
+      min-height: 120px;
+      transition: border-color 150ms;
+      line-height: 1.6;
+    }
+    .kb-textarea::placeholder { color: var(--kb-text-4); }
+    .kb-textarea:focus { border-color: var(--kb-border-focus); }
+
+    .kb-select {
+      background: var(--kb-elevated);
+      border: 1px solid var(--kb-border-mid);
+      border-radius: var(--kb-radius);
+      padding: 6px 10px;
+      font-family: var(--kb-font-sans);
+      font-size: 13px;
+      color: var(--kb-text-1);
+      outline: none;
+      cursor: pointer;
+    }
+    .kb-select:focus { border-color: var(--kb-border-focus); }
+
+    /* ================================================================
+       BUTTONS
+       ================================================================ */
+    .kb-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 6px 12px; border-radius: var(--kb-radius); font-size: 13px; font-weight: 500;
+      cursor: pointer; border: none; transition: all 120ms; white-space: nowrap;
+      font-family: var(--kb-font-sans); line-height: 1;
+    }
+    .kb-btn-primary {
+      background: var(--kb-accent);
+      color: #fff;
+    }
+    .kb-btn-primary:hover { background: var(--kb-accent-hover); }
+    .kb-btn-secondary {
+      background: var(--kb-elevated);
+      color: var(--kb-text-1);
+      border: 1px solid var(--kb-border-mid);
+    }
+    .kb-btn-secondary:hover { background: var(--kb-overlay); }
+    .kb-btn-ghost {
+      background: transparent;
+      color: var(--kb-text-2);
+      border: 1px solid transparent;
+    }
+    .kb-btn-ghost:hover { background: rgba(255,255,255,0.05); color: var(--kb-text-1); }
+    .kb-btn-danger {
+      background: var(--kb-error-dim);
+      color: var(--kb-error);
+      border: 1px solid rgba(239,68,68,0.2);
+    }
+    .kb-btn-danger:hover { background: rgba(239,68,68,0.2); }
+    .kb-btn-sm { padding: 4px 8px; font-size: 12px; }
+    .kb-btn-icon {
+      padding: 5px; width: 28px; height: 28px;
+      background: transparent; color: var(--kb-text-3);
+      border: none; border-radius: var(--kb-radius-sm);
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+      transition: all 120ms;
+    }
+    .kb-btn-icon:hover { background: rgba(255,255,255,0.06); color: var(--kb-text-1); }
+
+    /* ================================================================
+       PHASE PIPELINE TRACKER
+       ================================================================ */
+    .kb-pipeline { display: flex; align-items: center; gap: 0; overflow-x: auto; padding: 2px 0; }
+    .kb-phase-step {
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px 8px; font-size: 11px; font-weight: 500;
+      color: var(--kb-text-4); white-space: nowrap; position: relative;
+      flex-shrink: 0;
+    }
+    .kb-phase-step.done { color: var(--kb-success); }
+    .kb-phase-step.current { color: var(--kb-accent); font-weight: 600; }
+    .kb-phase-step::after {
+      content: '›';
+      margin-left: 4px;
+      color: var(--kb-text-4);
+      font-size: 14px;
+    }
+    .kb-phase-step:last-child::after { display: none; }
+    .kb-phase-dot {
+      width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
+      background: var(--kb-text-4);
+    }
+    .kb-phase-step.done .kb-phase-dot { background: var(--kb-success); }
+    .kb-phase-step.current .kb-phase-dot { background: var(--kb-accent); animation: kb-pulse 2s infinite; }
+
+    /* ================================================================
+       PROGRESS BAR
+       ================================================================ */
+    .kb-progress { height: 3px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden; }
+    .kb-progress-fill { height: 100%; border-radius: 99px; background: var(--kb-accent); transition: width 600ms ease; }
+    .kb-progress-fill.success { background: var(--kb-success); }
+    .kb-progress-fill.warning { background: var(--kb-warning); }
+    .kb-progress-fill.error { background: var(--kb-error); }
+
+    /* ================================================================
+       SKELETON LOADING
+       ================================================================ */
+    .kb-skeleton {
+      background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+      background-size: 200% 100%;
+      animation: kb-shimmer 1.5s infinite;
+      border-radius: var(--kb-radius-sm);
+    }
+    @keyframes kb-shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ================================================================
+       EMPTY STATE
+       ================================================================ */
+    .kb-empty {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; text-align: center;
+      padding: 48px 24px; gap: 12px;
+      color: var(--kb-text-3);
+    }
+    .kb-empty-icon { opacity: 0.3; margin-bottom: 4px; }
+    .kb-empty h3 { font-size: 14px; font-weight: 500; color: var(--kb-text-2); }
+    .kb-empty p { font-size: 12px; color: var(--kb-text-3); max-width: 280px; line-height: 1.5; }
+
+    /* ================================================================
+       TABS
+       ================================================================ */
+    .kb-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--kb-border); }
+    .kb-tab {
+      padding: 8px 14px; font-size: 13px; font-weight: 400;
+      color: var(--kb-text-3); cursor: pointer;
+      border: none; background: transparent;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      transition: color 120ms, border-color 120ms;
+      font-family: var(--kb-font-sans);
+      white-space: nowrap;
+    }
+    .kb-tab:hover { color: var(--kb-text-1); }
+    .kb-tab.active { color: var(--kb-text-1); border-bottom-color: var(--kb-text-1); font-weight: 500; }
+
+    /* ================================================================
+       DIVIDER
+       ================================================================ */
+    .kb-divider { height: 1px; background: var(--kb-border); margin: 0; }
+
+    /* ================================================================
+       MODAL / OVERLAY
+       ================================================================ */
+    .kb-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      display: flex; align-items: flex-start; justify-content: center;
+      padding-top: 80px; z-index: 100;
+      backdrop-filter: blur(2px);
+    }
+    .kb-modal {
+      background: var(--kb-surface);
+      border: 1px solid var(--kb-border-mid);
+      border-radius: var(--kb-radius-lg);
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+      width: 100%;
+      max-width: 540px;
+      max-height: calc(100vh - 120px);
+      overflow-y: auto;
+      animation: kb-modal-in 150ms ease-out;
+    }
+    .kb-modal-lg { max-width: 680px; }
+    @keyframes kb-modal-in {
+      from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* ================================================================
+       COMMAND MENU
+       ================================================================ */
+    #kb-command-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: none; align-items: flex-start; justify-content: center;
+      padding-top: 80px; z-index: 200;
+      backdrop-filter: blur(4px);
+    }
+    #kb-command-overlay.open { display: flex; }
+    .kb-command-menu {
+      width: 100%; max-width: 560px;
+      background: var(--kb-overlay);
+      border: 1px solid var(--kb-border-mid);
+      border-radius: var(--kb-radius-lg);
+      box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+      overflow: hidden;
+      animation: kb-modal-in 120ms ease-out;
+    }
+    .kb-command-input-wrap {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--kb-border);
+    }
+    .kb-command-input {
+      flex: 1; background: transparent; border: none; outline: none;
+      font-family: var(--kb-font-sans); font-size: 14px;
+      color: var(--kb-text-1);
+    }
+    .kb-command-input::placeholder { color: var(--kb-text-4); }
+    .kb-command-results { max-height: 360px; overflow-y: auto; padding: 4px; }
+    .kb-command-section-label {
+      padding: 8px 10px 4px;
+      font-size: 10px; font-weight: 500; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--kb-text-4);
+    }
+    .kb-command-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 10px; border-radius: var(--kb-radius-sm);
+      cursor: pointer; transition: background 80ms;
+      font-size: 13px; color: var(--kb-text-2);
+    }
+    .kb-command-item:hover, .kb-command-item.selected {
+      background: rgba(255,255,255,0.06); color: var(--kb-text-1);
+    }
+    .kb-command-item-icon { width: 15px; height: 15px; opacity: 0.6; flex-shrink: 0; }
+    .kb-command-shortcut {
+      margin-left: auto; font-family: var(--kb-font-mono);
+      font-size: 10px; color: var(--kb-text-4);
+      background: rgba(255,255,255,0.05); padding: 2px 5px; border-radius: 3px;
+    }
+
+    /* ================================================================
+       TOAST NOTIFICATIONS
+       ================================================================ */
+    #kb-toast-container {
+      position: fixed; bottom: 20px; right: 20px;
+      display: flex; flex-direction: column; gap: 8px;
+      z-index: 300;
+    }
+    .kb-toast {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--kb-overlay); border: 1px solid var(--kb-border-mid);
+      border-radius: var(--kb-radius); padding: 10px 14px;
+      font-size: 13px; color: var(--kb-text-1);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      animation: kb-toast-in 200ms ease-out;
+      min-width: 260px; max-width: 360px;
+    }
+    .kb-toast-success { border-left: 3px solid var(--kb-success); }
+    .kb-toast-error { border-left: 3px solid var(--kb-error); }
+    .kb-toast-warning { border-left: 3px solid var(--kb-warning); }
+    .kb-toast-info { border-left: 3px solid var(--kb-accent); }
+    @keyframes kb-toast-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ================================================================
+       ANIMATIONS
+       ================================================================ */
+    .kb-fade-in { animation: kb-fade 160ms ease-out; }
+    @keyframes kb-fade {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .kb-slide-in { animation: kb-slide 200ms ease-out; }
+    @keyframes kb-slide {
+      from { opacity: 0; transform: translateX(16px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* ================================================================
+       RESPONSIVE
+       ================================================================ */
+    @media (max-width: 768px) {
+      #kb-sidebar {
+        position: fixed; left: 0; top: 0; bottom: 0; z-index: 50;
+        transform: translateX(-100%);
+        transition: transform 200ms ease;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+      }
+      #kb-sidebar.open { transform: translateX(0); }
+      #kb-mobile-backdrop { display: none; }
+      #kb-sidebar.open + #kb-mobile-backdrop {
+        display: block; position: fixed; inset: 0; z-index: 49;
+        background: rgba(0,0,0,0.5);
+      }
+      .kb-sidebar-toggle { display: flex !important; }
+    }
+
+    /* ================================================================
+       DETAIL PANEL (slide-in from right)
+       ================================================================ */
+    .kb-detail-panel {
+      position: fixed; right: 0; top: 0; bottom: 0;
+      width: 440px; max-width: 90vw;
+      background: var(--kb-surface);
+      border-left: 1px solid var(--kb-border);
+      z-index: 60; overflow-y: auto;
+      animation: kb-slide 200ms ease-out;
+      box-shadow: -8px 0 40px rgba(0,0,0,0.3);
+    }
+    .kb-detail-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid var(--kb-border);
+      position: sticky; top: 0; background: var(--kb-surface); z-index: 1;
+    }
+
+    /* ================================================================
+       MISSION WORKSPACE LAYOUT
+       ================================================================ */
+    .kb-mission-header {
+      padding: 20px 24px 0;
+      border-bottom: 1px solid var(--kb-border);
+    }
+    .kb-mission-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .kb-mission-title { font-size: 20px; font-weight: 600; letter-spacing: -0.2px; margin-bottom: 10px; }
+
+    /* ================================================================
+       ACTIVITY TIMELINE
+       ================================================================ */
+    .kb-timeline { display: flex; flex-direction: column; }
+    .kb-timeline-item {
+      display: flex; gap: 12px; padding: 8px 0;
+      position: relative;
+    }
+    .kb-timeline-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--kb-text-4); flex-shrink: 0; margin-top: 4px;
+      position: relative; z-index: 1;
+    }
+    .kb-timeline-item:not(:last-child)::after {
+      content: '';
+      position: absolute; left: 3px; top: 20px; bottom: -8px;
+      width: 1px; background: var(--kb-border);
+    }
+
+    /* ================================================================
+       DIFF / CODE VIEWER
+       ================================================================ */
+    .kb-diff-added { background: rgba(34,197,94,0.08); color: var(--kb-success); }
+    .kb-diff-removed { background: rgba(239,68,68,0.08); color: var(--kb-error); }
+
+    /* ================================================================
+       REDUCED MOTION
+       ================================================================ */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       LOADING SCREEN
+       ============================================================ -->
+  <div id="loading-screen" class="hidden min-h-screen items-center justify-center">
+    <div style="text-align:center">
+      <div style="width:28px;height:28px;border:2px solid rgba(91,141,239,0.2);border-top-color:#5B8DEF;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px"></div>
+      <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+      <div class="kb-micro" style="letter-spacing:0.1em">KOBITS</div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       AUTH SCREEN
+       ============================================================ -->
+  <div id="auth-screen" class="flex min-h-screen items-center justify-center p-4"
+       style="background:var(--kb-bg)">
+    <div style="width:100%;max-width:360px">
+
+      <!-- Logo -->
+      <div style="text-align:center;margin-bottom:32px">
+        <div style="display:inline-flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="width:6px;height:24px;background:var(--kb-accent);border-radius:2px"></div>
+          <span style="font-family:var(--kb-font-mono);font-size:15px;font-weight:700;letter-spacing:0.08em">KOBITS</span>
+        </div>
+        <p class="kb-meta">AI engineering for your software</p>
+      </div>
+
+      <!-- Error state -->
+      <div id="auth-error" class="hidden" style="
+        margin-bottom:14px;padding:10px 12px;
+        background:var(--kb-error-dim);border:1px solid rgba(239,68,68,0.25);
+        border-radius:var(--kb-radius);">
+        <p id="auth-error-text" class="kb-meta" style="color:var(--kb-error)"></p>
+      </div>
+
+      <!-- Auth card -->
+      <div style="
+        background:var(--kb-surface);border:1px solid var(--kb-border-mid);
+        border-radius:var(--kb-radius-lg);padding:24px;">
+
+        <h2 id="auth-title" class="kb-body" style="font-weight:600;margin-bottom:2px">Sign in to your workspace</h2>
+        <p id="auth-subtitle" class="kb-meta" style="margin-bottom:20px">Continue with your preferred method</p>
+
+        <!-- OAuth buttons -->
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
+          <button onclick="window.location.href='/api/v1/auth/google/login'"
+            style="display:flex;align-items:center;justify-content:center;gap:10px;
+              padding:9px 16px;border-radius:var(--kb-radius);
+              background:#fff;color:#111;font-size:13px;font-weight:500;
+              border:none;cursor:pointer;transition:background 120ms;
+              font-family:var(--kb-font-sans);width:100%"
+            onmouseover="this.style.background='#f4f4f5'"
+            onmouseout="this.style.background='#fff'">
+            <svg width="16" height="16" viewBox="0 0 24 24">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Continue with Google
+          </button>
+
+          <button onclick="window.location.href='/api/v1/auth/github/login'"
+            style="display:flex;align-items:center;justify-content:center;gap:10px;
+              padding:9px 16px;border-radius:var(--kb-radius);
+              background:var(--kb-elevated);color:var(--kb-text-1);font-size:13px;font-weight:500;
+              border:1px solid var(--kb-border-mid);cursor:pointer;transition:background 120ms;
+              font-family:var(--kb-font-sans);width:100%"
+            onmouseover="this.style.background='var(--kb-overlay)'"
+            onmouseout="this.style.background='var(--kb-elevated)'">
+            <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+              <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/>
+            </svg>
+            Continue with GitHub
+          </button>
+        </div>
+
+        <!-- Divider -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+          <div style="flex:1;height:1px;background:var(--kb-border)"></div>
+          <span class="kb-micro" style="letter-spacing:0.08em">or</span>
+          <div style="flex:1;height:1px;background:var(--kb-border)"></div>
+        </div>
+
+        <!-- Email form -->
+        <form onsubmit="event.preventDefault(); window.kbAuthSubmit && window.kbAuthSubmit();">
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+            <div id="field-name" class="hidden">
+              <input id="input-name" type="text" placeholder="Full name" class="kb-input" autocomplete="name">
+            </div>
+            <div id="field-org" class="hidden">
+              <input id="input-org" type="text" placeholder="Workspace name" class="kb-input">
+            </div>
+            <input id="input-email" type="email" placeholder="Email address" class="kb-input" required autocomplete="email">
+            <input id="input-password" type="password" placeholder="Password" class="kb-input" required autocomplete="current-password">
+          </div>
+          <button id="btn-auth" type="submit" class="kb-btn kb-btn-primary" style="width:100%;justify-content:center;padding:9px 16px;font-size:13px">
+            Sign In
+          </button>
+        </form>
+
+        <div style="margin-top:14px;text-align:center">
+          <span id="auth-toggle-text" class="kb-meta">Don't have an account?</span>
+          <button id="auth-toggle-btn" onclick="window.kbAuthToggle && window.kbAuthToggle()"
+            class="kb-meta" style="color:var(--kb-accent);background:none;border:none;cursor:pointer;margin-left:4px;padding:0">
+            Sign up
+          </button>
+        </div>
+      </div>
+
+      <!-- Preview link -->
+      <div style="margin-top:20px;text-align:center">
+        <button onclick="window.location.href='/web/index.html#overview'"
+          class="kb-meta" style="color:var(--kb-text-3);background:none;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:4px">
+          Explore public preview
+          <i data-lucide="arrow-right" style="width:12px;height:12px"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       APPLICATION SHELL
+       ============================================================ -->
+  <div id="app-screen" class="hidden h-screen w-full flex bg-[#09090b] text-zinc-300 font-sans antialiased overflow-hidden">
+    <!-- Preview Mode Banner -->
+    <div id="preview-banner" class="hidden absolute top-0 left-0 w-full bg-blue-500 text-white text-xs text-center py-1 z-50">Preview Mode</div>
+
+    <!-- Mobile Backdrop -->
+    <div id="kb-mobile-backdrop" class="fixed inset-0 bg-black/50 z-30 hidden md:hidden"></div>
+
+    <!-- Sidebar -->
+    <aside id="kb-sidebar" class="w-64 flex-shrink-0 flex flex-col bg-[#09090b] border-r border-zinc-800/50 h-full relative z-40 transition-transform duration-300 -translate-x-full md:translate-x-0">
+        
+        <!-- Sidebar Header (User Profile & Actions) -->
+        <div class="h-14 flex items-center justify-between px-4 shrink-0">
+            <div class="flex items-center gap-2 text-zinc-100 font-medium tracking-tight">
+                <div class="w-5 h-5 bg-white rounded-sm"></div>
+                KOBITS
+            </div>
+            <button class="md:hidden text-zinc-400 hover:text-zinc-200" id="kb-sidebar-close">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <!-- Primary Action -->
+        <div class="px-4 py-3 shrink-0">
+            <button onclick="window.location.hash='#overview'" class="w-full flex items-center justify-center gap-2 bg-white text-black hover:bg-zinc-200 transition-colors rounded-lg py-2 text-sm font-medium">
+                <i data-lucide="plus" class="w-4 h-4"></i> New Mission
+            </button>
+        </div>
+
+        <!-- Sidebar Navigation -->
+        <div class="flex-1 overflow-y-auto px-3 py-2 space-y-6">
+            
+            <!-- Main Nav -->
+            <div class="space-y-0.5">
+                <a href="#overview" class="flex items-center px-2 py-1.5 rounded-md text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30 transition-colors group">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 mr-2"></i> Overview
+                </a>
+                
+                <div class="flex items-center justify-between group">
+                    <a href="#projects" class="flex-1 flex items-center px-2 py-1.5 rounded-md text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30 transition-colors">
+                        <i data-lucide="folder-git-2" class="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 mr-2"></i> Projects
+                    </a>
+                    <button onclick="window.kbNewProjectModal()" class="mr-2 text-zinc-500 hover:text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity" title="New Project">
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+                <div id="sidebar-projects" class="pl-6 space-y-0.5 mb-2"></div>
+
+                <a href="#missions" class="flex items-center px-2 py-1.5 rounded-md text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30 transition-colors group">
+                    <i data-lucide="target" class="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 mr-2"></i> Missions
+                </a>
+                <a href="#tasks" class="flex items-center px-2 py-1.5 rounded-md text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30 transition-colors group">
+                    <i data-lucide="check-square" class="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 mr-2"></i> Tasks
+                </a>
+            </div>
+
+            <!-- Engineering -->
+            <div>
+                <div class="px-2 mb-2 text-[10px] font-mono text-zinc-600 uppercase tracking-wider">Engineering</div>
+                <div class="space-y-0.5">
+                    <a href="#agents" class="flex items-center px-2 py-1.5 rounded-md text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30 transition-colors group">
+                        <i data-lucide="bot" class="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 mr-2"></i> Agents
+                    </a>
+                    <a href="#security" class="flex items-center px-2 py-1.5 rounded-md text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30 transition-colors group">
+                        <i data-lucide="shield-alert" class="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 mr-2"></i> Security
+                    </a>
+                    <a href="#knowledge" class="flex items-center px-2 py-1.5 rounded-md text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30 transition-colors group">
+                        <i data-lucide="brain" class="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 mr-2"></i> Memory
+                    </a>
+                </div>
+            </div>
+
+            <!-- System -->
+            <div>
+                <div class="px-2 mb-2 text-[10px] font-mono text-zinc-600 uppercase tracking-wider">System</div>
+                <div class="space-y-0.5">
+                    <a href="#activity" class="flex items-center px-2 py-1.5 rounded-md text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30 transition-colors group">
+                        <i data-lucide="activity" class="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 mr-2"></i> Activity
+                    </a>
+                    <a href="#settings" class="flex items-center px-2 py-1.5 rounded-md text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30 transition-colors group">
+                        <i data-lucide="settings" class="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 mr-2"></i> Settings
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sidebar Footer -->
+        <div class="p-3 border-t border-zinc-800/50 shrink-0">
+            <div class="flex items-center justify-between p-2 rounded-md hover:bg-zinc-800/30 cursor-pointer transition-colors group">
+                <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 rounded bg-zinc-800 text-zinc-300 flex items-center justify-center text-[10px] font-bold" id="user-avatar">AK</div>
+                    <div class="text-xs font-medium text-zinc-300" id="user-display-name">Arvind Kumar</div>
+                </div>
+                <i data-lucide="chevron-up" class="w-3.5 h-3.5 text-zinc-600 group-hover:text-zinc-400"></i>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col min-w-0 bg-[#09090b]">
+        <!-- Header -->
+        <header class="h-14 flex items-center justify-between px-6 border-b border-zinc-800/30 shrink-0">
+            <div class="flex items-center gap-3">
+                <button id="kb-sidebar-toggle" class="md:hidden text-zinc-400 hover:text-zinc-200"><i data-lucide="menu" class="w-5 h-5"></i></button>
+                <div class="flex items-center gap-1 cursor-pointer group">
+                    <span class="text-sm font-medium text-zinc-200" id="page-title">New Mission</span>
+                    <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300"></i>
+                </div>
+            </div>
+            <div id="header-actions" class="flex items-center gap-3">
+                <!-- Action buttons injected by router -->
+            </div>
+        </header>
+
+        <!-- Main View Container -->
+        <main id="main-content" class="flex-1 overflow-y-auto relative p-6 md:p-12">
+            <!-- Router injects views here -->
+        </main>
+    </div>
+</div>
+<div id="kb-command-overlay" role="dialog" aria-modal="true" aria-label="Command menu"
+    onclick="if(event.target===this) window.kbCloseCommand && window.kbCloseCommand()">
+    <div class="kb-command-menu" role="combobox">
+      <div class="kb-command-input-wrap">
+        <i data-lucide="search" style="width:15px;height:15px;color:var(--kb-text-3);flex-shrink:0"></i>
+        <input id="kb-command-input" class="kb-command-input"
+          placeholder="Search missions, projects, tasks, or type a command…"
+          autocomplete="off" spellcheck="false"
+          oninput="window.kbCommandSearch && window.kbCommandSearch(this.value)"
+          onkeydown="window.kbCommandKey && window.kbCommandKey(event)">
+        <kbd style="font-family:var(--kb-font-mono);font-size:10px;color:var(--kb-text-4);background:rgba(255,255,255,0.05);padding:2px 5px;border-radius:3px;flex-shrink:0">ESC</kbd>
+      </div>
+      <div id="kb-command-results" class="kb-command-results">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       TOAST CONTAINER
+       ============================================================ -->
+  <div id="kb-toast-container" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- ============================================================
+       SCRIPTS
+       ============================================================ -->
+  <script>
+    let isSignUp = window.location.hash === '#register';
+
+    function updateAuthMode() {
+      const title = document.getElementById('auth-title');
+      const btn = document.getElementById('btn-auth');
+      const toggleText = document.getElementById('auth-toggle-text');
+      const toggleBtn = document.getElementById('auth-toggle-btn');
+      const fieldName = document.getElementById('field-name');
+      const fieldOrg = document.getElementById('field-org');
+
+      if (isSignUp) {
+        if (title) title.textContent = 'Create your workspace';
+        if (btn) btn.textContent = 'Create Account';
+        if (toggleText) toggleText.textContent = 'Already have an account?';
+        if (toggleBtn) toggleBtn.textContent = 'Sign in';
+        if (fieldName) fieldName.classList.remove('hidden');
+        if (fieldOrg) fieldOrg.classList.remove('hidden');
+      } else {
+        if (title) title.textContent = 'Sign in to your workspace';
+        if (btn) btn.textContent = 'Sign In';
+        if (toggleText) toggleText.textContent = "Don't have an account?";
+        if (toggleBtn) toggleBtn.textContent = 'Sign up';
+        if (fieldName) fieldName.classList.add('hidden');
+        if (fieldOrg) fieldOrg.classList.add('hidden');
+      }
+    }
+
+    window.kbAuthToggle = function() {
+      isSignUp = !isSignUp;
+      window.location.hash = isSignUp ? '#register' : '#login';
+      updateAuthMode();
+    };
+
+    window.kbAuthSubmit = async function() {
+      const email = document.getElementById('input-email')?.value;
+      const password = document.getElementById('input-password')?.value;
+      const name = document.getElementById('input-name')?.value;
+      const org = document.getElementById('input-org')?.value;
+      const btn = document.getElementById('btn-auth');
+      const errBox = document.getElementById('auth-error');
+      const errText = document.getElementById('auth-error-text');
+
+      if (errBox) errBox.classList.add('hidden');
+      if (btn) btn.textContent = 'Signing in…';
+
+      try {
+        const endpoint = isSignUp ? '/api/v1/auth/register' : '/api/v1/auth/login';
+        const body = isSignUp ? { email, password, full_name: name, org_name: org } : { email, password };
+        
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        
+        if (res.ok) {
+          window.location.href = '/web/index.html#overview';
+        } else {
+          // If running on static host (e.g. Hostinger Basic without live Python API), allow test entry
+          if (res.status === 404 || res.status === 405) {
+            window.location.href = '/web/index.html#overview';
+            return;
+          }
+          const data = await res.json().catch(() => ({}));
+          if (errBox && errText) {
+            errText.textContent = data.detail || 'Authentication failed. Please check credentials.';
+            errBox.classList.remove('hidden');
+          }
+        }
+      } catch (e) {
+        // Fallback for static hosting / demo mode
+        window.location.href = '/web/index.html#overview';
+      } finally {
+        if (btn) btn.textContent = isSignUp ? 'Create Account' : 'Sign In';
+      }
+    };
+
+    window.addEventListener('DOMContentLoaded', updateAuthMode);
+    window.addEventListener('hashchange', () => {
+      isSignUp = window.location.hash === '#register';
+      updateAuthMode();
+    });
+    updateAuthMode();
+  </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+

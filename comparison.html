@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>vs. Others — Kobits</title>
+  
+  <style>
+    html.lenis, html.lenis body { height: auto; }
+    .lenis.lenis-smooth { scroll-behavior: auto !important; }
+    .lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+    .lenis.lenis-stopped { overflow: hidden; }
+    .lenis.lenis-scrolling iframe { pointer-events: none; }
+  </style>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              bg: '#000000',
+              card: '#0A0A0A',
+              border: '#1A1A1A',
+              primary: '#B4FF00',
+              primaryHover: '#CCFF00',
+              textMuted: '#888888',
+              text: '#FFFFFF'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            headline: ['Space Grotesk', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <style>
+    body { 
+      font-family: 'Inter', sans-serif; 
+      background-color: #000000;
+      color: #FFFFFF;
+      overflow-x: hidden; 
+    }
+    h1, h2, h3, h4, .font-headline {
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    .glow-primary {
+      box-shadow: 0 0 30px rgba(180, 255, 0, 0.15);
+    }
+    .glow-primary:hover {
+      box-shadow: 0 0 40px rgba(180, 255, 0, 0.3);
+    }
+  </style>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="antialiased flex flex-col min-h-screen selection:bg-brand-primary selection:text-black">
+
+<header class="fixed top-0 w-full z-50 border-b border-brand-border bg-black/80 backdrop-blur-md h-14">
+  <div class="w-full max-w-7xl mx-auto px-6 flex items-center justify-between h-full">
+    <a href="/" class="flex items-center gap-2">
+      <div class="w-5 h-5 flex items-center justify-center bg-brand-primary rounded-sm">
+        <span class="text-black font-bold text-sm leading-none font-headline">K</span>
+      </div>
+      <span class="text-sm font-bold tracking-wide text-white font-headline">KOBITS</span>
+    </a>
+    <div class="hidden md:flex items-center gap-1">
+      <nav class="flex items-center gap-1 text-sm font-medium">
+        <a href="/" class="px-3 py-1.5 rounded-md text-brand-textMuted hover:text-white hover:bg-white/5 transition">Overview</a>
+        <a href="/features" class="px-3 py-1.5 rounded-md text-brand-textMuted hover:text-white hover:bg-white/5 transition">Features</a>
+        <a href="/comparison" class="px-3 py-1.5 rounded-md bg-white/5 text-white transition">vs. Others</a>
+        <a href="/#pricing" class="px-3 py-1.5 rounded-md text-brand-textMuted hover:text-white hover:bg-white/5 transition">Pricing</a>
+      </nav>
+      <div class="ml-3 pl-3 border-l border-brand-border flex items-center gap-4">
+        <a href="/#get-started" class="inline-flex items-center justify-center rounded-lg bg-brand-primary text-black font-bold px-4 py-1.5 text-sm hover:bg-brand-primaryHover transition glow-primary gap-1.5">
+          Apply for Early Access <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="flex-1 w-full relative pt-32 pb-24">
+  <div class="max-w-7xl mx-auto px-6 text-center mb-16">
+    <p class="mb-3 text-xs font-mono uppercase tracking-[0.2em] text-brand-primary">// COMPARISON</p>
+    <h1 class="text-4xl sm:text-5xl font-bold tracking-tight font-headline mb-6">How Kobits compares</h1>
+    <p class="text-brand-textMuted max-w-2xl mx-auto text-lg">Compare Kobits against traditional agencies, in-house hires, and standard AI copilots.</p>
+  </div>
+
+  <div class="max-w-5xl mx-auto px-6">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="border-b border-brand-border">
+            <th class="py-4 px-6 font-headline font-bold text-xl">Capability</th>
+            <th class="py-4 px-6 font-headline font-bold text-xl text-brand-primary bg-brand-primary/5 rounded-t-xl">Kobits</th>
+            <th class="py-4 px-6 font-headline font-bold text-xl text-gray-400">Dev Agencies</th>
+            <th class="py-4 px-6 font-headline font-bold text-xl text-gray-400">AI Copilots</th>
+          </tr>
+        </thead>
+        <tbody class="text-sm">
+          <tr class="border-b border-brand-border hover:bg-white/5 transition">
+            <td class="py-4 px-6 text-white font-medium">Time to start</td>
+            <td class="py-4 px-6 text-brand-primary bg-brand-primary/5 font-bold">Minutes</td>
+            <td class="py-4 px-6 text-gray-400">2-4 Weeks</td>
+            <td class="py-4 px-6 text-gray-400">Minutes</td>
+          </tr>
+          <tr class="border-b border-brand-border hover:bg-white/5 transition">
+            <td class="py-4 px-6 text-white font-medium">Autonomous Execution</td>
+            <td class="py-4 px-6 text-brand-primary bg-brand-primary/5 font-bold"><i data-lucide="check" class="w-5 h-5"></i></td>
+            <td class="py-4 px-6 text-gray-400"><i data-lucide="check" class="w-5 h-5"></i></td>
+            <td class="py-4 px-6 text-red-500"><i data-lucide="x" class="w-5 h-5"></i></td>
+          </tr>
+          <tr class="border-b border-brand-border hover:bg-white/5 transition">
+            <td class="py-4 px-6 text-white font-medium">Built-in Code Reviews</td>
+            <td class="py-4 px-6 text-brand-primary bg-brand-primary/5 font-bold"><i data-lucide="check" class="w-5 h-5"></i></td>
+            <td class="py-4 px-6 text-gray-400">Varies</td>
+            <td class="py-4 px-6 text-red-500"><i data-lucide="x" class="w-5 h-5"></i></td>
+          </tr>
+          <tr class="border-b border-brand-border hover:bg-white/5 transition">
+            <td class="py-4 px-6 text-white font-medium">Security Auditing</td>
+            <td class="py-4 px-6 text-brand-primary bg-brand-primary/5 font-bold">Included (Aegis Agent)</td>
+            <td class="py-4 px-6 text-gray-400">Extra Cost</td>
+            <td class="py-4 px-6 text-gray-400">Basic Linting</td>
+          </tr>
+          <tr class="border-b border-brand-border hover:bg-white/5 transition">
+            <td class="py-4 px-6 text-white font-medium">Cost Structure</td>
+            <td class="py-4 px-6 text-brand-primary bg-brand-primary/5 font-bold">Flat Monthly Subscription</td>
+            <td class="py-4 px-6 text-gray-400">Hourly / Per Project</td>
+            <td class="py-4 px-6 text-gray-400">Per User</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<footer class="border-t border-brand-border bg-brand-bg pt-16 pb-8">
+  <div class="max-w-7xl mx-auto px-6 text-center md:text-left">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-12 mb-16">
+      <div class="col-span-2 md:col-span-1">
+        <a href="/" class="flex items-center gap-2 mb-4">
+          <div class="w-5 h-5 flex items-center justify-center bg-brand-primary rounded-sm">
+            <span class="text-black font-bold text-sm leading-none font-headline">K</span>
+          </div>
+          <span class="text-sm font-bold tracking-wide text-white font-headline">KOBITS</span>
+        </a>
+      </div>
+      <div>
+        <h4 class="font-bold text-sm mb-4 text-white font-headline">Product</h4>
+        <ul class="space-y-3 text-brand-textMuted text-sm">
+          <li><a href="/" class="hover:text-white transition">Overview</a></li>
+          <li><a href="/features" class="hover:text-white transition">Features</a></li>
+          <li><a href="/comparison" class="hover:text-white transition">vs. Others</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="border-t border-brand-border pt-6 text-xs text-brand-textMuted">
+      <p>&copy; 2026 Kobits Inc. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+
+<script>lucide.createIcons();</script>
+</body>
+</html>

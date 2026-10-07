@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en" data-theme="noir" data-accent="mono" data-density="default" data-width="standard" data-bg="grid">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kobits — Engineering Dashboard</title>
+  <meta name="description" content="Kobits autonomous multi-agent software engineering dashboard." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/theme.css?v=5" />
+  <!-- Handwritten "K" Monochrome Favicon -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Crect width='36' height='36' rx='8' fill='%23050505'/%3E%3Cpath d='M11.5 6.5C11.1 13.5 10.2 21.5 9.6 29.2M26.2 7.2C20.8 11.4 15.2 16.0 10.6 19.6M13.2 17.4C17.0 21.2 21.6 25.8 27.2 29.0' stroke='%23ffffff' stroke-width='3.8' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="ky-shell">
+    <!-- Top Kyros-style Navigation Bar -->
+    <header class="ky-topbar">
+      <div class="ky-topbar-inner">
+        <a class="ky-brand" href="#overview" aria-label="Kobits Home">
+          <span class="ky-logo-badge" aria-hidden="true">
+            <!-- Expressive Handwritten Calligraphic Brush-Stroke 'K' (Kyros Style) -->
+            <svg class="ky-logo-svg" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+              <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+              <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="ky-brand-word">KOBITS</span>
+        </a>
+
+        <div class="ky-topbar-right">
+          <div class="ky-project-pill" title="Active Workspace Project">
+            <span class="ky-dot-live"></span>
+            <select id="ky-project-select" aria-label="Select Project">
+              <option value="">Loading project…</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Kyros Container -->
+    <main class="ky-main" id="view" tabindex="-1"></main>
+  </div>
+
+  <!-- Modal Host (Deliverable & Sandbox Diff Inspector) -->
+  <div id="ky-modal-host"></div>
+
+  <!-- Toast Notifications -->
+  <div class="ky-toasts" id="toasts" aria-live="polite"></div>
+
+  <script type="module" src="/js/app.js?v=5"></script>
+</body>
+</html>

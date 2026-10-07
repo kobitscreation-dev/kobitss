@@ -1,0 +1,55 @@
+# Append to the end of backend/api/v1/projects.py
+from backend.models.agent import ApprovalRequest, ApprovalStatus
+
+@router.get("/{project_id}/approvals", response_model=List[ApprovalRequestResponse])
+async def get_approval_requests(
+    project_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get all human approval requests for the project."""
+    membership = await get_user_org_membership(db, current_user.id, (await get_user_default_org(db, current_user.id)).organization_id)
+    
+    stmt = select(ApprovalRequest).where(
+        ApprovalRequest.project_id == project_id,
+        ApprovalRequest.organization_id == membership.organization_id
+    ).order_by(ApprovalRequest.created_at.desc())
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
+@router.post("/{project_id}/approvals/{approval_id}", response_model=ApprovalRequestResponse)
+async def resolve_approval_request(
+    project_id: str,
+    approval_id: str,
+    submission: ApprovalSubmit,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Approve or reject a pending agent action."""
+    membership = await get_user_org_membership(db, current_user.id, (await get_user_default_org(db, current_user.id)).organization_id)
+    require_role(membership, OrgRole.ADMIN) # Only admins can approve
+    
+    stmt = select(ApprovalRequest).where(
+        ApprovalRequest.id == approval_id,
+        ApprovalRequest.project_id == project_id,
+        ApprovalRequest.organization_id == membership.organization_id
+    )
+    result = await db.execute(stmt)
+    approval = result.scalars().first()
+    
+    if not approval:
+        raise HTTPException(status_code=404, detail="Approval request not found")
+        
+    if approval.status != ApprovalStatus.PENDING:
+        raise HTTPException(status_code=400, detail="Approval already resolved")
+        
+    approval.status = ApprovalStatus.APPROVED if submission.approved else ApprovalStatus.REJECTED
+    approval.feedback = submission.feedback
+    approval.resolved_by_user_id = current_user.id
+    
+    # In a real app, this would trigger an event to resume the AgentRun
+    
+    await db.commit()
+    await db.refresh(approval)
+    return approval

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Features — Kobits</title>
+  
+  <style>
+    html.lenis, html.lenis body { height: auto; }
+    .lenis.lenis-smooth { scroll-behavior: auto !important; }
+    .lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+    .lenis.lenis-stopped { overflow: hidden; }
+    .lenis.lenis-scrolling iframe { pointer-events: none; }
+  </style>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              bg: '#000000',
+              card: '#0A0A0A',
+              border: '#1A1A1A',
+              primary: '#B4FF00',
+              primaryHover: '#CCFF00',
+              textMuted: '#888888',
+              text: '#FFFFFF'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            headline: ['Space Grotesk', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <style>
+    body { 
+      font-family: 'Inter', sans-serif; 
+      background-color: #000000;
+      color: #FFFFFF;
+      overflow-x: hidden; 
+    }
+    h1, h2, h3, h4, .font-headline {
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    .glow-primary {
+      box-shadow: 0 0 30px rgba(180, 255, 0, 0.15);
+    }
+    .glow-primary:hover {
+      box-shadow: 0 0 40px rgba(180, 255, 0, 0.3);
+    }
+  </style>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="antialiased flex flex-col min-h-screen selection:bg-brand-primary selection:text-black">
+
+<header class="fixed top-0 w-full z-50 border-b border-brand-border bg-black/80 backdrop-blur-md h-14">
+  <div class="w-full max-w-7xl mx-auto px-6 flex items-center justify-between h-full">
+    <a href="/" class="flex items-center gap-2">
+      <div class="w-5 h-5 flex items-center justify-center bg-brand-primary rounded-sm">
+        <span class="text-black font-bold text-sm leading-none font-headline">K</span>
+      </div>
+      <span class="text-sm font-bold tracking-wide text-white font-headline">KOBITS</span>
+    </a>
+    <div class="hidden md:flex items-center gap-1">
+      <nav class="flex items-center gap-1 text-sm font-medium">
+        <a href="/" class="px-3 py-1.5 rounded-md text-brand-textMuted hover:text-white hover:bg-white/5 transition">Overview</a>
+        <a href="/features" class="px-3 py-1.5 rounded-md bg-white/5 text-white transition">Features</a>
+        <a href="/comparison" class="px-3 py-1.5 rounded-md text-brand-textMuted hover:text-white hover:bg-white/5 transition">vs. Others</a>
+        <a href="/#pricing" class="px-3 py-1.5 rounded-md text-brand-textMuted hover:text-white hover:bg-white/5 transition">Pricing</a>
+      </nav>
+      <div class="ml-3 pl-3 border-l border-brand-border flex items-center gap-4">
+        <a href="/#get-started" class="inline-flex items-center justify-center rounded-lg bg-brand-primary text-black font-bold px-4 py-1.5 text-sm hover:bg-brand-primaryHover transition glow-primary gap-1.5">
+          Apply for Early Access <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="flex-1 w-full relative pt-32 pb-24">
+  <div class="max-w-7xl mx-auto px-6 text-center mb-16">
+    <p class="mb-3 text-xs font-mono uppercase tracking-[0.2em] text-brand-primary">// SERVICE</p>
+    <h1 class="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight font-headline mb-6">Everything your engineering <span class="text-brand-primary">team needs</span></h1>
+    <p class="text-brand-textMuted max-w-2xl mx-auto text-lg">We handle architecture, backend, frontend, security, and QA — a dedicated team that builds production software on your codebase with governance built in.</p>
+  </div>
+
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="mb-12">
+      <p class="mb-3 text-xs font-mono uppercase tracking-[0.2em] text-brand-primary">// CORE_CAPABILITIES</p>
+      <h2 class="text-3xl font-bold font-headline mb-8">Service capabilities</h2>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-brand-card border border-brand-border rounded-xl p-6 hover:shadow-[0_0_24px_rgba(180,255,0,0.05)] hover:border-brand-primary/20 transition-all">
+          <span class="text-xs font-mono uppercase tracking-widest text-brand-primary mb-3 block">Persistent Memory</span>
+          <h3 class="text-lg font-bold font-headline mb-2">Persistent team memory</h3>
+          <p class="text-sm text-brand-textMuted">Your dedicated team remembers everything it has built — across sessions, sprints, and projects. No cold starts. No repeated mistakes. Knowledge compounds.</p>
+        </div>
+        <div class="bg-brand-card border border-brand-border rounded-xl p-6 hover:shadow-[0_0_24px_rgba(180,255,0,0.05)] hover:border-brand-primary/20 transition-all">
+          <span class="text-xs font-mono uppercase tracking-widest text-brand-primary mb-3 block">Codebase Intelligence</span>
+          <h3 class="text-lg font-bold font-headline mb-2">Deep codebase understanding</h3>
+          <p class="text-sm text-brand-textMuted">We map your entire codebase before writing a single line. Your team understands structure and relationships, not just syntax.</p>
+        </div>
+        <div class="bg-brand-card border border-brand-border rounded-xl p-6 hover:shadow-[0_0_24px_rgba(180,255,0,0.05)] hover:border-brand-primary/20 transition-all">
+          <span class="text-xs font-mono uppercase tracking-widest text-brand-primary mb-3 block">Stack Agnostic</span>
+          <h3 class="text-lg font-bold font-headline mb-2">Built for your stack</h3>
+          <p class="text-sm text-brand-textMuted">Whatever your stack — frontend frameworks, backend services, APIs — we work within your existing architecture. No migration required.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mb-12 pt-12 border-t border-brand-border">
+      <p class="mb-3 text-xs font-mono uppercase tracking-[0.2em] text-brand-primary">// SECURITY</p>
+      <h2 class="text-3xl font-bold font-headline mb-8">Enterprise-grade security built in</h2>
+      <div class="bg-brand-card border border-brand-border rounded-xl p-8 flex flex-col md:flex-row gap-8">
+        <div class="flex-1">
+          <h3 class="text-xl font-bold font-headline mb-4">Every line of code is audited</h3>
+          <p class="text-brand-textMuted mb-4">Our dedicated Security Agent (Aegis) automatically analyzes every pull request against OWASP top 10, CWE, and your own internal security policies before it ever reaches production.</p>
+          <ul class="space-y-3">
+            <li class="flex items-center gap-3 text-sm"><i data-lucide="shield-check" class="text-green-500 w-4 h-4"></i> Continuous Vulnerability Scanning</li>
+            <li class="flex items-center gap-3 text-sm"><i data-lucide="lock" class="text-green-500 w-4 h-4"></i> Automated Auth Pattern Enforcement</li>
+            <li class="flex items-center gap-3 text-sm"><i data-lucide="eye" class="text-green-500 w-4 h-4"></i> Secret Leak Detection</li>
+          </ul>
+        </div>
+        <div class="flex-1 bg-black border border-brand-border rounded-lg p-6 font-mono text-sm">
+          <div class="text-green-500 mb-2">> Running security audit on PR #442...</div>
+          <div class="text-gray-400">> [Aegis] Analyzing authentication middleware...</div>
+          <div class="text-red-500">> [Aegis] ⚠️ WARNING: Hardcoded JWT secret found in auth.ts:L42</div>
+          <div class="text-brand-primary">> [Aegis] Pushing remediation commit: Refactoring to use process.env.JWT_SECRET</div>
+          <div class="text-green-500">> Audit complete. 1 issue resolved. Ready to merge.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="border-t border-brand-border bg-brand-bg pt-16 pb-8">
+  <div class="max-w-7xl mx-auto px-6 text-center md:text-left">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-12 mb-16">
+      <div class="col-span-2 md:col-span-1">
+        <a href="/" class="flex items-center gap-2 mb-4">
+          <div class="w-5 h-5 flex items-center justify-center bg-brand-primary rounded-sm">
+            <span class="text-black font-bold text-sm leading-none font-headline">K</span>
+          </div>
+          <span class="text-sm font-bold tracking-wide text-white font-headline">KOBITS</span>
+        </a>
+      </div>
+      <div>
+        <h4 class="font-bold text-sm mb-4 text-white font-headline">Product</h4>
+        <ul class="space-y-3 text-brand-textMuted text-sm">
+          <li><a href="/" class="hover:text-white transition">Overview</a></li>
+          <li><a href="/features" class="hover:text-white transition">Features</a></li>
+          <li><a href="/comparison" class="hover:text-white transition">vs. Others</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="border-t border-brand-border pt-6 text-xs text-brand-textMuted">
+      <p>&copy; 2026 Kobits Inc. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+
+<script>lucide.createIcons();</script>
+</body>
+</html>

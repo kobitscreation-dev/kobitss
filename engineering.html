@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kobits - AI Engineering Platform</title>
+    
+    <!-- Fonts: Inter and JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        kb: {
+                            bg: '#09090b',
+                            surface: '#121214',
+                            border: '#27272a',
+                            accent: '#3b82f6',
+                        }
+                    },
+                    letterSpacing: {
+                        tighter: '-.04em',
+                        tight: '-.02em',
+                        widest: '.1em',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body {
+            background-color: #09090b;
+            color: #fafafa;
+            font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .fig-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #71717a;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .fig-container {
+            border: 1px solid #27272a;
+            background: linear-gradient(180deg, rgba(24,24,27,0) 0%, rgba(24,24,27,0.4) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .technical-grid {
+            background-image: linear-gradient(to right, #27272a 1px, transparent 1px),
+                              linear-gradient(to bottom, #27272a 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        .hairline-b { border-bottom: 1px solid #27272a; }
+        .hairline-t { border-top: 1px solid #27272a; }
+        .hairline-l { border-left: 1px solid #27272a; }
+        .hairline-r { border-right: 1px solid #27272a; }
+
+        .diagram-node {
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            color: #a1a1aa;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 10;
+        }
+        .diagram-node.active {
+            border-color: rgba(59, 130, 246, 0.4);
+            color: #bfdbfe;
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        /* Subtle reveal animation */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-up {
+            animation: fadeUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+        }
+        
+        @keyframes drawLineH {
+            from { transform: scaleX(0); }
+            to { transform: scaleX(1); }
+        }
+        .animate-draw-h {
+            transform-origin: left;
+            animation: drawLineH 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+    </style>
+</head>
+<body class="selection:bg-blue-500/30">
+
+    <!-- NAVIGATION -->
+    <nav class="fixed top-0 left-0 w-full h-14 bg-kb-bg/80 backdrop-blur-md hairline-b z-50 flex items-center justify-between px-6">
+        <div class="flex items-center">
+            <a href="/index.html" class="font-medium tracking-tight text-white flex items-center gap-2">
+                <div class="w-5 h-5 bg-white rounded-sm"></div>
+                KOBITS
+            </a>
+        </div>
+        <div class="flex items-center gap-6 text-sm">
+            <div class="hidden lg:flex items-center gap-6 text-zinc-400 border-r border-zinc-800 pr-6">
+                <a href="/product.html" class="hover:text-white transition-colors">Product</a>
+                <a href="/how-it-works.html" class="hover:text-white transition-colors">How It Works</a>
+                <a href="/engineering.html" class="text-white font-medium transition-colors">Engineering</a>
+                <a href="/security.html" class="hover:text-white transition-colors">Security</a>
+                <a href="/memory.html" class="hover:text-white transition-colors">Memory</a>
+            </div>
+            <div class="flex items-center gap-4">
+                <a href="/portal.html#login" class="text-zinc-400 hover:text-white transition-colors">Sign in</a>
+                <a href="/portal.html#login" class="bg-white text-black px-4 py-1.5 rounded-full font-medium hover:bg-zinc-200 transition-colors">Start building</a>
+            </div>
+        </div>
+    </nav>
+<!-- SECTION 04: MISSION SYSTEM -->
+    <section id="engineering" class="py-32 hairline-t bg-kb-surface">
+        <div class="max-w-[1400px] mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-4xl md:text-5xl tracking-tighter font-medium mb-6">A mission is the unit of engineering work.</h2>
+            </div>
+            
+            <div class="max-w-5xl mx-auto fig-container rounded-xl bg-kb-bg overflow-hidden shadow-2xl border border-zinc-800">
+                <!-- Header -->
+                <div class="h-14 hairline-b bg-zinc-950 flex items-center justify-between px-6">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="target" class="w-4 h-4 text-zinc-400"></i>
+                        <span class="text-sm font-medium text-white tracking-wide">MISSION / Secure User Profile</span>
+                    </div>
+                    <div class="hidden sm:flex items-center gap-4">
+                        <div class="fig-label text-yellow-500">RISK: HIGH</div>
+                        <div class="diagram-node active">IMPLEMENTATION</div>
+                    </div>
+                </div>
+                <!-- Body -->
+                <div class="p-8 grid md:grid-cols-3 gap-8">
+                    <div class="md:col-span-2 space-y-8">
+                        <div>
+                            <div class="fig-label mb-3">REPOSITORY</div>
+                            <div class="text-sm text-zinc-300 font-mono">acme/backend <span class="text-zinc-600 ml-2">â€¢ main</span></div>
+                        </div>
+                        <div>
+                            <div class="fig-label mb-3">TASKS</div>
+                            <div class="space-y-3">
+                                <div class="flex items-start gap-3 text-sm text-zinc-500">
+                                    <i data-lucide="check-circle" class="w-4 h-4 text-lime-500 mt-0.5"></i>
+                                    <div>
+                                        <div class="text-zinc-300">Update user schema for RBAC</div>
+                                        <div class="text-xs text-zinc-500 font-mono mt-1">Completed by Core</div>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3 text-sm text-white">
+                                    <i data-lucide="circle" class="w-4 h-4 text-blue-500 mt-0.5"></i>
+                                    <div>
+                                        <div class="text-white">Implement JWT rotation strategy</div>
+                                        <div class="text-xs text-blue-400 font-mono mt-1">In progress (Axiom)</div>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3 text-sm text-zinc-600">
+                                    <i data-lucide="circle" class="w-4 h-4 text-zinc-700 mt-0.5"></i>
+                                    <div>
+                                        <div class="text-zinc-500">Add Redis rate limiting</div>
+                                        <div class="text-xs text-zinc-700 font-mono mt-1">Pending</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-8 md:border-l border-zinc-800 md:pl-8">
+                        <div>
+                            <div class="fig-label mb-3">ACTIVE AGENTS</div>
+                            <div class="flex flex-col gap-2">
+                                <div class="diagram-node w-full border-zinc-800 bg-zinc-900"><i data-lucide="layout" class="w-3 h-3"></i> AXIOM</div>
+                                <div class="diagram-node w-full border-zinc-800 bg-zinc-900"><i data-lucide="code" class="w-3 h-3"></i> CORE</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="fig-label mb-3">CHANGES</div>
+                            <div class="text-sm text-zinc-300 font-mono">+124 <span class="text-zinc-600">/</span> -18 <span class="text-zinc-600">lines</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 05: QUALITY -->
+    <section class="py-32 hairline-t">
+        <div class="max-w-[1400px] mx-auto px-6">
+            <h2 class="text-5xl md:text-7xl tracking-tighter leading-[1.05] font-medium text-center mb-32">
+                Engineering output is evidence,<br>
+                <span class="text-zinc-600">not a promise.</span>
+            </h2>
+
+            <div class="max-w-4xl mx-auto flex flex-col items-center relative z-10">
+                <div class="diagram-node mb-4">TASK CONTRACT</div>
+                <div class="w-px h-12 bg-zinc-800 mb-4"></div>
+                <div class="diagram-node mb-4">IMPLEMENTATION</div>
+                <div class="w-px h-12 bg-zinc-800 mb-4"></div>
+                
+                <div class="flex flex-col md:flex-row gap-8 mb-4 w-full md:w-auto">
+                    <div class="fig-container p-6 rounded-xl text-center flex-1">
+                        <div class="text-3xl font-mono text-lime-400 mb-2">48</div>
+                        <div class="fig-label text-zinc-400">TESTS PASSED</div>
+                    </div>
+                    <div class="fig-container p-6 rounded-xl text-center flex-1">
+                        <div class="text-3xl font-mono text-white mb-2">0</div>
+                        <div class="fig-label text-zinc-400">CRITICAL FINDINGS</div>
+                    </div>
+                    <div class="fig-container p-6 rounded-xl text-center flex-1">
+                        <div class="text-3xl font-mono text-lime-400 mb-2 flex justify-center"><i data-lucide="check" class="w-8 h-8"></i></div>
+                        <div class="fig-label text-zinc-400">ARCH APPROVED</div>
+                    </div>
+                </div>
+                
+                <div class="w-px h-12 bg-zinc-800 mb-4"></div>
+                <div class="diagram-node active px-6 py-2">REVALIDATION</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 08: HUMAN CONTROL -->
+    <section class="py-32 hairline-t bg-kb-surface">
+        <div class="max-w-[1400px] mx-auto px-6">
+            <div class="grid lg:grid-cols-2 gap-16 items-center">
+                <div class="order-2 lg:order-1 fig-container rounded-xl p-10 bg-kb-bg">
+                    <div class="fig-label mb-8">ARCHITECTURE REVIEW</div>
+                    
+                    <div class="space-y-6 mb-10">
+                        <div class="flex justify-between items-center pb-4 hairline-b">
+                            <span class="text-sm text-zinc-400">Risk Profile</span>
+                            <span class="text-xs text-yellow-500 font-mono bg-yellow-500/10 px-2 py-1 rounded">HIGH</span>
+                        </div>
+                        <div class="flex justify-between items-center pb-4 hairline-b">
+                            <span class="text-sm text-zinc-400">Test Coverage</span>
+                            <span class="text-xs text-lime-400 font-mono flex items-center gap-1"><i data-lucide="check" class="w-3 h-3"></i> PASS</span>
+                        </div>
+                        <div class="flex justify-between items-center pb-4 hairline-b">
+                            <span class="text-sm text-zinc-400">Security Gate</span>
+                            <span class="text-xs text-lime-400 font-mono flex items-center gap-1"><i data-lucide="check" class="w-3 h-3"></i> PASS</span>
+                        </div>
+                        <div class="flex justify-between items-center pb-4 hairline-b">
+                            <span class="text-sm text-zinc-400">Scope</span>
+                            <span class="text-sm text-zinc-200 font-mono">12 files</span>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <button class="flex-1 bg-white text-black py-3 rounded text-sm font-medium hover:bg-zinc-200 transition-colors">Approve</button>
+                        <button class="flex-1 border border-zinc-700 text-white py-3 rounded text-sm font-medium hover:bg-zinc-800 transition-colors">Request Changes</button>
+                    </div>
+                </div>
+
+                <div class="order-1 lg:order-2 lg:pl-12">
+                    <h2 class="text-4xl md:text-5xl tracking-tighter leading-[1.1] font-medium mb-6">AI does the engineering.<br>You control the decisions.</h2>
+                    <p class="text-lg text-zinc-400 max-w-lg">Kobits executes the complex workflows, but explicitly yields to human judgment for critical path approvals, architectural decisions, and production deployments.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 09: DELIVERY -->
+    <section class="py-32 hairline-t">
+        <div class="max-w-[1400px] mx-auto px-6 text-center">
+            <h2 class="text-4xl md:text-5xl tracking-tighter font-medium mb-32">From working tree to delivery.</h2>
+
+            <div class="relative w-full overflow-x-auto pb-8">
+                <div class="relative min-w-[800px] max-w-5xl mx-auto h-24 flex items-center justify-between px-4">
+                    <div class="absolute left-8 right-8 top-1/2 h-px bg-zinc-800 -translate-y-1/2"></div>
+                    
+                    <div class="relative bg-kb-bg px-3"><div class="diagram-node border-zinc-700 text-zinc-400">SANDBOX</div></div>
+                    <div class="relative bg-kb-bg px-3"><div class="diagram-node border-zinc-700 text-zinc-400">DIFF</div></div>
+                    <div class="relative bg-kb-bg px-3"><div class="diagram-node border-zinc-700 text-zinc-400">COMMIT</div></div>
+                    <div class="relative bg-kb-bg px-3"><div class="diagram-node border-zinc-700 text-zinc-400">PULL REQUEST</div></div>
+                    <div class="relative bg-kb-bg px-3"><div class="diagram-node border-zinc-700 text-zinc-400">CI</div></div>
+                    <div class="relative bg-kb-bg px-3"><div class="diagram-node active px-4">DELIVERY</div></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 12: FINAL CTA -->
+    <section class="py-48 hairline-t relative overflow-hidden bg-zinc-950">
+        <div class="absolute inset-0 technical-grid opacity-10"></div>
+        <div class="max-w-[1400px] mx-auto px-6 text-center relative z-10">
+            <h2 class="text-[4rem] md:text-[6.5rem] tracking-tighter leading-[0.9] font-medium mb-10 text-white">Tell Kobits<br>what to build.</h2>
+            <p class="text-xl text-zinc-400 mb-16 font-medium tracking-wide">Your engineering team is ready.</p>
+            
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-6 max-w-xl mx-auto">
+                <a href="/portal.html#login" class="bg-white text-black px-8 py-4 rounded-full text-sm font-medium hover:bg-zinc-200 transition-colors w-full sm:w-auto flex items-center justify-center gap-2">
+                    Start a Mission <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </a>
+                <a href="/portal.html#preview" class="text-zinc-400 hover:text-white text-sm font-medium transition-colors border border-zinc-800 bg-zinc-900/50 px-8 py-4 rounded-full w-full sm:w-auto">
+                    Explore the Workspace
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="py-12 hairline-t text-center text-zinc-600 text-[10px] font-mono tracking-widest bg-kb-bg">
+        KOBITS AI ENGINEERING
+    </footer>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Daily Grind Café</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ===== NAVIGATION ===== -->
+  <nav class="navbar">
+    <a href="#" class="nav-brand">☕ The Daily Grind</a>
+    <div class="nav-links">
+      <a href="#menu">Menu</a>
+      <a href="#brew-calculator">Brew</a>
+      <a href="#reserve">Reserve</a>
+    </div>
+    <div class="nav-actions">
+      <button id="theme-toggle" class="btn-icon" aria-label="Toggle theme">Dark Roast / Light Roast</button>
+      <button id="cart-toggle" class="btn-icon cart-btn" aria-label="Open cart">
+        🛒 <span id="cart-count" class="cart-count">0</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ===== HERO SECTION ===== -->
+  <section id="hero" class="hero">
+    <div class="hero-content">
+      <h1 class="hero-headline">Wake up &amp; smell the coffee</h1>
+      <p class="hero-subtitle">Artisan brews, freshly baked pastries, and a warm corner for every mood. Come as you are.</p>
+      <div class="hero-cta">
+        <a href="#menu" class="btn btn-primary cta-animated">Explore Menu</a>
+        <a href="#reserve" class="btn btn-secondary cta-animated">Reserve a Table</a>
+      </div>
+    </div>
+    <div class="hero-image" aria-hidden="true">
+      <div class="hero-image-placeholder">☕</div>
+    </div>
+  </section>
+
+  <!-- ===== MENU SECTION ===== -->
+  <section id="menu" class="menu-section">
+    <div class="container">
+      <h2 class="section-title">Our Menu</h2>
+      <p class="section-subtitle">From single-origin espresso to buttery croissants</p>
+
+      <!-- Filter Buttons -->
+      <div class="menu-filters" role="group" aria-label="Menu category filters">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="coffee">Coffee</button>
+        <button class="filter-btn" data-filter="tea">Tea</button>
+        <button class="filter-btn" data-filter="pastry">Pastry</button>
+      </div>
+
+      <!-- Menu Grid -->
+      <div class="menu-grid" id="menu-grid">
+
+        <!-- Coffee Items -->
+        <article class="menu-card" data-category="coffee">
+          <div class="card-image" aria-label="Espresso">☕</div>
+          <div class="card-body">
+            <h3 class="card-name">Espresso</h3>
+            <p class="card-description">Rich, bold, full-bodied shot of pure coffee.</p>
+            <div class="card-footer">
+              <span class="card-price">$3.50</span>
+              <button class="btn btn-add add-to-order" data-name="Espresso" data-price="3.50">Add to Order</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="menu-card" data-category="coffee">
+          <div class="card-image" aria-label="Cappuccino">🍵</div>
+          <div class="card-body">
+            <h3 class="card-name">Cappuccino</h3>
+            <p class="card-description">Velvety steamed milk with a perfect espresso base.</p>
+            <div class="card-footer">
+              <span class="card-price">$4.75</span>
+              <button class="btn btn-add add-to-order" data-name="Cappuccino" data-price="4.75">Add to Order</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="menu-card" data-category="coffee">
+          <div class="card-image" aria-label="Cold Brew">🧊</div>
+          <div class="card-body">
+            <h3 class="card-name">Cold Brew</h3>
+            <p class="card-description">Slow-steeped 18 hours for a smooth, mellow finish.</p>
+            <div class="card-footer">
+              <span class="card-price">$5.25</span>
+              <button class="btn btn-add add-to-order" data-name="Cold Brew" data-price="5.25">Add to Order</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="menu-card" data-category="coffee">
+          <div class="card-image" aria-label="Latte">☕</div>
+          <div class="card-body">
+            <h3 class="card-name">Latte</h3>
+            <p class="card-description">Smooth espresso blended with silky steamed milk.</p>
+            <div class="card-footer">
+              <span class="card-price">$5.00</span>
+              <button class="btn btn-add add-to-order" data-name="Latte" data-price="5.00">Add to Order</button>
+            </div>
+          </div>
+        </article>
+
+        <!-- Tea Items -->
+        <article class="menu-card" data-category="tea">
+          <div class="card-image" aria-label="Matcha Latte">🍵</div>
+          <div class="card-body">
+            <h3 class="card-name">Matcha Latte</h3>
+            <p class="card-description">Ceremonial-grade matcha with oat milk.</p>
+            <div class="card-footer">
+              <span class="card-price">$5.50</span>
+              <button class="btn btn-add add-to-order" data-name="Matcha Latte" data-price="5.50">Add to Order</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="menu-card" data-category="tea">
+          <div class="card-image" aria-label="Chai">🫖</div>
+          <div class="card-body">
+            <h3 class="card-name">Masala Chai</h3>
+            <p class="card-description">Spiced black tea brewed with ginger and cardamom.</p>
+            <div class="card-footer">
+              <span class="card-price">$4.25</span>
+              <button class="btn btn-add add-to-order" data-name="Masala Chai" data-price="4.25">Add to Order</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="menu-card" data-category="tea">
+          <div class="card-image" aria-label="Earl Grey">🫖</div>
+          <div class="card-body">
+            <h3 class="card-name">Earl Grey</h3>
+            <p class="card-description">Classic bergamot-infused black tea served hot.</p>
+            <div class="card-footer">
+              <span class="card-price">$3.75</span>
+              <button class="btn btn-add add-to-order" data-name="Earl Grey" data-price="3.75">Add to Order</button>
+            </div>
+          </div>
+        </article>
+
+        <!-- Pastry Items -->
+        <article class="menu-card" data-category="pastry">
+          <div class="card-image" aria-label="Croissant">🥐</div>
+          <div class="card-body">
+            <h3 class="card-name">Butter Croissant</h3>
+            <p class="card-description">Flaky, golden layers baked fresh each morning.</p>
+            <div class="card-footer">
+              <span class="card-price">$3.25</span>
+              <button class="btn btn-add add-to-order" data-name="Butter Croissant" data-price="3.25">Add to Order</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="menu-card" data-category="pastry">
+          <div class="card-image" aria-label="Muffin">🧁</div>
+          <div class="card-body">
+            <h3 class="card-name">Blueberry Muffin</h3>
+            <p class="card-description">Bursting with fresh blueberries and a sugar crust.</p>
+            <div class="card-footer">
+              <span class="card-price">$2.75</span>
+              <button class="btn btn-add add-to-order" data-name="Blueberry Muffin" data-price="2.75">Add to Order</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="menu-card" data-category="pastry">
+          <div class="card-image" aria-label="Scone">🍞</div>
+          <div class="card-body">
+            <h3 class="card-name">Cranberry Scone</h3>
+            <p class="card-description">Tender scone with tart cranberries and orange zest.</p>
+            <div class="card-footer">
+              <span class="card-price">$3.00</span>
+              <button class="btn btn-add add-to-order" data-name="Cranberry Scone" data-price="3.00">Add to Order</button>
+            </div>
+          </div>
+        </article>
+
+      </div><!-- /menu-grid -->
+    </div>
+  </section>
+
+  <!-- ===== BREW RATIO CALCULATOR ===== -->
+  <section id="brew-calculator" class="brew-section">
+    <div class="container">
+      <h2 class="section-title">Brew Ratio Calculator</h2>
+      <p class="section-subtitle">Find your perfect coffee-to-water ratio</p>
+      <div class="brew-card">
+        <div class="brew-inputs">
+          <div class="input-group">
+            <label for="coffee-grams">Coffee (grams)</label>
+            <input type="number" id="coffee-grams" min="1" max="500" placeholder="20" value="20" />
+          </div>
+          <div class="brew-divider" aria-hidden="true">:</div>
+          <div class="input-group">
+            <label for="water-ml">Water (ml)</label>
+            <input type="number" id="water-ml" min="1" max="5000" placeholder="300" value="300" />
+          </div>
+        </div>
+        <div class="brew-result">
+          <div class="brew-ratio-display">
+            <span class="ratio-label">Ratio</span>
+            <span id="brew-ratio-output" class="ratio-value">1 : 15</span>
+          </div>
+          <div class="brew-strength-display">
+            <span class="strength-label">Strength</span>
+            <span id="brew-strength-output" class="strength-badge balanced">Balanced</span>
+          </div>
+        </div>
+        <p class="brew-hint">Weak &lt;1:12 &nbsp;|&nbsp; Balanced 1:12–1:17 &nbsp;|&nbsp; Strong &gt;1:17</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== TABLE RESERVATION ===== -->
+  <section id="reserve" class="reservation-section">
+    <div class="container">
+      <h2 class="section-title">Reserve a Table</h2>
+      <p class="section-subtitle">Book your spot — we'll have it ready for you</p>
+      <div class="reservation-card">
+        <form id="reservation-form" class="reservation-form" novalidate>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="res-name">Full Name</label>
+              <input type="text" id="res-name" name="name" placeholder="Jane Smith" required />
+            </div>
+            <div class="form-group">
+              <label for="res-email">Email</label>
+              <input type="email" id="res-email" name="email" placeholder="jane@example.com" required />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="res-date">Date</label>
+              <input type="date" id="res-date" name="date" required />
+            </div>
+            <div class="form-group">
+              <label for="res-time">Time</label>
+              <input type="time" id="res-time" name="time" required />
+            </div>
+            <div class="form-group">
+              <label for="res-guests">Guests</label>
+              <input type="number" id="res-guests" name="guests" min="1" max="20" placeholder="2" required />
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">Book My Table</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="footer">
+    <div class="container">
+      <p>© 2024 The Daily Grind Café. Brewed with ❤️.</p>
+      <p class="footer-address">123 Roast Ave, Beantown, MA 02101 &nbsp;|&nbsp; (617) 555-0192</p>
+    </div>
+  </footer>
+
+  <!-- ===== CART DRAWER ===== -->
+  <aside id="cart-drawer" class="cart-drawer" hidden aria-label="Shopping cart">
+    <div class="cart-header">
+      <h2 class="cart-title">Your Order</h2>
+      <button id="cart-close" class="btn-icon" aria-label="Close cart">✕</button>
+    </div>
+    <div id="cart-items" class="cart-items">
+      <p class="cart-empty">Your cart is empty.</p>
+    </div>
+    <div class="cart-summary">
+      <div class="summary-row">
+        <span>Subtotal</span>
+        <span id="cart-subtotal">$0.00</span>
+      </div>
+      <div class="summary-row">
+        <span>Tax (8.5%)</span>
+        <span id="cart-tax">$0.00</span>
+      </div>
+      <div class="summary-row summary-total">
+        <span>Total</span>
+        <span id="cart-total">$0.00</span>
+      </div>
+    </div>
+    <button id="checkout-btn" class="btn btn-primary btn-full">Checkout</button>
+  </aside>
+  <div id="cart-overlay" class="cart-overlay" hidden></div>
+
+  <!-- ===== RESERVATION MODAL ===== -->
+  <div id="reservation-modal" class="modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-box">
+      <button id="modal-close" class="btn-icon modal-close" aria-label="Close confirmation">✕</button>
+      <div class="modal-icon" aria-hidden="true">✅</div>
+      <h2 id="modal-title" class="modal-title">Booking Confirmed!</h2>
+      <div id="modal-details" class="modal-details"></div>
+      <button class="btn btn-primary" id="modal-done">Done</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kobits Café</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header class="site-header">
+    <div class="header-inner">
+      <h1 class="logo">☕ Kobits Café</h1>
+      <button id="cart-toggle-btn" class="cart-btn" aria-label="Open cart drawer">
+        🛒 Cart (<span id="cart-count">0</span>)
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== HERO ===== -->
+  <section class="hero">
+    <h2>Artisan Coffee &amp; Fresh Bakes</h2>
+    <p>Order your favourites and brew like a pro.</p>
+  </section>
+
+  <!-- ===== MENU SECTION ===== -->
+  <main class="menu-section">
+    <h2 class="section-title">Our Menu</h2>
+    <div class="menu-grid" id="menu-grid">
+
+      <!-- Item 1 -->
+      <article class="menu-card" data-id="1" data-name="Espresso" data-price="3.50">
+        <div class="item-emoji">☕</div>
+        <h3 class="item-name">Espresso</h3>
+        <p class="item-desc">Rich, bold single shot.</p>
+        <span class="item-price">$3.50</span>
+        <button class="add-to-order-btn" data-id="1">Add to Order</button>
+      </article>
+
+      <!-- Item 2 -->
+      <article class="menu-card" data-id="2" data-name="Flat White" data-price="4.50">
+        <div class="item-emoji">🥛</div>
+        <h3 class="item-name">Flat White</h3>
+        <p class="item-desc">Smooth espresso with velvety milk.</p>
+        <span class="item-price">$4.50</span>
+        <button class="add-to-order-btn" data-id="2">Add to Order</button>
+      </article>
+
+      <!-- Item 3 -->
+      <article class="menu-card" data-id="3" data-name="Cold Brew" data-price="5.00">
+        <div class="item-emoji">🧊</div>
+        <h3 class="item-name">Cold Brew</h3>
+        <p class="item-desc">12-hour slow-steeped perfection.</p>
+        <span class="item-price">$5.00</span>
+        <button class="add-to-order-btn" data-id="3">Add to Order</button>
+      </article>
+
+      <!-- Item 4 -->
+      <article class="menu-card" data-id="4" data-name="Croissant" data-price="3.00">
+        <div class="item-emoji">🥐</div>
+        <h3 class="item-name">Croissant</h3>
+        <p class="item-desc">Buttery, flaky, freshly baked.</p>
+        <span class="item-price">$3.00</span>
+        <button class="add-to-order-btn" data-id="4">Add to Order</button>
+      </article>
+
+      <!-- Item 5 -->
+      <article class="menu-card" data-id="5" data-name="Blueberry Muffin" data-price="3.50">
+        <div class="item-emoji">🫐</div>
+        <h3 class="item-name">Blueberry Muffin</h3>
+        <p class="item-desc">Bursting with fresh blueberries.</p>
+        <span class="item-price">$3.50</span>
+        <button class="add-to-order-btn" data-id="5">Add to Order</button>
+      </article>
+
+      <!-- Item 6 -->
+      <article class="menu-card" data-id="6" data-name="Pour Over" data-price="5.50">
+        <div class="item-emoji">🫖</div>
+        <h3 class="item-name">Pour Over</h3>
+        <p class="item-desc">Hand-crafted single-origin drip.</p>
+        <span class="item-price">$5.50</span>
+        <button class="add-to-order-btn" data-id="6">Add to Order</button>
+      </article>
+
+    </div>
+  </main>
+
+  <!-- ===== BREW RATIO CALCULATOR ===== -->
+  <section class="brew-calc-section" id="brew-calc-section">
+    <h2 class="section-title">☕ Brew Ratio Calculator</h2>
+    <p class="brew-intro">Choose your method, enter your bean weight and get the perfect recipe.</p>
+
+    <div class="brew-calc-widget" id="brew-calc-widget">
+
+      <div class="brew-method-group">
+        <label for="brew-method">Brewing Method</label>
+        <select id="brew-method" name="brew-method">
+          <option value="pour_over">Pour Over</option>
+          <option value="french_press">French Press</option>
+          <option value="espresso">Espresso</option>
+        </select>
+      </div>
+
+      <div class="brew-input-group">
+        <label for="bean-weight">Bean Weight (g)</label>
+        <input
+          type="number"
+          id="bean-weight"
+          name="bean-weight"
+          min="1"
+          max="500"
+          placeholder="e.g. 20"
+          aria-label="Bean weight in grams"
+        />
+      </div>
+
+      <button id="calc-brew-btn" class="calc-btn">Calculate</button>
+
+      <div class="brew-result" id="brew-result" aria-live="polite" hidden>
+        <h3>Your Brew Recipe</h3>
+        <ul class="brew-result-list">
+          <li><strong>Method:</strong> <span id="result-method"></span></li>
+          <li><strong>Bean Weight:</strong> <span id="result-beans"></span> g</li>
+          <li><strong>Water Amount:</strong> <span id="result-water"></span> ml</li>
+          <li><strong>Brew Time:</strong> <span id="result-time"></span></li>
+          <li><strong>Ratio:</strong> <span id="result-ratio"></span></li>
+        </ul>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===== SLIDE-OUT CART DRAWER ===== -->
+  <div id="cart-overlay" class="cart-overlay" aria-hidden="true"></div>
+
+  <aside id="cart-drawer" class="cart-drawer" aria-label="Shopping cart" role="complementary">
+    <div class="cart-header">
+      <h2>Your Order</h2>
+      <button id="cart-close-btn" class="cart-close-btn" aria-label="Close cart">✕</button>
+    </div>
+
+    <div class="cart-items-container" id="cart-items-container">
+      <p class="cart-empty-msg" id="cart-empty-msg">Your cart is empty.</p>
+      <ul class="cart-items-list" id="cart-items-list"></ul>
+    </div>
+
+    <div class="cart-footer" id="cart-footer">
+      <div class="cart-totals">
+        <div class="cart-subtotal-row">
+          <span>Subtotal</span>
+          <span id="cart-subtotal">$0.00</span>
+        </div>
+        <div class="cart-tax-row">
+          <span>Tax (8%)</span>
+          <span id="cart-tax">$0.00</span>
+        </div>
+        <div class="cart-total-row">
+          <span><strong>Total</strong></span>
+          <span id="cart-total"><strong>$0.00</strong></span>
+        </div>
+      </div>
+      <button id="checkout-btn" class="checkout-btn" disabled>Checkout</button>
+    </div>
+  </aside>
+
+  <!-- ===== ORDER CONFIRMATION POPUP ===== -->
+  <div id="confirmation-overlay" class="confirmation-overlay" aria-hidden="true" hidden>
+    <div class="confirmation-popup" id="confirmation-popup" role="dialog" aria-modal="true" aria-labelledby="confirmation-title">
+      <div class="confirmation-icon">✅</div>
+      <h2 id="confirmation-title">Order Confirmed!</h2>
+      <p class="confirmation-msg" id="confirmation-msg">
+        Thank you for your order. Your artisan coffee is being prepared with love. ☕
+      </p>
+      <div class="confirmation-order-summary" id="confirmation-order-summary"></div>
+      <button id="confirmation-close-btn" class="confirmation-close-btn">Done</button>
+    </div>
+  </div>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="site-footer">
+    <p>© 2024 Kobits Café — Crafted with ❤️ and caffeine.</p>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

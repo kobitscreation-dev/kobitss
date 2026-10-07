@@ -1,0 +1,19 @@
+# Environment & secrets
+.env
+.env.*
+
+# Runtime databases & sandboxes
+*.db
+*.db-shm
+*.db-wal
+sandboxes/
+repos/
+*.zip
+
+# Python caches & build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/

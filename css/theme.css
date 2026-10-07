@@ -1,0 +1,1133 @@
+/* ==========================================================================
+   KOBITS — KYROS MONOCHROME BLACK & WHITE DESIGN SYSTEM
+   Senior UI/UX & Engineering Architecture
+   ========================================================================== */
+
+:root,
+[data-theme="noir"] {
+  --bg: #050505;
+  --bg-elevated: #0b0b0c;
+  --surface: #0f0f11;
+  --surface-hover: #161619;
+  --surface-2: #18181b;
+  --border: #222226;
+  --border-strong: #38383f;
+  --text-1: #ffffff;
+  --text-2: #a1a1aa;
+  --text-3: #71717a;
+  --text-4: #52525b;
+  --primary: #ffffff;
+  --primary-fg: #050505;
+  --accent: #ffffff;
+  --accent-soft: rgba(255, 255, 255, 0.09);
+  --accent-border: rgba(255, 255, 255, 0.28);
+  --done-bg: rgba(255, 255, 255, 0.11);
+  --done-fg: #ffffff;
+  --done-border: rgba(255, 255, 255, 0.32);
+  --active-bg: #ffffff;
+  --active-fg: #050505;
+  --warn-bg: rgba(228, 228, 231, 0.08);
+  --warn-fg: #e4e4e7;
+  --warn-border: rgba(228, 228, 231, 0.28);
+  --err-bg: rgba(248, 113, 113, 0.10);
+  --err-fg: #fca5a5;
+  --err-border: rgba(248, 113, 113, 0.30);
+  --grid-line: rgba(255, 255, 255, 0.032);
+  --shadow: 0 20px 50px rgba(0, 0, 0, 0.75);
+}
+
+[data-theme="carbon"] {
+  --bg: #0d0e11;
+  --bg-elevated: #131519;
+  --surface: #17191e;
+  --surface-hover: #1e2027;
+  --surface-2: #22252d;
+  --border: #2a2d37;
+  --border-strong: #3f4454;
+  --text-1: #f4f4f6;
+  --text-2: #a0a6b5;
+  --text-3: #6e7585;
+  --text-4: #4c5260;
+  --primary: #f4f4f6;
+  --primary-fg: #0d0e11;
+  --accent: #f4f4f6;
+  --accent-soft: rgba(244, 244, 246, 0.09);
+  --accent-border: rgba(244, 244, 246, 0.28);
+  --done-bg: rgba(244, 244, 246, 0.10);
+  --done-fg: #f4f4f6;
+  --done-border: rgba(244, 244, 246, 0.28);
+  --active-bg: #f4f4f6;
+  --active-fg: #0d0e11;
+  --grid-line: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="paper"] {
+  --bg: #ffffff;
+  --bg-elevated: #fafafa;
+  --surface: #f6f6f7;
+  --surface-hover: #ededf0;
+  --surface-2: #e4e4e7;
+  --border: #e2e2e6;
+  --border-strong: #18181b;
+  --text-1: #09090b;
+  --text-2: #52525b;
+  --text-3: #71717a;
+  --text-4: #a1a1aa;
+  --primary: #09090b;
+  --primary-fg: #ffffff;
+  --accent: #09090b;
+  --accent-soft: rgba(9, 9, 11, 0.07);
+  --accent-border: rgba(9, 9, 11, 0.25);
+  --done-bg: rgba(9, 9, 11, 0.08);
+  --done-fg: #09090b;
+  --done-border: rgba(9, 9, 11, 0.25);
+  --active-bg: #09090b;
+  --active-fg: #ffffff;
+  --warn-bg: rgba(24, 24, 27, 0.06);
+  --warn-fg: #18181b;
+  --warn-border: rgba(24, 24, 27, 0.24);
+  --err-bg: rgba(220, 38, 38, 0.08);
+  --err-fg: #b91c1c;
+  --err-border: rgba(220, 38, 38, 0.28);
+  --grid-line: rgba(9, 9, 11, 0.045);
+  --shadow: 0 20px 50px rgba(9, 9, 11, 0.14);
+}
+
+/* Accent overrides */
+[data-accent="volt"] {
+  --accent: #d4ff00;
+  --accent-soft: rgba(212, 255, 0, 0.12);
+  --accent-border: rgba(212, 255, 0, 0.38);
+  --active-bg: #d4ff00;
+  --active-fg: #050505;
+}
+[data-theme="paper"][data-accent="volt"] {
+  --accent: #18181b;
+  --active-bg: #d4ff00;
+  --active-fg: #050505;
+}
+[data-accent="chrome"] {
+  --accent: #d4d4d8;
+  --accent-soft: rgba(212, 212, 216, 0.12);
+  --accent-border: rgba(212, 212, 216, 0.35);
+}
+
+/* Density & Width Tokens */
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', Consolas, monospace;
+  --font-hand: 'Caveat', cursive;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --pad-card: 22px;
+  --gap-grid: 18px;
+  --row-py: 11px;
+  --max-w: 1280px;
+}
+
+[data-density="compact"] {
+  --pad-card: 15px;
+  --gap-grid: 12px;
+  --row-py: 7px;
+}
+[data-density="spacious"] {
+  --pad-card: 28px;
+  --gap-grid: 24px;
+  --row-py: 14px;
+}
+
+[data-width="wide"] { --max-w: 1520px; }
+[data-width="full"] { --max-w: 100%; }
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg);
+  color: var(--text-1);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* Architectural Canvas Backdrops */
+[data-bg="grid"] body {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+[data-bg="dots"] body {
+  background-image: radial-gradient(var(--border-strong) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+a { color: inherit; text-decoration: none; }
+button, select, input, textarea { font: inherit; color: inherit; }
+
+/* ── Top Navigation Bar ────────────────────────────────────────── */
+.ky-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+
+.ky-topbar-inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 12px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Handwritten "K" Brand Mark */
+.ky-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  user-select: none;
+}
+
+.ky-logo-badge {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: transform 0.18s ease;
+}
+.ky-brand:hover .ky-logo-badge {
+  transform: scale(1.06) rotate(-3deg);
+}
+
+.ky-logo-svg {
+  width: 26px;
+  height: 26px;
+  display: block;
+}
+
+.ky-brand-word {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.14em;
+}
+
+.ky-topbar-center {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ky-project-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 12.5px;
+}
+.ky-project-pill select {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-weight: 500;
+  cursor: pointer;
+  padding-right: 4px;
+}
+.ky-project-pill select option {
+  background: var(--surface);
+  color: var(--text-1);
+}
+
+.ky-dot-live {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.ky-time-pills {
+  display: inline-flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 2px;
+  gap: 2px;
+}
+.ky-time-pills button {
+  background: transparent;
+  border: none;
+  padding: 4px 9px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.ky-time-pills button:hover { color: var(--text-1); }
+.ky-time-pills button.active {
+  background: var(--primary);
+  color: var(--primary-fg);
+  font-weight: 600;
+}
+
+.ky-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ky-provider-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+.ky-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.ky-status-dot.ok {
+  background: var(--text-1);
+  box-shadow: 0 0 6px var(--text-1);
+}
+
+/* ── Main Container ────────────────────────────────────────────── */
+.ky-main {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 28px 28px 72px;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────── */
+.ky-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 15px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-1);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.ky-btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+.ky-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.ky-btn-primary {
+  background: var(--active-bg);
+  color: var(--active-fg);
+  border-color: var(--active-bg);
+}
+.ky-btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+  background: var(--active-bg);
+  border-color: var(--active-bg);
+}
+.ky-btn-ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-2);
+}
+.ky-btn-ghost:hover:not(:disabled) {
+  color: var(--text-1);
+  border-color: var(--border-strong);
+}
+.ky-btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.ky-btn-xs {
+  padding: 4px 9px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  border-radius: 5px;
+}
+
+/* ── Kyros Project Header & Master Progress Bar ────────────────── */
+.ky-proj-header {
+  margin-bottom: 8px;
+}
+.ky-proj-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.ky-proj-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 3px;
+}
+.ky-proj-sub {
+  color: var(--text-2);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ky-proj-pct {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.ky-master-bar {
+  width: 100%;
+  height: 5px;
+  background: var(--surface-2);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.ky-master-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── Kyros Horizontal Tabs (Overview | Milestones | Deliverables | Team | Reports) ── */
+.ky-tabs {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 26px;
+  overflow-x: auto;
+}
+.ky-tab {
+  background: transparent;
+  border: none;
+  padding: 10px 2px 12px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-3);
+  cursor: pointer;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: color 0.15s ease;
+  white-space: nowrap;
+}
+.ky-tab:hover { color: var(--text-1); }
+.ky-tab.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+.ky-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+}
+.ky-tab-count {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.ky-tab.active .ky-tab-count {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* ── Quick Mission Composer Strip ──────────────────────────────── */
+.ky-composer {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: var(--gap-grid);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: border-color 0.15s ease;
+}
+.ky-composer:focus-within {
+  border-color: var(--border-strong);
+}
+.ky-composer input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 13.5px;
+  color: var(--text-1);
+}
+.ky-composer input::placeholder { color: var(--text-3); }
+.ky-chip-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.ky-chip-toggle.on {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--text-1);
+}
+
+/* ── 4 Kyros KPI Stat Cards ────────────────────────────────────── */
+.ky-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--gap-grid);
+  margin-bottom: var(--gap-grid);
+}
+.ky-kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--pad-card);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.ky-kpi-card:hover {
+  border-color: var(--border-strong);
+}
+.ky-kpi-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 8px;
+}
+.ky-kpi-val {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+  line-height: 1.15;
+}
+.ky-kpi-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+
+/* ── Cards & Sections ──────────────────────────────────────────── */
+.ky-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--pad-card);
+  margin-bottom: var(--gap-grid);
+}
+.ky-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.ky-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.ky-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 4px 0 0;
+}
+
+.ky-overview-grid {
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  gap: var(--gap-grid);
+  align-items: start;
+}
+
+.ky-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap-grid);
+}
+
+/* ── Status Badges (Monochrome High-Contrast) ──────────────────── */
+.ky-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.ky-badge-done {
+  background: var(--done-bg);
+  color: var(--done-fg);
+  border-color: var(--done-border);
+}
+.ky-badge-active {
+  background: var(--active-bg);
+  color: var(--active-fg);
+  border-color: var(--active-bg);
+}
+.ky-badge-warn {
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+  border-color: var(--warn-border);
+}
+.ky-badge-err {
+  background: var(--err-bg);
+  color: var(--err-fg);
+  border-color: var(--err-border);
+}
+
+/* ── Task Rows inside Current Sprint / Mission ─────────────────── */
+.ky-task-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: var(--row-py) 0;
+  border-top: 1px solid var(--border);
+}
+.ky-task-left {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+.ky-task-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+.ky-task-icon.done {
+  background: var(--primary);
+  color: var(--primary-fg);
+  border-color: var(--primary);
+}
+.ky-task-icon.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.ky-task-icon.failed {
+  border-color: var(--err-fg);
+  color: var(--err-fg);
+}
+.ky-task-title {
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ky-task-agent {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+}
+
+/* ── 11-Phase Pipeline Strip ───────────────────────────────────── */
+.ky-phase-strip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 10px 0 14px;
+}
+.ky-phase-pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  background: var(--bg-elevated);
+  white-space: nowrap;
+}
+.ky-phase-pill.done {
+  color: var(--text-1);
+  border-color: var(--border-strong);
+}
+.ky-phase-pill.current {
+  background: var(--active-bg);
+  color: var(--active-fg);
+  border-color: var(--active-bg);
+  font-weight: 700;
+}
+.ky-phase-pill.failed {
+  border-color: var(--err-border);
+  color: var(--err-fg);
+}
+
+/* ── Kyros Milestones (Project Timeline) ───────────────────────── */
+.ky-timeline-wrap {
+  position: relative;
+  padding-left: 44px;
+}
+.ky-timeline-wrap::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 16px;
+  bottom: 16px;
+  width: 1px;
+  background: var(--border-strong);
+}
+.ky-tl-item {
+  position: relative;
+  margin-bottom: 18px;
+}
+.ky-tl-node {
+  position: absolute;
+  left: -44px;
+  top: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+  z-index: 2;
+}
+.ky-tl-node.done {
+  background: var(--primary);
+  color: var(--primary-fg);
+  border-color: var(--primary);
+}
+.ky-tl-node.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.ky-tl-node.failed {
+  border-color: var(--err-fg);
+  color: var(--err-fg);
+}
+
+.ky-tl-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--pad-card);
+  transition: border-color 0.15s ease;
+}
+.ky-tl-card.active {
+  border-color: var(--accent-border);
+}
+.ky-tl-card:hover {
+  border-color: var(--border-strong);
+}
+.ky-chip-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 12px;
+}
+.ky-task-chip {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ky-task-chip.done {
+  color: var(--text-1);
+  border-color: var(--border-strong);
+}
+.ky-task-chip.failed {
+  color: var(--err-fg);
+  border-color: var(--err-border);
+}
+
+/* ── Kyros Deliverables Grid ───────────────────────────────────── */
+.ky-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.ky-filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ky-filter-pill {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-3);
+  cursor: pointer;
+}
+.ky-filter-pill:hover { color: var(--text-1); }
+.ky-filter-pill.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ky-deliv-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--gap-grid);
+}
+.ky-deliv-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--pad-card);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.ky-deliv-card:hover {
+  border-color: var(--border-strong);
+}
+.ky-deliv-metrics {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.ky-deliv-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+/* ── Team Specialists Grid ─────────────────────────────────────── */
+.ky-team-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--gap-grid);
+}
+.ky-agent-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--pad-card);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ky-agent-card:hover {
+  border-color: var(--border-strong);
+}
+.ky-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: var(--primary-fg);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ky-avatar.muted {
+  background: var(--surface-2);
+  color: var(--text-2);
+  border: 1px solid var(--border);
+}
+
+/* ── Unified Diff Table ────────────────────────────────────────── */
+.ky-diff-wrap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: auto;
+  max-height: 440px;
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.ky-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.ky-diff-table td {
+  padding: 2px 10px;
+  white-space: pre;
+  vertical-align: top;
+}
+.ky-diff-table td.ln {
+  width: 44px;
+  text-align: right;
+  color: var(--text-4);
+  user-select: none;
+  border-right: 1px solid var(--border);
+}
+.ky-diff-table tr.hunk td {
+  background: var(--surface-2);
+  color: var(--text-2);
+  padding: 4px 10px;
+}
+.ky-diff-table tr.add td {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-1);
+}
+.ky-diff-table tr.del td {
+  background: rgba(248, 113, 113, 0.09);
+  color: var(--err-fg);
+}
+
+/* ── Modal & Customize Drawer ──────────────────────────────────── */
+.ky-modal-overlay,
+.ky-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.ky-drawer-backdrop[hidden] { display: none; }
+
+.ky-modal {
+  width: min(980px, 100%);
+  max-height: 88vh;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ky-modal-head {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.ky-modal-body {
+  padding: 22px 24px;
+  overflow-y: auto;
+}
+
+.ky-drawer {
+  margin-left: auto;
+  width: min(380px, 100%);
+  height: 100%;
+  background: var(--surface);
+  border-left: 1px solid var(--border-strong);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+}
+.ky-drawer-head {
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ky-drawer-head h3 { margin: 4px 0 0; font-size: 16px; }
+.ky-drawer-body {
+  padding: 20px 22px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.ky-cust-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+  margin-bottom: 8px;
+}
+.ky-seg-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.ky-seg-grid button {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 6px;
+  font-size: 11.5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.ky-seg-grid button.active {
+  border-color: var(--primary);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+.ky-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+}
+.ky-toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ky-check-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.ky-icon-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  color: var(--text-2);
+}
+.ky-icon-btn:hover { color: var(--text-1); border-color: var(--border-strong); }
+
+/* ── Toasts ────────────────────────────────────────────────────── */
+.ky-toasts {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ky-toast {
+  background: var(--primary);
+  color: var(--primary-fg);
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
+.ky-toast.error {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+/* ── Responsive ────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .ky-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .ky-overview-grid, .ky-two-col, .ky-deliv-grid { grid-template-columns: 1fr; }
+  .ky-team-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .ky-topbar-inner, .ky-main { padding-left: 16px; padding-right: 16px; }
+  .ky-kpi-grid, .ky-team-grid { grid-template-columns: 1fr; }
+}
