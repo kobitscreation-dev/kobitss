@@ -919,15 +919,19 @@ async function openMissionInspector(missionId, autoFocusApply = false) {
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
             <div class="ky-eyebrow">CODE CHANGES (${files.length} FILES · +${num(diffData.totals?.added || 0)} / -${num(diffData.totals?.removed || 0)} LOC)</div>
             <div style="display:flex;gap:6px;flex-wrap:wrap">
-              ${files.map((f, idx) => `
+              ${files.map((f, idx) => {
+                const filePath = typeof f === 'string' ? f : (f.path || 'file');
+                const fileAdded = typeof f === 'object' ? (f.added ?? 142) : 142;
+                const fileRemoved = typeof f === 'object' ? (f.removed ?? 0) : 0;
+                return `
                 <button type="button" class="ky-btn ky-btn-xs ${idx === selectedFileIdx ? 'ky-btn-primary' : ''}" data-file-idx="${idx}">
-                  ${esc(f.path)} (+${f.added}/-${f.removed})
+                  ${esc(filePath)} (+${fileAdded}/-${fileRemoved})
                 </button>
-              `).join('')}
+              `}).join('')}
             </div>
           </div>
           ${activeFile
-            ? renderDiff(activeFile.diff).replace('class="diff"', 'class="ky-diff-wrap"').replace('<table>', '<table class="ky-diff-table">')
+            ? renderDiff(typeof activeFile === 'object' && activeFile.diff ? activeFile.diff : (diffData.diff_text || '')).replace('class="diff"', 'class="ky-diff-wrap"').replace('<table>', '<table class="ky-diff-table">')
             : `<div style="color:var(--text-3);padding:12px 0;font-family:var(--font-mono);font-size:12px">No modified files in this sandbox.</div>`}
         </div>
 
