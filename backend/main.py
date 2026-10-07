@@ -43,12 +43,9 @@ async def lifespan(app: FastAPI):
             raise e
         print(f"Warning: Provider misconfigured: {e}")
 
-    # Database tables should be created via migrations in production.
-    # In development/tests, we still use create_all if needed, but 
-    # it's better to rely on alembic.
-    if settings.KOBITS_DEV_MODE:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+    # Ensure database tables exist (idempotent, safe for SQLite on cloud containers)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
     # Resume ACTIVE missions and clear dangling locks
     from backend.core.database import AsyncSessionLocal
@@ -214,7 +211,16 @@ async def global_exception_handler(request: Request, exc: Exception):
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL, "http://localhost:8081", "http://127.0.0.1:8081"],
+    allow_origins=[
+        settings.FRONTEND_URL,
+        "http://localhost:8081",
+        "http://127.0.0.1:8081",
+        "https://kobits.space",
+        "http://kobits.space",
+        "https://www.kobits.space",
+        "http://www.kobits.space",
+    ],
+    allow_origin_regex=r"https?://(.*\.)?kobits\.space",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -420,8 +420,13 @@ index 0000000..9b62a4f
     opts.body = JSON.stringify(body);
   }
   let res;
+  const backendBase = (typeof window !== 'undefined' && window.KOBITS_API_URL)
+    ? window.KOBITS_API_URL
+    : (typeof window !== 'undefined' && window.location.hostname.includes('kobits.space')
+      ? 'https://kobitss.onrender.com'
+      : '');
   try {
-    res = await fetch(`/api/v1${path}`, opts);
+    res = await fetch(`${backendBase}/api/v1${path}`, opts);
   } catch (e) {
     throw new ApiError(0, 'Cannot reach the Kobits server. Is it running?');
   }
