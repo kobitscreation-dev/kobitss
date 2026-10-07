@@ -139,8 +139,37 @@ async def signup(user_in: UserCreate, response: Response, db: AsyncSession = Dep
 
 
 @router.post("/login", response_model=Token)
-async def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == form_data.username))
+async def login(
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db)
+):
+    content_type = request.headers.get("content-type", "")
+    email = None
+    password = None
+
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            email = body.get("email") or body.get("username")
+            password = body.get("password")
+        except Exception:
+            pass
+    else:
+        try:
+            form = await request.form()
+            email = form.get("username") or form.get("email")
+            password = form.get("password")
+        except Exception:
+            pass
+
+    if not email or not password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Missing email or password"
+        )
+
+    result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if not user or user.hashed_password == "__oauth_no_password__":
@@ -150,7 +179,7 @@ async def login(response: Response, form_data: OAuth2PasswordRequestForm = Depen
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if not verify_password(form_data.password, user.hashed_password):
+    if not verify_password(password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
