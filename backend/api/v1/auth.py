@@ -105,6 +105,7 @@ async def _find_or_create_user_and_org(
 # ════════════════════════════════════════════════════════════
 
 @router.post("/signup", response_model=UserResponse)
+@router.post("/register", response_model=UserResponse)
 async def signup(user_in: UserCreate, response: Response, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == user_in.email))
     if result.scalar_one_or_none():

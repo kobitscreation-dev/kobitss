@@ -5,7 +5,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: Optional[str] = None
-    organization_name: str
+    organization_name: Optional[str] = "Default Workspace"
 
 class UserResponse(BaseModel):
     id: str
