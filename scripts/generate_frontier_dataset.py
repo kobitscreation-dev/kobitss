@@ -779,9 +779,91 @@ def generate_enterprise_dpo_pairs() -> List[Dict[str, Any]]:
 
 
 # =====================================================================
-# 5. MAIN EXECUTION
+# 5. LIVE CLAUDE SONNET TRAJECTORY HARVESTER (TEACHER DISTILLATION)
+# =====================================================================
+async def harvest_claude_trajectories(limit: int = 3) -> List[Dict[str, Any]]:
+    """Calls AWS Bedrock Claude Sonnet to harvest golden teacher trajectories."""
+    try:
+        from backend.services.llm.bedrock_provider import BedrockProvider
+        provider = BedrockProvider()
+        client = provider._get_client()
+        model = provider._normalize_model_id(provider.default_model)
+    except Exception as e:
+        print(f"[Claude Harvester] Bedrock initialization skipped: {e}")
+        return []
+
+    prompts = [
+        {
+            "task": "Design and implement a production Stripe webhook listener in FastAPI that verifies HMAC signatures, updates organization subscription status, and handles payment failures.",
+            "category": "billing_webhooks"
+        },
+        {
+            "task": "Implement a Multi-Tenant RBAC system with Organization scoping and JWT dependency guards in FastAPI and SQLAlchemy 2.0.",
+            "category": "backend_auth_rbac"
+        },
+        {
+            "task": "Build an enterprise audit logging engine in FastAPI with JSON diff tracking, tenant indexing, and paginated time-series queries.",
+            "category": "audit_logging"
+        }
+    ]
+
+    trajectories = []
+    print(f"[*] Connecting to Claude ({model}) on AWS Bedrock to harvest live teacher trajectories...")
+
+    for i, item in enumerate(prompts[:limit]):
+        print(f"  Harvesting Claude trajectory {i+1}/{min(len(prompts), limit)}: {item['category']}...")
+        sys_prompt = (
+            "You are Kobits, an autonomous senior full-stack AI engineering agent. "
+            "You write clean, production-grade, bug-free code with explicit architecture, "
+            "zero placeholders, and verified tool calls (`repository_write`)."
+        )
+        user_prompt = (
+            f"Task: {item['task']}\n\n"
+            "Format your output with:\n"
+            "### 1. SPECIFICATION & ARCHITECTURAL PLAN\n[Detailed Plan]\n\n"
+            "```tool_call\n{\"name\": \"repository_write\", \"parameters\": {\"path\": \"...\"}}\n```\n\n"
+            "```python\n# Complete code with zero placeholders\n```\n\n"
+            "### 2. VERIFICATION & QUALITY AUDIT\n[Audit summary]"
+        )
+
+        try:
+            resp = await client.messages.create(
+                model=model,
+                max_tokens=4096,
+                system=sys_prompt,
+                messages=[{"role": "user", "content": user_prompt}]
+            )
+            content = resp.content[0].text if resp.content else ""
+            if len(content) > 200:
+                record = {
+                    "messages": [
+                        {"role": "system", "content": sys_prompt},
+                        {"role": "user", "content": item["task"]},
+                        {"role": "assistant", "content": content}
+                    ],
+                    "metadata": {
+                        "source": "claude_sonnet_teacher_distillation",
+                        "model": model,
+                        "category": item["category"]
+                    }
+                }
+                trajectories.append(record)
+                print(f"    ✓ Harvested {len(content):,} characters from Claude Sonnet!")
+        except Exception as e:
+            print(f"    ✗ Error harvesting {item['category']}: {e}")
+
+    return trajectories
+
+
+# =====================================================================
+# 6. MAIN EXECUTION
 # =====================================================================
 def main():
+    parser = argparse.ArgumentParser(description="Kobits Enterprise Frontier Dataset Engine")
+    parser.add_argument("--harvest-claude", action="store_true", help="Harvest live teacher trajectories from AWS Bedrock Claude")
+    parser.add_argument("--limit", type=int, default=3, help="Number of trajectories to harvest from Claude")
+    args = parser.parse_args()
+
     print("=================================================================")
     print("🚀 Kobits Enterprise Frontier Dataset Engine (Kyros Standard)")
     print("=================================================================")
@@ -794,9 +876,15 @@ def main():
     synth_blueprints = generate_enterprise_blueprints()
     print(f"[*] Synthesized {len(synth_blueprints)} master enterprise workloads.")
 
-    all_trajectories = db_trajectories + synth_blueprints
+    # 3. Optional: Live Claude Sonnet Harvester
+    claude_trajectories = []
+    if args.harvest_claude:
+        claude_trajectories = asyncio.run(harvest_claude_trajectories(limit=args.limit))
+        print(f"[*] Harvested {len(claude_trajectories)} live teacher trajectories from Bedrock Claude.")
 
-    # 3. Quality Control Filter Gate
+    all_trajectories = db_trajectories + synth_blueprints + claude_trajectories
+
+    # 4. Quality Control Filter Gate
     verified_trajectories = []
     rejected_count = 0
     forbidden_stems = ["// todo", "/* todo", "# todo", "pass # todo", "// add code here"]
@@ -814,12 +902,12 @@ def main():
         else:
             rejected_count += 1
 
-    # 4. Save SFT Dataset
+    # 5. Save SFT Dataset
     with open(V2_SFT_PATH, "w", encoding="utf-8") as f:
         for t in verified_trajectories:
             f.write(json.dumps(t) + "\n")
 
-    # 5. Save DPO Dataset
+    # 6. Save DPO Dataset
     dpo_samples = generate_enterprise_dpo_pairs()
     with open(V2_DPO_PATH, "w", encoding="utf-8") as f:
         for d in dpo_samples:
@@ -844,3 +932,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
