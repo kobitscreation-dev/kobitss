@@ -346,7 +346,7 @@ async def get_user_default_org(db: AsyncSession, user_id: str) -> OrganizationMe
     return membership
 
 
-async def _resolve_owned_project(db: AsyncSession, project_ref: Optional[str], org_id: str) -> Project:
+async def _resolve_owned_project(db: AsyncSession, project_ref: Optional[str], org_id: str, user_id: Optional[str] = None) -> Project:
     ref = (project_ref or "default").strip()
     if ref.lower() in ("default", "latest", "active", ""):
         proj = (
@@ -357,7 +357,20 @@ async def _resolve_owned_project(db: AsyncSession, project_ref: Optional[str], o
             )
         ).scalars().first()
         if not proj:
-            raise HTTPException(status_code=404, detail="No project found in organization")
+            # Auto-create default project for this workspace so missions can launch immediately!
+            import uuid
+            from backend.models.project import ProjectStatus
+            proj = Project(
+                id=str(uuid.uuid4()),
+                organization_id=org_id,
+                name="Default Workspace",
+                description="Auto-created default project for Kobits missions",
+                status=ProjectStatus.PLANNING,
+                created_by=user_id or "cli_user",
+            )
+            db.add(proj)
+            await db.commit()
+            await db.refresh(proj)
         return proj
 
     proj = await db.get(Project, ref)
@@ -530,7 +543,7 @@ async def create_mission(
     current_user: User = Depends(get_current_active_user)
 ):
     membership = await get_user_default_org(db, current_user.id)
-    project = await _resolve_owned_project(db, project_id, membership.organization_id)
+    project = await _resolve_owned_project(db, project_id, membership.organization_id, current_user.id)
     resolved_pid = project.id
 
     raw_obj = (request.objective or request.prompt or request.text or request.title or "").strip()

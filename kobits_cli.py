@@ -2662,8 +2662,14 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument(
         "--local",
         action="store_true",
-        default=argparse.SUPPRESS,
-        help="Run in pure standalone local engine mode (always active by default)",
+        default=False,
+        help="Run in local engine mode",
+    )
+    common.add_argument(
+        "--cloud",
+        action="store_true",
+        default=False,
+        help="Execute via Kobits Cloud Engine on Render (AWS Bedrock Claude Sonnet)",
     )
 
     parser = argparse.ArgumentParser(
