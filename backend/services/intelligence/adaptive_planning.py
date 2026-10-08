@@ -113,22 +113,20 @@ class AdaptivePlanner:
                     elif len(stem_lower) >= 4 and stem_lower not in stop_stems and stem_lower in specific_tokens:
                         score += 6
 
-                    # 3. Domain hotspot grounding for real entrypoints
+                    # 3. Domain hotspot grounding for real entrypoints (only if relevant to the project)
                     if rel_lower == "backend/main.py" and any(
                         k in words for k in ("ping", "health", "endpoint", "route", "api", "fastapi", "middleware")
-                    ):
+                    ) and "portal" not in words and "admission" not in words:
                         score += 8
-                    elif rel_lower == "portal.html" and any(
-                        k in words for k in ("portal", "dashboard", "modal", "sidebar", "theme", "css", "layout")
-                    ):
-                        score += 7
+                    elif rel_lower == "portal.html" and "portal.html" in text:
+                        score += 15
                     elif rel_lower == "backend/core/database.py" and any(
                         k in words for k in ("database", "sqlite", "postgres", "schema", "migration")
-                    ):
+                    ) and "admission" not in words:
                         score += 7
                     elif rel_lower == "backend/services/agent_executor.py" and any(
                         k in words for k in ("agent", "executor", "prompt", "llm")
-                    ):
+                    ) and "admission" not in words:
                         score += 7
 
                     if score > 0:

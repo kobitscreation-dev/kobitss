@@ -30,9 +30,8 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 os.chdir(ROOT_DIR)
 
-# If invoked from the Windows home directory (e.g., C:\Users\Arvind Kumar), target ROOT_DIR;
-# otherwise target the active project directory where the developer ran `kobits`.
-WORKSPACE_DIR = ROOT_DIR if CALLER_CWD == Path.home().resolve() else CALLER_CWD
+# Target the active directory where the developer ran `kobits`.
+WORKSPACE_DIR = CALLER_CWD
 os.environ["KOBITS_TARGET_WORKSPACE"] = str(WORKSPACE_DIR)
 
 CONFIG_PATH = Path.home() / ".kobits" / "cli_config.json"

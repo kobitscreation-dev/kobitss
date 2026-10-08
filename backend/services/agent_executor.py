@@ -243,7 +243,14 @@ class AgentExecutor:
                 f"\n\nREPOSITORY TARGET FILES (GROUNDED BY SCOPE TRIAGE): {t_files}\n"
                 "Use `repository_read` directly on the target file(s) above (you can pass `start_line` and `end_line` to read surgical slices of large files). "
                 "When modifying an existing file, prefer `repository_edit` (single `old_string` -> `new_string` or atomic `edits` list) to save tokens and prevent truncation; "
-                "check `syntax_valid` in the edit response, use `repository_write` when creating a brand-new file, and then immediately output your final JSON response."
+                "check `syntax_valid` in the edit response. "
+                "When building a new application, portal, or feature, create new files using `repository_write` (e.g. `index.html`, `styles.css`, `app.js`) and output your final JSON response."
+            )
+        else:
+            system_prompt += (
+                "\n\nNEW APPLICATION / GREENFIELD IMPLEMENTATION:\n"
+                "When tasked with building or creating an application, website, portal, or tool, create complete, production-grade files using `repository_write` "
+                "(e.g., `index.html`, `styles.css`, `app.js` or backend scripts). Write complete implementations cleanly and then return your final JSON response with status 'SUCCESS'."
             )
         system_prompt += "\n\nCOLLABORATION:\nYou are part of a multi-agent team. Your input data may contain 'upstream_artifacts' from agents who ran before you. Use this data to inform your work. When you finish, you can output structured JSON in your 'artifacts' field for downstream agents to use."
         system_prompt += "\n\nPRE-EXECUTION REASONING:\n\nBefore executing tools for major implementation work, you MUST first establish and output a clear plan including:\n1. Requirements\n2. Assumptions\n3. Constraints\n4. Dependencies\n5. Risks\n6. Expected files to modify\n7. Verification strategy\n"
