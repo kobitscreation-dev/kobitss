@@ -47,6 +47,29 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    # Auto-seed default user if database is fresh
+    from backend.core.database import AsyncSessionLocal
+    from backend.models.organization import User, Organization, OrganizationMember, OrgRole
+    from backend.core.security import get_password_hash
+    from sqlalchemy import select
+
+    async with AsyncSessionLocal() as db:
+        admin_user = (await db.execute(select(User).where(User.email == "realuser@kobits.space"))).scalar_one_or_none()
+        if not admin_user:
+            new_u = User(
+                email="realuser@kobits.space",
+                hashed_password=get_password_hash("MyPass12345!"),
+                full_name="Kobits Founder",
+                is_active=True
+            )
+            db.add(new_u)
+            new_org = Organization(name="Kobits Core Workspace")
+            db.add(new_org)
+            await db.flush()
+            db.add(OrganizationMember(user_id=new_u.id, organization_id=new_org.id, role=OrgRole.OWNER))
+            await db.commit()
+            print("Auto-seeded default user realuser@kobits.space")
+
     # Resume ACTIVE missions and clear dangling locks
     from backend.core.database import AsyncSessionLocal
     from backend.models.mission import Mission, MissionStatus
