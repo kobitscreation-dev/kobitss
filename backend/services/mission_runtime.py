@@ -2001,7 +2001,7 @@ class MissionRuntime:
             if mission.active_branch:
                 from backend.services.sandbox_manager import SandboxManager
                 session = SandboxManager.get_session_by_branch(mission.active_branch)
-                if not session and os.environ.get("KOBITS_CLI_RESUME") == "1":
+                if not session:
                     session = SandboxManager.create_sandbox(
                         project_root=os.getcwd(),
                         branch_name=mission.active_branch
