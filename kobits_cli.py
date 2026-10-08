@@ -961,12 +961,187 @@ def print_mission_summary(detail: Dict[str, Any]) -> None:
         )
 
 
-# ── CLI Subcommand Handlers (Pure Local Engine) ───────────────
+async def cloud_create_and_run_mission(
+    objective: str,
+    title: Optional[str] = None,
+    branch: str = "main",
+    workspace_dir: Optional[Path] = None,
+) -> int:
+    import httpx
+    target_ws = workspace_dir or WORKSPACE_DIR
+    api_url = (os.environ.get("KOBITS_API_URL") or "https://kobitss.onrender.com").rstrip("/")
+    
+    print(f"\n{CYAN}{BOLD}⚡ KOBITS CLOUD ENGINE{RESET} {GRAY}(AWS Bedrock Claude Sonnet 4.6){RESET}")
+    print(f"  {GRAY}Target Workspace :{RESET} {target_ws}")
+    print(f"  {GRAY}Cloud Backend    :{RESET} {api_url}")
+    print(f"  {GRAY}Objective        :{RESET} {BOLD}{objective[:72]}{'...' if len(objective) > 72 else ''}{RESET}\n")
+
+    token = None
+    print(f"{YELLOW}⏳ Connecting to Kobits Cloud agents...{RESET}")
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        login_url = f"{api_url}/api/v1/auth/login"
+        login_data = {
+            "email": os.environ.get("KOBITS_USER_EMAIL") or "realuser@kobits.space",
+            "password": os.environ.get("KOBITS_USER_PASSWORD") or "MyPass12345!"
+        }
+        for attempt in range(3):
+            try:
+                auth_res = await client.post(login_url, json=login_data)
+                if auth_res.status_code == 200:
+                    token = auth_res.json().get("access_token")
+                    break
+                else:
+                    auth_res2 = await client.post(login_url, data={"username": login_data["email"], "password": login_data["password"]})
+                    if auth_res2.status_code == 200:
+                        token = auth_res2.json().get("access_token")
+                        break
+            except Exception as exc:
+                if attempt < 2:
+                    await asyncio.sleep(2.0)
+                    continue
+                print(f"{RED}✗ Cloud Connection Error:{RESET} Could not reach {api_url}: {exc}")
+                return 1
+
+        if not token:
+            print(f"{RED}✗ Authentication Failed:{RESET} Could not authenticate with Kobits Cloud.")
+            return 1
+
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        run_url = f"{api_url}/api/v1/missions/run"
+        payload = {
+            "objective": objective,
+            "title": title or (objective[:64] + ("..." if len(objective) > 64 else "")),
+            "branch": branch,
+            "auto_execute": True,
+            "requires_approval": False
+        }
+        
+        try:
+            start_res = await client.post(run_url, json=payload, headers=headers)
+            if start_res.status_code not in (200, 201):
+                print(f"{RED}✗ Mission Launch Error:{RESET} Status {start_res.status_code}: {start_res.text}")
+                return 1
+            mission_info = start_res.json()
+            mission_id = mission_info.get("mission_id") or mission_info.get("id")
+        except Exception as exc:
+            print(f"{RED}✗ Cloud Request Failed:{RESET} {exc}")
+            return 1
+
+        short_id = mission_id[:8]
+        print(f"{GREEN}✓ Mission Launched on Cloud!{RESET} ID: {CYAN}{short_id}{RESET} ({mission_id})")
+        print(f"{GRAY}─────────────────────────────────────────────────────────────────────────────{RESET}")
+
+        last_phase = None
+        last_stage = None
+        last_tasks_seen = set()
+        
+        poll_url = f"{api_url}/api/v1/missions/{mission_id}"
+        poll_interval = 2.0
+        
+        completed = False
+        start_time = time.time()
+        while not completed:
+            await asyncio.sleep(poll_interval)
+            try:
+                poll_res = await client.get(poll_url, headers=headers)
+                if poll_res.status_code != 200:
+                    continue
+                m_data = poll_res.json()
+                stat = (m_data.get("status") or "ACTIVE").upper()
+                phase = m_data.get("phase") or "PLANNING"
+                pct = m_data.get("progress") or 0
+                stage_name = m_data.get("current_stage") or ""
+                
+                if phase != last_phase or stage_name != last_stage:
+                    bar = render_progress_bar(pct, width=20)
+                    print(f"  {color_status(stat, pad=10)} {bar}  {BOLD}{phase:<16}{RESET} {GRAY}{stage_name}{RESET}")
+                    last_phase = phase
+                    last_stage = stage_name
+                
+                tasks = m_data.get("tasks") or []
+                for t in tasks:
+                    t_id = t.get("id")
+                    t_title = t.get("title")
+                    t_stat = (t.get("status") or "PENDING").upper()
+                    t_role = t.get("agent_role") or t.get("agent_name") or "ENGINEER"
+                    t_key = f"{t_id}_{t_stat}"
+                    if t_key not in last_tasks_seen:
+                        last_tasks_seen.add(t_key)
+                        if t_stat in ("COMPLETED", "SUCCESS"):
+                            print(f"    {GREEN}✓ Task [COMPLETED]{RESET} {t_title} {GRAY}({t_role}){RESET}")
+                        elif t_stat in ("IN_PROGRESS", "RUNNING"):
+                            print(f"    {YELLOW}↳ Task [IN_PROGRESS]{RESET} {t_title} {GRAY}({t_role}){RESET}")
+                        elif t_stat in ("FAILED", "ERROR"):
+                            print(f"    {RED}✗ Task [FAILED]{RESET} {t_title} {GRAY}({t_role}){RESET}")
+
+                if stat in ("COMPLETED", "FAILED", "CANCELLED"):
+                    completed = True
+                    if stat == "FAILED":
+                        print(f"\n{RED}✗ Mission Failed on Cloud.{RESET}")
+                        return 1
+            except Exception:
+                pass
+
+        elapsed = int(time.time() - start_time)
+        print(f"\n{GREEN}✓ Cloud Generation Finished in {elapsed}s!{RESET}")
+
+        print(f"{YELLOW}📥 Downloading deliverables from Cloud Sandbox...{RESET}")
+        files_url = f"{api_url}/api/v1/missions/{mission_id}/files"
+        try:
+            files_res = await client.get(files_url, headers=headers)
+            written_count = 0
+            if files_res.status_code == 200:
+                files_data = files_res.json().get("files") or []
+                for f_info in files_data:
+                    rel_p = f_info.get("path")
+                    content = f_info.get("content", "")
+                    if not rel_p:
+                        continue
+                    dest = (target_ws / rel_p).resolve()
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_text(content, encoding="utf-8")
+                    line_count = len(content.splitlines())
+                    print(f"  {GREEN}+ [CREATED]{RESET} {rel_p} {GRAY}({line_count} lines){RESET}")
+                    written_count += 1
+            
+            if written_count > 0:
+                print(f"\n{GREEN}{BOLD}======================================================={RESET}")
+                print(f"{GREEN}{BOLD}✓ MISSION DELIVERED SUCCESSFULLY!{RESET}")
+                print(f"{GREEN}{BOLD}======================================================={RESET}")
+                print(f"  {BOLD}Files Written:{RESET} {written_count} file(s) created in {CYAN}{target_ws}{RESET}\n")
+            else:
+                print(f"{YELLOW}No sandbox files found to download.{RESET}")
+            return 0
+        except Exception as exc:
+            print(f"{RED}Error downloading files:{RESET} {exc}")
+            return 1
+
+
+# ── CLI Subcommand Handlers ─────────────────────────────────────
 async def cmd_run(args: argparse.Namespace) -> int:
     objective = " ".join(args.objective).strip()
     if not objective:
         print(f"{RED}Error:{RESET} Please provide a mission objective. Example: kobits run \"Add rate limiting middleware\"")
         return 1
+
+    from backend.core.config import settings
+    has_local_llm = bool(
+        (os.environ.get("ANTHROPIC_API_KEY") or getattr(settings, "ANTHROPIC_API_KEY", None)) or
+        (os.environ.get("AWS_ACCESS_KEY_ID") or getattr(settings, "AWS_ACCESS_KEY_ID", None)) or
+        (os.environ.get("AWS_BEDROCK_API_KEY") or getattr(settings, "AWS_BEDROCK_API_KEY", None)) or
+        (os.environ.get("GEMINI_API_KEY") or getattr(settings, "GEMINI_API_KEY", None)) or
+        (os.environ.get("DEEPSEEK_API_KEY") or getattr(settings, "DEEPSEEK_API_KEY", None))
+    )
+    
+    use_cloud = getattr(args, "cloud", False) or (not has_local_llm and not getattr(args, "local", False)) or os.environ.get("KOBITS_USE_CLOUD") == "1"
+
+    if use_cloud:
+        return await cloud_create_and_run_mission(
+            objective=objective,
+            title=args.title,
+            branch=args.branch,
+        )
 
     await local_create_and_run_mission(
         objective=objective,
@@ -2355,14 +2530,31 @@ async def cmd_repl(args: argparse.Namespace) -> int:
         if not raw:
             continue
 
-        await local_create_and_run_mission(
-            objective=raw,
-            title=None,
-            project_arg=getattr(args, "project", None),
-            branch=getattr(args, "branch", "main"),
-            autopilot=True,
-            wait=True,
+        from backend.core.config import settings
+        has_local_llm = bool(
+            (os.environ.get("ANTHROPIC_API_KEY") or getattr(settings, "ANTHROPIC_API_KEY", None)) or
+            (os.environ.get("AWS_ACCESS_KEY_ID") or getattr(settings, "AWS_ACCESS_KEY_ID", None)) or
+            (os.environ.get("AWS_BEDROCK_API_KEY") or getattr(settings, "AWS_BEDROCK_API_KEY", None)) or
+            (os.environ.get("GEMINI_API_KEY") or getattr(settings, "GEMINI_API_KEY", None)) or
+            (os.environ.get("DEEPSEEK_API_KEY") or getattr(settings, "DEEPSEEK_API_KEY", None))
         )
+        use_cloud = getattr(args, "cloud", False) or (not has_local_llm and not getattr(args, "local", False)) or os.environ.get("KOBITS_USE_CLOUD") == "1"
+
+        if use_cloud:
+            await cloud_create_and_run_mission(
+                objective=raw,
+                title=None,
+                branch=getattr(args, "branch", "main"),
+            )
+        else:
+            await local_create_and_run_mission(
+                objective=raw,
+                title=None,
+                project_arg=getattr(args, "project", None),
+                branch=getattr(args, "branch", "main"),
+                autopilot=True,
+                wait=True,
+            )
     return 0
 
 

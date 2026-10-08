@@ -615,7 +615,7 @@ async def create_mission(
             {"mission_id": mission.id, "org_id": membership.organization_id, "user_id": current_user.id},
             job_id=f"job_mission_{mission.id}",
         )
-        if os.environ.get("KOBITS_NO_AUTO_EXECUTE") != "1" and os.environ.get("KOBITS_NO_WORKER") == "1":
+        if os.environ.get("KOBITS_NO_AUTO_EXECUTE") != "1":
             from backend.services.mission_runtime import MissionRuntime
             import asyncio
             asyncio.create_task(MissionRuntime(mission.id, membership.organization_id, current_user.id).execute())
@@ -1105,6 +1105,57 @@ async def get_mission_diff(
     mission = await _get_owned_mission(db, mission_id, current_user.id)
     from backend.services.sandbox_review import get_mission_diff as _diff
     return await _diff(mission.id, mission.active_branch)
+
+
+@router.get("/{mission_id}/files")
+async def get_mission_files(
+    mission_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get the full file contents of all files created or modified in the mission sandbox."""
+    mission = await _get_owned_mission(db, mission_id, current_user.id)
+    import os
+    from pathlib import Path
+    from backend.services.sandbox_manager import SandboxManager
+
+    session = SandboxManager.get_session_by_branch(mission.active_branch) if mission.active_branch else None
+    sb_dir = session.sandbox_dir if session else os.path.join("sandboxes", f"sandbox-{mission.id[:8]}")
+
+    if not os.path.isdir(sb_dir):
+        sandboxes_root = Path("sandboxes")
+        if sandboxes_root.is_dir():
+            for entry in sandboxes_root.iterdir():
+                if entry.is_dir() and mission.id[:8] in entry.name:
+                    sb_dir = str(entry)
+                    break
+
+    files_result = []
+    if os.path.isdir(sb_dir):
+        for root, dirs, filenames in os.walk(sb_dir):
+            dirs[:] = [d for d in dirs if d not in (".git", "__pycache__", ".pytest_cache")]
+            for fname in filenames:
+                if fname.startswith(".kobits_"):
+                    continue
+                full_path = os.path.join(root, fname)
+                rel_path = os.path.relpath(full_path, sb_dir).replace("\\", "/")
+                try:
+                    with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+                        content = f.read()
+                    files_result.append({
+                        "path": rel_path,
+                        "content": content,
+                        "size": len(content)
+                    })
+                except Exception:
+                    pass
+
+    return {
+        "mission_id": mission.id,
+        "status": mission.status.value,
+        "phase": mission.phase.value if mission.phase else None,
+        "files": files_result
+    }
 
 
 class DeliverRequest(BaseModel):
