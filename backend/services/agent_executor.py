@@ -249,8 +249,12 @@ class AgentExecutor:
         else:
             system_prompt += (
                 "\n\nNEW APPLICATION / GREENFIELD IMPLEMENTATION:\n"
-                "When tasked with building or creating an application, website, portal, or tool, create complete, production-grade files using `repository_write` "
-                "(e.g., `index.html`, `styles.css`, `app.js` or backend scripts). Write complete implementations cleanly and then return your final JSON response with status 'SUCCESS'."
+                "When tasked with building or creating an application, website, portal, or tool:\n"
+                "You MUST build a complete, beautiful, and fully working application by creating the files directly with `repository_write`:\n"
+                "- `index.html`: Complete, modern, semantic HTML5 structure with responsive UI and components.\n"
+                "- `styles.css`: Polished modern CSS styles (clean typography, flexbox/grid, smooth styling).\n"
+                "- `app.js`: Complete client-side functionality, calculation algorithms, interactivity, form validation.\n"
+                "Write real, exhaustive code (no placeholders or 'TODO' stubs). After creating the files, return your JSON response with status 'SUCCESS'."
             )
         system_prompt += "\n\nCOLLABORATION:\nYou are part of a multi-agent team. Your input data may contain 'upstream_artifacts' from agents who ran before you. Use this data to inform your work. When you finish, you can output structured JSON in your 'artifacts' field for downstream agents to use."
         system_prompt += "\n\nPRE-EXECUTION REASONING:\n\nBefore executing tools for major implementation work, you MUST first establish and output a clear plan including:\n1. Requirements\n2. Assumptions\n3. Constraints\n4. Dependencies\n5. Risks\n6. Expected files to modify\n7. Verification strategy\n"

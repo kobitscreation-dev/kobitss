@@ -70,7 +70,12 @@ class AdaptivePlanner:
         import os
         from pathlib import Path
 
-        root = Path(repo_root or os.environ.get("KOBITS_TARGET_WORKSPACE") or os.getcwd()).resolve()
+        framework_root = Path(__file__).resolve().parents[3]
+        target = repo_root or os.environ.get("KOBITS_TARGET_WORKSPACE")
+        if not target or Path(target).resolve() == framework_root:
+            return []
+
+        root = Path(target).resolve()
         if not root.exists():
             return []
 

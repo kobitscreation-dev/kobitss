@@ -1097,6 +1097,12 @@ async def cloud_create_and_run_mission(
                     content = f_info.get("content", "")
                     if not rel_p:
                         continue
+                    forbidden_framework = {
+                        "portal.html", "mock_data.js", "server.py", "render.yaml",
+                        "requirements.txt", "install.ps1", "kobits_cli.py", "alembic.ini"
+                    }
+                    if rel_p in forbidden_framework or any(rel_p.startswith(p) for p in ("backend/", "web/", "sandboxes/", "storage/", "scripts/", "docs/", "tests/")):
+                        continue
                     dest = (target_ws / rel_p).resolve()
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     dest.write_text(content, encoding="utf-8")

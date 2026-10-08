@@ -176,7 +176,9 @@ class SandboxManager:
         """
         import hashlib
         repo_root = Path(__file__).resolve().parent.parent.parent
-        target_ws = source_dir or os.environ.get("KOBITS_TARGET_WORKSPACE") or str(repo_root)
+        target_ws = source_dir or os.environ.get("KOBITS_TARGET_WORKSPACE")
+        if not target_ws or Path(target_ws).resolve() == repo_root:
+            return False
         ws_path = Path(target_ws).resolve()
 
         # 1. If the target workspace is already a valid Git repository with a HEAD commit, use it directly
@@ -325,7 +327,19 @@ class SandboxManager:
                     _run_git(sandbox_dir, "checkout", base_commit_sha)
                 _run_git(sandbox_dir, "checkout", "-b", branch_name)
         else:
-            if not cls._create_git_worktree_sandbox(sandbox_dir, branch_name, source_dir=project_root):
+            repo_root = Path(__file__).resolve().parent.parent.parent
+            is_greenfield = (
+                not project_root
+                or Path(project_root).resolve() == repo_root
+                or not os.path.exists(project_root)
+            )
+            if is_greenfield:
+                os.makedirs(sandbox_dir, exist_ok=True)
+                _run_git(sandbox_dir, "init")
+                cls._init_git_excludes(sandbox_dir)
+                _run_git(sandbox_dir, "commit", "--allow-empty", "-m", "Initial commit for greenfield mission")
+                _run_git(sandbox_dir, "checkout", "-b", branch_name)
+            elif not cls._create_git_worktree_sandbox(sandbox_dir, branch_name, source_dir=project_root):
                 os.makedirs(sandbox_dir, exist_ok=True)
                 ignore = shutil.ignore_patterns(
                     "__pycache__", "*.pyc", ".git", "node_modules", "sandboxes",

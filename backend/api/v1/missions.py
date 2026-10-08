@@ -1145,13 +1145,26 @@ async def get_mission_files(
 
     files_result = []
     if os.path.isdir(sb_dir):
+        # Exclude Kobits framework internals from mission deliverables
+        forbidden_exact = {
+            "portal.html", "mock_data.js", "server.py", "render.yaml",
+            "requirements.txt", "install.ps1", "kobits_cli.py", "alembic.ini"
+        }
+        forbidden_prefixes = (
+            "backend/", "web/", "extensions/", "sandboxes/", ".kobits_",
+            "storage/", "scripts/", "docs/", "tests/", "alembic/"
+        )
         for root, dirs, filenames in os.walk(sb_dir):
-            dirs[:] = [d for d in dirs if d not in (".git", "__pycache__", ".pytest_cache")]
+            dirs[:] = [d for d in dirs if d not in (".git", "__pycache__", ".pytest_cache", "sandboxes")]
             for fname in filenames:
                 if fname.startswith(".kobits_"):
                     continue
                 full_path = os.path.join(root, fname)
                 rel_path = os.path.relpath(full_path, sb_dir).replace("\\", "/")
+
+                if rel_path in forbidden_exact or any(rel_path.startswith(p) for p in forbidden_prefixes):
+                    continue
+
                 try:
                     with open(full_path, "r", encoding="utf-8", errors="replace") as f:
                         content = f.read()
