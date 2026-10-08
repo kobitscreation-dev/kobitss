@@ -6,11 +6,12 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
-Write-Host "   ╦╔═ ╔═╗ ╔╗  ╦ ╔╦╗ ╔═╗" -ForegroundColor Cyan
-Write-Host "   ╠╩╗ ║ ║ ╠╩╗ ║  ║  ╚═╗" -ForegroundColor Cyan
-Write-Host "   ╩ ╩ ╚═╝ ╚═╝ ╩  ╩  ╚═╝" -ForegroundColor Cyan
+Write-Host "   _  _____  ___  ___ _____ ___ " -ForegroundColor Cyan
+Write-Host "  | |/ / _ \/ _ )/  _/_  __/ __/" -ForegroundColor Cyan
+Write-Host "  |   / // / _  |/ /  / / _\ \  " -ForegroundColor Cyan
+Write-Host "  |_|_\___/____/___/ /_/ /___/  " -ForegroundColor Cyan
 Write-Host "   Autonomous Software Engineering CLI" -ForegroundColor Gray
-Write-Host "   ─────────────────────────────────────────────" -ForegroundColor DarkGray
+Write-Host "   ---------------------------------------------" -ForegroundColor DarkGray
 Write-Host ""
 
 # 1. Detect Python Installation (supports Python 3.10, 3.11, 3.12+)
@@ -19,37 +20,34 @@ Write-Host "[1/4] Detecting Python environment..." -ForegroundColor Yellow
 $pythonCmd = $null
 $pythonPrefix = @()
 
-# Check Windows 'py' launcher first
-$testVersions = @("-3.12", "-3.11", "-3.10", "")
-foreach ($ver in $testVersions) {
-    try {
-        $checkArgs = if ($ver) { @($ver, "-c", "import sys; print(sys.version_info[0], sys.version_info[1])") } else { @("-c", "import sys; print(sys.version_info[0], sys.version_info[1])") }
-        $proc = Start-Process -FilePath "py" -ArgumentList $checkArgs -NoNewWindow -Wait -PassThru -RedirectStandardOutput "$env:TEMP\py_check.txt" -RedirectStandardError "$env:TEMP\py_err.txt"
-        if ($proc.ExitCode -eq 0) {
-            $verOut = (Get-Content "$env:TEMP\py_check.txt" -Raw).Trim()
-            $major, $minor = $verOut.Split(" ")
-            if ([int]$major -eq 3 -and [int]$minor -ge 10) {
-                $pythonCmd = "py"
-                if ($ver) { $pythonPrefix = @($ver) }
-                Write-Host "      Found Python $major.$minor via py launcher" -ForegroundColor Green
-                break
-            }
-        }
-    } catch {}
-}
+$candidates = @(
+    @{ cmd = "py"; args = @("-3.12") },
+    @{ cmd = "py"; args = @("-3.11") },
+    @{ cmd = "py"; args = @("-3.10") },
+    @{ cmd = "py"; args = @() },
+    @{ cmd = "python"; args = @() },
+    @{ cmd = "python3"; args = @() }
+)
 
-# Fallback to direct 'python' command
-if (-not $pythonCmd) {
+foreach ($c in $candidates) {
     try {
-        $checkArgs = @("-c", "import sys; print(sys.version_info[0], sys.version_info[1])")
-        $proc = Start-Process -FilePath "python" -ArgumentList $checkArgs -NoNewWindow -Wait -PassThru -RedirectStandardOutput "$env:TEMP\py_check.txt" -RedirectStandardError "$env:TEMP\py_err.txt"
-        if ($proc.ExitCode -eq 0) {
-            $verOut = (Get-Content "$env:TEMP\py_check.txt" -Raw).Trim()
-            $major, $minor = $verOut.Split(" ")
-            if ([int]$major -eq 3 -and [int]$minor -ge 10) {
-                $pythonCmd = "python"
-                $pythonPrefix = @()
-                Write-Host "      Found Python $major.$minor via python on PATH" -ForegroundColor Green
+        $cCmd = $c.cmd
+        $cArgs = $c.args
+        $fullArgs = $cArgs + @("-c", "import sys; print(f'{sys.version_info[0]} {sys.version_info[1]}')")
+        $res = & $cCmd $fullArgs 2>$null
+        if ($LASTEXITCODE -eq 0 -and $res) {
+            $lastLine = ($res | Select-Object -Last 1).ToString().Trim()
+            $parts = $lastLine.Split(" ")
+            if ($parts.Count -ge 2) {
+                $major = [int]$parts[0]
+                $minor = [int]$parts[1]
+                if ($major -eq 3 -and $minor -ge 10) {
+                    $pythonCmd = $cCmd
+                    $pythonPrefix = $cArgs
+                    $displayVer = if ($cArgs.Count -gt 0) { "$($c.cmd) $($c.args -join ' ')" } else { $c.cmd }
+                    Write-Host "      Found Python $major.$minor via $displayVer" -ForegroundColor Green
+                    break
+                }
             }
         }
     } catch {}
