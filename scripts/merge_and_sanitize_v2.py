@@ -19,6 +19,7 @@ MASTER_FILE = DATA_DIR / "kobits_frontier_v2.jsonl"
 SWEBENCH_FILE = DATA_DIR / "kobits_swebench_verified.jsonl"
 MODERN_UI_FILE = DATA_DIR / "kobits_modern_ui_opus.jsonl"
 FABLE_FILE = DATA_DIR / "kobits_fable5_claude.jsonl"
+TURBO_FILE = DATA_DIR / "kobits_turbo_harvest.jsonl"
 
 
 def sanitize_text(text: str) -> str:
@@ -110,6 +111,23 @@ def main():
                         added_fable += 1
 
     print(f"[*] Added {added_fable} Claude Fable 5 agentic trajectories.", flush=True)
+
+    added_turbo = 0
+    if TURBO_FILE.exists():
+        with open(TURBO_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    rec = json.loads(line)
+                    q = ""
+                    for m in rec.get("messages", []):
+                        if m.get("role") == "user":
+                            q = m.get("content", "").strip()[:80]
+                    if q not in seen_queries:
+                        existing_samples.append(sanitize_record(rec))
+                        seen_queries.add(q)
+                        added_turbo += 1
+
+    print(f"[*] Added {added_turbo} Turbo Scale (Fable 5 + Modern UI) trajectories.", flush=True)
 
     # Write merged dataset
     total_chars = 0
