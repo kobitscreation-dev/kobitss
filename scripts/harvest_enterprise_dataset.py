@@ -185,6 +185,40 @@ ENTERPRISE_PROMPTS = [
     {
         "category": "distributed_systems",
         "task": "Design a resilient Circuit Breaker pattern implementation in Python with Closed, Open, and Half-Open states, failure threshold tracking, and fallback responses."
+    },
+
+    # 11. Autonomous Bug Fixing & Root Cause Remediation
+    {
+        "category": "bug_fixing",
+        "task": "Given a severe deadlock error traceback in a high-concurrency wallet ledger system using SQLAlchemy 2.0, diagnose the locking order conflict, implement deterministic SELECT FOR UPDATE resource ordering, and write regression tests proving the fix."
+    },
+    {
+        "category": "bug_fixing",
+        "task": "Diagnose and fix a memory leak in an async Redis pub/sub WebSocket worker caused by uncollected task references, circular callbacks, and unclosed client streams."
+    },
+    {
+        "category": "bug_fixing",
+        "task": "Fix a race condition in a high-throughput e-commerce inventory reservation service where concurrent requests cause negative stock balances, using Redis atomic Lua scripts."
+    },
+
+    # 12. Enterprise Code Refactoring & Modernization
+    {
+        "category": "code_refactoring",
+        "task": "Refactor a monolithic 1,200-line legacy Flask router into clean Domain-Driven Design (DDD) in FastAPI with Domain Entities, Value Objects, Repository Interfaces, and Service Layer orchestration."
+    },
+    {
+        "category": "code_refactoring",
+        "task": "Migrate a legacy synchronous database application from psycopg2 to asyncpg and SQLAlchemy 2.0 async engine with complete type annotations and Pydantic v2 schemas."
+    },
+
+    # 13. Autonomous Agent Tool Calling & Surgical Patching
+    {
+        "category": "agent_execution",
+        "task": "Act as an autonomous engineering agent executing a multi-file bug fix: analyze the problem, inspect the codebase, output precise surgical unified git diffs for affected files, and write comprehensive verification tests."
+    },
+    {
+        "category": "agent_execution",
+        "task": "Act as an autonomous architecture agent: take an enterprise feature requirement, create a multi-service technical specification, define API contracts with Pydantic v2, and generate the full implementation across models, services, and routes."
     }
 ]
 
