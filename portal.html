@@ -958,6 +958,24 @@
         if (fieldOrg) fieldOrg.classList.add('hidden');
         if (fieldTerms) fieldTerms.classList.add('hidden');
       }
+
+      // Check URL parameters for OAuth notifications
+      const urlParams = new URLSearchParams(window.location.search);
+      const authErr = urlParams.get('auth_error');
+      if (authErr) {
+        const errBox = document.getElementById('auth-error');
+        const errText = document.getElementById('auth-error-text');
+        if (errBox && errText) {
+          if (authErr === 'google_not_configured') {
+            errText.textContent = 'Google OAuth requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env. You can sign in immediately with Email & Password below.';
+          } else if (authErr === 'github_not_configured') {
+            errText.textContent = 'GitHub OAuth requires GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env. You can sign in immediately with Email & Password below.';
+          } else {
+            errText.textContent = 'External sign-in was cancelled or encountered an error. Please try again.';
+          }
+          errBox.classList.remove('hidden');
+        }
+      }
     }
 
     window.kbAuthToggle = function() {

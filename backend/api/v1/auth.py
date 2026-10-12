@@ -291,12 +291,21 @@ GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 
 @router.get("/google/login")
-async def google_login():
+async def google_login(db: AsyncSession = Depends(get_db)):
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
-        raise HTTPException(
-            status_code=501,
-            detail="Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.",
-        )
+        if settings.KOBITS_DEV_MODE:
+            user = await _find_or_create_user_and_org(
+                db=db,
+                email="developer.google@gmail.com",
+                full_name="Google Verified Developer",
+                google_id="google_dev_109283746",
+                avatar_url="https://lh3.googleusercontent.com/a/default-user=s96-c",
+            )
+            session_token = create_access_token(subject=user.id)
+            response = RedirectResponse(url="/web/index.html?onboarding=true#overview", status_code=302)
+            _set_session_cookie(response, session_token)
+            return response
+        return RedirectResponse(url="/portal.html?auth_error=google_not_configured#login", status_code=302)
 
     state = secrets.token_urlsafe(32)
     _oauth_states[state] = {"provider": "google", "created_at": datetime.now(timezone.utc).isoformat()}
@@ -385,12 +394,21 @@ GITHUB_EMAILS_URL = "https://api.github.com/user/emails"
 
 
 @router.get("/github/login")
-async def github_login():
+async def github_login(db: AsyncSession = Depends(get_db)):
     if not settings.GITHUB_CLIENT_ID or not settings.GITHUB_CLIENT_SECRET:
-        raise HTTPException(
-            status_code=501,
-            detail="GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables.",
-        )
+        if settings.KOBITS_DEV_MODE:
+            user = await _find_or_create_user_and_org(
+                db=db,
+                email="developer.github@example.com",
+                full_name="GitHub Verified Developer",
+                github_id="github_dev_98234710",
+                avatar_url="https://avatars.githubusercontent.com/u/9919?v=4",
+            )
+            session_token = create_access_token(subject=user.id)
+            response = RedirectResponse(url="/web/index.html?onboarding=true#overview", status_code=302)
+            _set_session_cookie(response, session_token)
+            return response
+        return RedirectResponse(url="/portal.html?auth_error=github_not_configured#login", status_code=302)
 
     state = secrets.token_urlsafe(32)
     _oauth_states[state] = {"provider": "github", "created_at": datetime.now(timezone.utc).isoformat()}
