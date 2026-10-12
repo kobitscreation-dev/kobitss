@@ -348,7 +348,8 @@ async def get_user_default_org(db: AsyncSession, user_id: str) -> OrganizationMe
 
 async def _resolve_owned_project(db: AsyncSession, project_ref: Optional[str], org_id: str, user_id: Optional[str] = None) -> Project:
     ref = (project_ref or "default").strip()
-    if ref.lower() in ("default", "latest", "active", ""):
+
+    async def _get_or_create_default_proj() -> Project:
         proj = (
             await db.execute(
                 select(Project)
@@ -357,14 +358,13 @@ async def _resolve_owned_project(db: AsyncSession, project_ref: Optional[str], o
             )
         ).scalars().first()
         if not proj:
-            # Auto-create default project for this workspace so missions can launch immediately!
             import uuid
             from backend.models.project import ProjectStatus
             proj = Project(
                 id=str(uuid.uuid4()),
                 organization_id=org_id,
                 name="Default Workspace",
-                description="Auto-created default project for Kobits missions",
+                description="Autonomous Multi-Agent Engineering Workspace",
                 status=ProjectStatus.PLANNING,
                 created_by=user_id or "cli_user",
             )
@@ -373,9 +373,15 @@ async def _resolve_owned_project(db: AsyncSession, project_ref: Optional[str], o
             await db.refresh(proj)
         return proj
 
+    if ref.lower() in ("default", "latest", "active", "", "null", "undefined") or ref.startswith("demo-"):
+        return await _get_or_create_default_proj()
+
     proj = await db.get(Project, ref)
-    if proj and proj.organization_id == org_id:
-        return proj
+    if proj:
+        if proj.organization_id == org_id:
+            return proj
+        # Project exists but belongs to a different organization -> enforce tenant isolation
+        raise HTTPException(status_code=404, detail="Project not found")
 
     proj = (
         await db.execute(
@@ -385,9 +391,12 @@ async def _resolve_owned_project(db: AsyncSession, project_ref: Optional[str], o
             )
         )
     ).scalars().first()
-    if not proj:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return proj
+    if proj:
+        return proj
+
+    # If the project UUID does not exist anywhere in DB (e.g. stale localStorage ID after container restart),
+    # fall back to the user's default project (or auto-create one) so mission launch never fails.
+    return await _get_or_create_default_proj()
 
 
 async def _resolve_owned_mission(db: AsyncSession, mission_ref: str, org_id: str) -> Mission:

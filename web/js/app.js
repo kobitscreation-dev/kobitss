@@ -156,12 +156,28 @@ async function fetchDashboard(silent = false) {
     view.innerHTML = `<div class="ky-card"><div class="ky-eyebrow">LOADING WORKSPACE</div><p style="color:var(--text-2);margin:8px 0 0">Synchronizing live engineering telemetry…</p></div>`;
   }
   try {
-    const q = state.projectId ? `?project_id=${encodeURIComponent(state.projectId)}` : '';
-    const data = await get(`/org/dashboard${q}`);
+    let data;
+    const hasSpecificProject = state.projectId && state.projectId !== 'default' && state.projectId !== '__new__';
+    const q = hasSpecificProject ? `?project_id=${encodeURIComponent(state.projectId)}` : '';
+    try {
+      data = await get(`/org/dashboard${q}`);
+    } catch (firstErr) {
+      if (hasSpecificProject) {
+        // Stale projectId in localStorage (e.g. after container reset) — clear and retry default
+        state.projectId = '';
+        localStorage.removeItem('kobits.projectId');
+        data = await get('/org/dashboard');
+      } else {
+        throw firstErr;
+      }
+    }
     state.dashboard = data;
     if (data?.project?.id) {
       state.projectId = data.project.id;
       localStorage.setItem('kobits.projectId', state.projectId);
+    } else {
+      state.projectId = '';
+      localStorage.removeItem('kobits.projectId');
     }
     populateProjectSelect(data);
     renderDashboard();
@@ -169,7 +185,8 @@ async function fetchDashboard(silent = false) {
     if (!silent) {
       view.innerHTML = `<div class="ky-card" style="border-color:var(--err-border)">
         <div class="ky-eyebrow" style="color:var(--err-fg)">TELEMETRY ERROR</div>
-        <p style="margin:8px 0 0">${esc(err.message || String(err))}</p>
+        <p style="margin:8px 0 12px">${esc(err.message || String(err))}</p>
+        <button type="button" class="ky-btn ky-btn-primary ky-btn-xs" onclick="window.location.reload()">Retry Connection</button>
       </div>`;
     }
   }
@@ -177,11 +194,19 @@ async function fetchDashboard(silent = false) {
 
 function populateProjectSelect(data) {
   const sel = document.getElementById('ky-project-select');
-  if (!sel || !data?.projects) return;
-  const activeId = data.project?.id || '';
-  sel.innerHTML = data.projects.map((p) =>
-    `<option value="${esc(p.id)}" ${p.id === activeId ? 'selected' : ''}>${esc(p.name)}</option>`
-  ).join('');
+  if (!sel) return;
+  const projects = data?.projects || [];
+  const activeId = data?.project?.id || '';
+  if (projects.length > 0) {
+    sel.innerHTML = projects.map((p) =>
+      `<option value="${esc(p.id)}" ${p.id === activeId ? 'selected' : ''}>${esc(p.name)}</option>`
+    ).join('') + `<option value="__new__">+ Create New Project…</option>`;
+  } else {
+    sel.innerHTML = `
+      <option value="default" selected>Default Workspace (Ready)</option>
+      <option value="__new__">+ Create New Project…</option>
+    `;
+  }
 }
 
 // ── Main Kyros View Renderer ────────────────────────────────────────────────
@@ -190,16 +215,20 @@ function renderDashboard() {
   const view = document.getElementById('view') || document.getElementById('main-content');
   if (!view) return;
   const d = state.dashboard;
-  if (!d || !d.project) {
+  if (!d) {
     view.innerHTML = `<div class="ky-card" style="text-align:center;padding:48px 24px">
-      <div class="ky-eyebrow">WORKSPACE EMPTY</div>
-      <h2 style="margin:8px 0">No Engineering Projects Yet</h2>
-      <p style="color:var(--text-2);margin:0">Run a mission via the Kobits CLI (<code style="font-family:var(--font-mono)">kobits run "..."</code>) to populate your dashboard.</p>
+      <div class="ky-eyebrow">INITIALIZING WORKSPACE</div>
+      <h2 style="margin:8px 0">Connecting to Engineering Control Plane…</h2>
     </div>`;
     return;
   }
 
-  const proj = d.project;
+  const hasRealProject = Boolean(d.project && d.project.id);
+  const proj = d.project || {
+    id: 'default',
+    name: 'Default Engineering Workspace',
+    description: 'Launch a mission below to auto-initialize your workspace, or create a named project.',
+  };
   const pct = d.progress?.percent ?? 0;
   // Tag each mission with its chronological Sprint number (Sprint 1 = oldest, Sprint N = newest)
   const rawMilestones = d.milestones || [];
@@ -214,7 +243,12 @@ function renderDashboard() {
     <section class="ky-proj-header">
       <div class="ky-proj-top">
         <div>
-          <h1 class="ky-proj-title">${esc(proj.name)}</h1>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <h1 class="ky-proj-title">${esc(proj.name)}</h1>
+            <button type="button" data-open-new-project="1" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border);font-family:var(--font-mono);font-size:11px">
+              + ${hasRealProject ? 'New Project' : 'Create Named Project'}
+            </button>
+          </div>
           <div class="ky-proj-sub">
             <span>${esc(proj.description || 'Autonomous Software Engineering Platform')}</span>
           </div>
@@ -784,6 +818,14 @@ function wireTabEvents() {
     });
   });
 
+  // New Project triggers inside the dashboard header
+  document.querySelectorAll('[data-open-new-project]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openNewProjectModal();
+    });
+  });
+
   // Mission Launch Console
   const promptInput = document.getElementById('ky-mission-prompt');
   const launchBtn = document.getElementById('ky-mission-submit');
@@ -802,7 +844,8 @@ function wireTabEvents() {
 
       try {
         const title = text.length > 60 ? text.slice(0, 60) + '…' : text;
-        const res = await post(`/missions/projects/${state.projectId}/missions`, {
+        const targetPid = (state.projectId && state.projectId !== '__new__') ? state.projectId : 'default';
+        const res = await post(`/missions/projects/${encodeURIComponent(targetPid)}/missions`, {
           title: title,
           objective: text,
           branch: branch,
@@ -810,6 +853,10 @@ function wireTabEvents() {
           auto_execute: true
         });
 
+        if (res?.project_id) {
+          state.projectId = res.project_id;
+          localStorage.setItem('kobits.projectId', res.project_id);
+        }
         notify('🚀 Mission launched into cleanroom sandbox!');
         promptInput.value = '';
         state.selectedMissionId = res.mission_id || res.id;
@@ -1218,10 +1265,24 @@ async function openMissionInspector(missionId, autoFocusApply = false) {
 function initTopBar() {
   const projSel = document.getElementById('ky-project-select');
   projSel?.addEventListener('change', () => {
-    state.projectId = projSel.value;
+    if (projSel.value === '__new__') {
+      projSel.value = state.projectId || 'default';
+      openNewProjectModal();
+      return;
+    }
+    state.projectId = projSel.value === 'default' ? '' : projSel.value;
     state.selectedMissionId = null;
-    localStorage.setItem('kobits.projectId', state.projectId);
+    if (state.projectId) {
+      localStorage.setItem('kobits.projectId', state.projectId);
+    } else {
+      localStorage.removeItem('kobits.projectId');
+    }
     fetchDashboard();
+  });
+
+  const newProjBtn = document.getElementById('ky-topbar-new-project');
+  newProjBtn?.addEventListener('click', () => {
+    openNewProjectModal();
   });
 
   const tourBtn = document.getElementById('ky-topbar-tour');
@@ -1236,8 +1297,12 @@ function initTopBar() {
     renderDashboard();
     setTimeout(() => {
       const p = document.getElementById('ky-mission-prompt');
-      p?.focus();
-      p?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (p) {
+        p.focus();
+        p.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        openNewProjectModal();
+      }
     }, 80);
   });
 
@@ -1258,9 +1323,179 @@ function initTopBar() {
       openSettingsModal('account');
       return;
     }
+    if (h === 'new-project') {
+      openNewProjectModal();
+      return;
+    }
     if (['overview', 'milestones', 'deliverables', 'team', 'reports'].includes(h)) {
       state.tab = h;
       renderDashboard();
+    }
+  });
+}
+
+// ── Dedicated Create Project & Launch Workspace Modal ───────────────────────
+
+function openNewProjectModal() {
+  const host = document.getElementById('ky-modal-host');
+  if (!host) return;
+
+  const templates = [
+    {
+      name: 'FinTech Payment API',
+      desc: 'Python / FastAPI service with idempotent webhook handlers, HMAC signatures, and SQLite/PostgreSQL storage.',
+      mission: 'Implement a production-ready Stripe webhook verification module with HMAC-SHA256 validation, replay protection, and a comprehensive pytest suite.'
+    },
+    {
+      name: 'SaaS Auth & RBAC Core',
+      desc: 'Multi-tenant authentication microservice with JWT rotation, rate limiting, and audit logging.',
+      mission: 'Build a token bucket rate limiter and JWT RBAC permission guard with unit tests covering edge cases and concurrency.'
+    },
+    {
+      name: 'Data Pipeline & Analytics Engine',
+      desc: 'High-throughput ETL ingestion worker, schema validator, and anomaly detection pipeline.',
+      mission: 'Create a resilient JSONL telemetry ingestion parser with dead-letter queue recovery, secret scrubbing, and full pytest coverage.'
+    }
+  ];
+
+  host.innerHTML = `
+    <div class="ky-modal-backdrop" id="ky-newproj-backdrop">
+      <div class="ky-modal" role="dialog" aria-modal="true" aria-labelledby="ky-newproj-title" style="max-width:640px;width:95vw">
+        <div class="ky-modal-head" style="border-bottom:1px solid var(--border);padding:16px 20px;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div class="ky-eyebrow">WORKSPACE INITIALIZATION</div>
+            <h3 class="ky-modal-title" id="ky-newproj-title" style="margin-top:2px">Start a New Engineering Project</h3>
+          </div>
+          <button type="button" class="ky-modal-close" id="ky-newproj-close" aria-label="Close">×</button>
+        </div>
+
+        <div class="ky-modal-body" style="padding:20px;display:flex;flex-direction:column;gap:16px">
+          <div>
+            <div class="ky-eyebrow" style="margin-bottom:8px">QUICK-START BLUEPRINTS (OPTIONAL 1-CLICK FILL)</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+              ${templates.map((t, idx) => `
+                <button type="button" class="ky-tpl-btn" data-tpl-idx="${idx}" style="text-align:left;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color .15s">
+                  <div style="font-weight:600;font-size:12px;color:var(--text-1)">${esc(t.name)}</div>
+                  <div style="font-size:10.5px;color:var(--text-2);margin-top:3px;line-height:1.35">${esc(t.desc.slice(0, 68))}…</div>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:12px">
+            <div>
+              <label style="display:block;font-size:11px;color:var(--text-2);margin-bottom:5px;font-family:var(--font-mono)">PROJECT NAME *</label>
+              <input id="ky-np-name" type="text" placeholder="e.g. Core Backend API" style="width:100%;padding:9px 11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text-1)" />
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;color:var(--text-2);margin-bottom:5px;font-family:var(--font-mono)">GITHUB REPO URL (OPTIONAL)</label>
+              <input id="ky-np-repo" type="text" placeholder="https://github.com/org/repo" style="width:100%;padding:9px 11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12.5px;font-family:var(--font-mono);color:var(--text-1)" />
+            </div>
+          </div>
+
+          <div>
+            <label style="display:block;font-size:11px;color:var(--text-2);margin-bottom:5px;font-family:var(--font-mono)">ARCHITECTURE & STACK DESCRIPTION</label>
+            <input id="ky-np-desc" type="text" placeholder="e.g. Python 3.12, FastAPI, SQLite/PostgreSQL, Pytest cleanroom verification" style="width:100%;padding:9px 11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text-1)" />
+          </div>
+
+          <div style="padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <label style="font-size:11px;color:var(--text-1);font-family:var(--font-mono);font-weight:600">FIRST MISSION OBJECTIVE (OPTIONAL — AUTO-LAUNCHES IMMEDIATELY)</label>
+              <span style="font-size:10.5px;color:var(--text-3);font-family:var(--font-mono)">E2B / Cleanroom Sandbox</span>
+            </div>
+            <textarea id="ky-np-mission" rows="3" placeholder="Leave blank to just create the project, or describe your first task here to immediately boot the 6-agent engineering team…" style="width:100%;padding:9px 11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12.5px;color:var(--text-1);resize:vertical;font-family:var(--font-sans)"></textarea>
+          </div>
+        </div>
+
+        <div class="ky-modal-foot" style="border-top:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:11.5px;color:var(--text-3);font-family:var(--font-mono)">Isolated per-organization workspace</span>
+          <div style="display:flex;gap:8px">
+            <button type="button" class="ky-btn ky-btn-ghost ky-btn-sm" id="ky-newproj-cancel">Cancel</button>
+            <button type="button" class="ky-btn ky-btn-primary ky-btn-sm" id="ky-newproj-submit">+ Create Project</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const closeModal = () => { host.innerHTML = ''; };
+  document.getElementById('ky-newproj-close')?.addEventListener('click', closeModal);
+  document.getElementById('ky-newproj-cancel')?.addEventListener('click', closeModal);
+  document.getElementById('ky-newproj-backdrop')?.addEventListener('click', (ev) => {
+    if (ev.target.id === 'ky-newproj-backdrop') closeModal();
+  });
+
+  const nameInput = document.getElementById('ky-np-name');
+  const descInput = document.getElementById('ky-np-desc');
+  const missionInput = document.getElementById('ky-np-mission');
+  const submitBtn = document.getElementById('ky-newproj-submit');
+
+  setTimeout(() => nameInput?.focus(), 50);
+
+  missionInput?.addEventListener('input', () => {
+    if (submitBtn) {
+      submitBtn.textContent = missionInput.value.trim()
+        ? '🚀 Create & Launch Mission'
+        : '+ Create Project';
+    }
+  });
+
+  host.querySelectorAll('.ky-tpl-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const idx = Number(btn.getAttribute('data-tpl-idx'));
+      const t = templates[idx];
+      if (!t) return;
+      if (nameInput) nameInput.value = t.name;
+      if (descInput) descInput.value = t.desc;
+      if (missionInput) missionInput.value = t.mission;
+      if (submitBtn) submitBtn.textContent = '🚀 Create & Launch Mission';
+    });
+  });
+
+  submitBtn?.addEventListener('click', async () => {
+    const name = nameInput?.value?.trim();
+    const repository_url = document.getElementById('ky-np-repo')?.value?.trim() || null;
+    const description = descInput?.value?.trim() || 'Autonomous Software Engineering Workspace';
+    const firstMission = missionInput?.value?.trim() || '';
+
+    if (!name) {
+      notify('Please enter a project name (or click a Quick-Start Blueprint above).', 'error');
+      nameInput?.focus();
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = firstMission ? '⚡ Creating & Booting Sandbox…' : 'Creating Project…';
+
+    try {
+      const created = await post('/projects', { name, description, repository_url });
+      const newPid = created?.id || 'default';
+      state.projectId = newPid;
+      localStorage.setItem('kobits.projectId', newPid);
+
+      if (firstMission) {
+        const title = firstMission.length > 60 ? firstMission.slice(0, 60) + '…' : firstMission;
+        const mRes = await post(`/missions/projects/${encodeURIComponent(newPid)}/missions`, {
+          title,
+          objective: firstMission,
+          branch: 'main',
+          execution_mode: localStorage.getItem('kobits.execMode') || 'autopilot',
+          auto_execute: true,
+        });
+        state.selectedMissionId = mRes.mission_id || mRes.id;
+        notify(`🚀 Project "${name}" created & mission launched!`);
+      } else {
+        state.selectedMissionId = null;
+        notify(`Project "${name}" created!`);
+      }
+
+      closeModal();
+      state.tab = 'overview';
+      await fetchDashboard();
+    } catch (err) {
+      notify(err.message || 'Failed to create project.', 'error');
+      submitBtn.disabled = false;
+      submitBtn.textContent = firstMission ? '🚀 Create & Launch Mission' : '+ Create Project';
     }
   });
 }
