@@ -968,7 +968,7 @@ async def cloud_create_and_run_mission(
 ) -> int:
     import httpx
     target_ws = workspace_dir or WORKSPACE_DIR
-    api_url = (os.environ.get("KOBITS_API_URL") or "https://kobitss.onrender.com").rstrip("/")
+    api_url = (os.environ.get("KOBITS_API_URL") or "https://kobits.space").rstrip("/")
     
     print(f"\n{CYAN}{BOLD}⚡ KOBITS CLOUD ENGINE{RESET} {GRAY}(AWS Bedrock Claude Sonnet 4.6){RESET}")
     print(f"  {GRAY}Target Workspace :{RESET} {target_ws}")

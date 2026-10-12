@@ -422,9 +422,8 @@ index 0000000..9b62a4f
   let res;
   const backendBase = (typeof window !== 'undefined' && window.KOBITS_API_URL)
     ? window.KOBITS_API_URL
-    : (typeof window !== 'undefined' && window.location.hostname.includes('kobits.space')
-      ? 'https://kobitss.onrender.com'
-      : '');
+    : '';
+
   try {
     res = await fetch(`${backendBase}/api/v1${path}`, opts);
   } catch (e) {

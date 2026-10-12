@@ -1043,7 +1043,7 @@
       if (btn) btn.textContent = isSignUp ? 'Creating Workspace…' : 'Signing in…';
 
       try {
-        const apiBase = window.KOBITS_API_URL || (window.location.hostname.includes('kobits.space') ? 'https://kobitss.onrender.com' : '');
+        const apiBase = window.KOBITS_API_URL || '';
         const endpoint = apiBase + (isSignUp ? '/api/v1/auth/register' : '/api/v1/auth/login');
         const body = isSignUp ? { 
           email, 

@@ -59,19 +59,20 @@ if True:
     print(f"  Estimated Cost (All-Time Claude): ${cost_all:.4f}")
     conn.close()
 
-print("\n================ RENDER CLOUD AUDIT ================")
+print("\n================ CLOUD AUDIT (kobits.space) ================")
 try:
     login_req = urllib.request.Request(
-        "https://kobitss.onrender.com/api/v1/auth/login",
+        "https://kobits.space/api/v1/auth/login",
         data=json.dumps({"email": "realuser@kobits.space", "password": "MyPass12345!"}).encode("utf-8"),
         headers={"Content-Type": "application/json"}
     )
     token = json.loads(urllib.request.urlopen(login_req).read().decode())["access_token"]
     
     runs_req = urllib.request.Request(
-        "https://kobitss.onrender.com/api/v1/ai/runs",
+        "https://kobits.space/api/v1/ai/runs",
         headers={"Authorization": f"Bearer {token}"}
     )
+
     res = urllib.request.urlopen(runs_req)
     cloud_runs = json.loads(res.read().decode())
     print(f"Total cloud runs: {len(cloud_runs)}")

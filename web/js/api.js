@@ -293,9 +293,8 @@ export async function api(method, path, body) {
     }
     const backendBase = (typeof window !== 'undefined' && window.KOBITS_API_URL)
       ? window.KOBITS_API_URL
-      : (typeof window !== 'undefined' && window.location.hostname.includes('kobits.space')
-        ? 'https://kobitss.onrender.com'
-        : '');
+      : '';
+
     try {
       const res = await fetch(`${backendBase}/api/v1${path}`, opts);
       const text = await res.text();
