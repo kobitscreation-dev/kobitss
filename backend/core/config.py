@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     KOBITS_SANDBOX_DRIVER: str = "auto"  # auto | cloud_microvm | docker | virtual_rootfs_jail
     KOBITS_MAX_FLUID_ITERATIONS: int = 15
 
+    # Remote Docker Daemon Configuration (For Docker-in-Cloud execution)
+    DOCKER_HOST: Optional[str] = None
+    DOCKER_TLS_VERIFY: Optional[str] = None
+    DOCKER_CERT_PATH: Optional[str] = None
+
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True, extra="ignore")
 
 settings = Settings()

@@ -51,3 +51,13 @@ def test_sandbox_driver_auto_detection():
     with patch.dict(os.environ, {"E2B_API_KEY": "e2b_test_key_123"}):
         driver = EnvironmentBootstrapper.detect_isolation_driver()
         assert driver == "cloud_microvm"
+
+def test_docker_host_and_daemon_detection():
+    # Verify DOCKER_HOST configuration is checked during docker availability inspection
+    with patch("backend.services.environment_bootstrapper.shutil.which", return_value="/usr/bin/docker"), \
+         patch("backend.services.environment_bootstrapper.subprocess.run") as mock_sub:
+        mock_sub.return_value.returncode = 0
+        mock_sub.return_value.stdout = "24.0.5\n"
+        is_avail = EnvironmentBootstrapper.is_docker_daemon_available(force_check=True)
+        assert is_avail is True
+

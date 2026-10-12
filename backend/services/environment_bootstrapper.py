@@ -83,11 +83,21 @@ class EnvironmentBootstrapper:
             return cached_ok
 
         try:
+            from backend.core.config import settings
+            env = os.environ.copy()
+            if getattr(settings, "DOCKER_HOST", None) and "DOCKER_HOST" not in env:
+                env["DOCKER_HOST"] = settings.DOCKER_HOST
+            if getattr(settings, "DOCKER_TLS_VERIFY", None) and "DOCKER_TLS_VERIFY" not in env:
+                env["DOCKER_TLS_VERIFY"] = settings.DOCKER_TLS_VERIFY
+            if getattr(settings, "DOCKER_CERT_PATH", None) and "DOCKER_CERT_PATH" not in env:
+                env["DOCKER_CERT_PATH"] = settings.DOCKER_CERT_PATH
+
             res = subprocess.run(
                 ["docker", "info", "--format", "{{.ServerVersion}}"],
                 capture_output=True,
                 text=True,
                 timeout=3,
+                env=env,
             )
             ok = res.returncode == 0 and bool(res.stdout.strip())
         except Exception:
