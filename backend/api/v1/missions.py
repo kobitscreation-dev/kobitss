@@ -342,7 +342,22 @@ async def get_user_default_org(db: AsyncSession, user_id: str) -> OrganizationMe
     result = await db.execute(stmt)
     membership = result.scalars().first()
     if not membership:
-        raise HTTPException(status_code=403, detail="User not part of an organization")
+        from backend.models.organization import Organization, OrgRole
+        org = Organization(
+            id=str(uuid.uuid4()),
+            name="Personal Workspace",
+            credit_balance=50,
+        )
+        db.add(org)
+        await db.flush()
+        membership = OrganizationMember(
+            user_id=user_id,
+            organization_id=org.id,
+            role=OrgRole.OWNER,
+        )
+        db.add(membership)
+        await db.commit()
+        await db.refresh(membership)
     return membership
 
 

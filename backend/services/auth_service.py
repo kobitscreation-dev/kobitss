@@ -24,16 +24,29 @@ async def get_user_org_membership(
 
 
 async def get_user_default_org(db: AsyncSession, user_id: str) -> OrganizationMember:
-    """Get the first organization a user belongs to (default workspace)."""
+    """Get the first organization a user belongs to (default workspace), auto-provisioning one if missing."""
     result = await db.execute(
         select(OrganizationMember).where(OrganizationMember.user_id == user_id)
     )
-    membership = result.scalar_one_or_none()
+    membership = result.scalars().first()
     if not membership:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User does not belong to any organization",
+        import uuid
+        from backend.models.organization import Organization
+        org = Organization(
+            id=str(uuid.uuid4()),
+            name="Personal Workspace",
+            credit_balance=50,
         )
+        db.add(org)
+        await db.flush()
+        membership = OrganizationMember(
+            user_id=user_id,
+            organization_id=org.id,
+            role=OrgRole.OWNER,
+        )
+        db.add(membership)
+        await db.commit()
+        await db.refresh(membership)
     return membership
 
 
