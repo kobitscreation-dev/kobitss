@@ -107,3 +107,18 @@ class GitHubService:
             if resp.status_code in (200, 201):
                 return resp.json()
             return {"error": resp.text, "status_code": resp.status_code}
+
+    @classmethod
+    async def create_issue_comment(cls, repo_full_name: str, issue_number: int, body: str, token: str) -> dict:
+        """Post an informative comment on a GitHub issue or PR."""
+        if MOCK_GITHUB_API:
+            return {"id": 12345, "body": body}
+
+        url = f"{cls.BASE_URL}/repos/{repo_full_name}/issues/{issue_number}/comments"
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(url, json={"body": body}, headers=cls._get_headers(token))
+            if resp.status_code in (200, 201):
+                return resp.json()
+            logger.error(f"GitHub issue comment failed: {resp.text}")
+            return {"error": resp.text, "status_code": resp.status_code}
+

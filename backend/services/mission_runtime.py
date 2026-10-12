@@ -899,6 +899,75 @@ class MissionRuntime:
             except Exception as exc:
                 errors.append(f"pytest execution error: {exc}")
 
+        # ── Multi-Language Test Gate: Node.js / TypeScript (Jest, Vitest, Node Test) ──
+        node_bin = shutil.which("node")
+        discovered_js_ts_tests = []
+        for rel_f in (candidate_files or []):
+            clean_f = str(rel_f).strip().replace("\\", "/")
+            if not clean_f:
+                continue
+            lower_name = os.path.basename(clean_f).lower()
+            if any(lower_name.endswith(sfx) for sfx in (".test.js", ".spec.js", ".test.ts", ".spec.ts", ".test.jsx", ".spec.jsx", ".test.tsx", ".spec.tsx")):
+                if os.path.isfile(os.path.join(sandbox_dir, clean_f)):
+                    discovered_js_ts_tests.append(clean_f)
+
+        if discovered_js_ts_tests and node_bin:
+            try:
+                npm_bin = shutil.which("npm")
+                # Try running `npm test` if package.json has test script, else fallback to `node --test`
+                has_package_json = os.path.isfile(os.path.join(sandbox_dir, "package.json"))
+                ran_count += len(discovered_js_ts_tests)
+                if has_package_json and npm_bin:
+                    js_res = subprocess.run(
+                        [npm_bin, "test", "--silent", "--", *discovered_js_ts_tests],
+                        cwd=sandbox_dir, capture_output=True, text=True, timeout=20, env=env
+                    )
+                else:
+                    js_res = subprocess.run(
+                        [node_bin, "--test", *discovered_js_ts_tests],
+                        cwd=sandbox_dir, capture_output=True, text=True, timeout=15, env=env
+                    )
+                js_out = (js_res.stdout or js_res.stderr or "").strip()
+                outputs.append(js_out[-500:])
+                if js_res.returncode != 0:
+                    errors.append(f"JS/TS test runner failed: {js_out[-240:]}")
+            except Exception as exc:
+                errors.append(f"Node test execution error: {exc}")
+
+        # ── Multi-Language Test Gate: Golang (`go test ./...`) ─────────────────────
+        go_bin = shutil.which("go")
+        has_go = os.path.isfile(os.path.join(sandbox_dir, "go.mod")) or any(str(f).endswith(".go") for f in (candidate_files or []))
+        if has_go and go_bin:
+            try:
+                go_res = subprocess.run(
+                    [go_bin, "test", "./..."],
+                    cwd=sandbox_dir, capture_output=True, text=True, timeout=25, env=env
+                )
+                ran_count += 1
+                go_out = (go_res.stdout or go_res.stderr or "").strip()
+                outputs.append(go_out[-500:])
+                if go_res.returncode != 0:
+                    errors.append(f"go test failed: {go_out[-240:]}")
+            except Exception as exc:
+                errors.append(f"Go test execution error: {exc}")
+
+        # ── Multi-Language Test Gate: Rust (`cargo test`) ─────────────────────────
+        cargo_bin = shutil.which("cargo")
+        has_cargo = os.path.isfile(os.path.join(sandbox_dir, "Cargo.toml"))
+        if has_cargo and cargo_bin:
+            try:
+                cargo_res = subprocess.run(
+                    [cargo_bin, "test", "--quiet"],
+                    cwd=sandbox_dir, capture_output=True, text=True, timeout=30, env=env
+                )
+                ran_count += 1
+                cargo_out = (cargo_res.stdout or cargo_res.stderr or "").strip()
+                outputs.append(cargo_out[-500:])
+                if cargo_res.returncode != 0:
+                    errors.append(f"cargo test failed: {cargo_out[-240:]}")
+            except Exception as exc:
+                errors.append(f"Cargo test execution error: {exc}")
+
         return {
             "ran": ran_count,
             "passed": len(errors) == 0,

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import json
 import uuid
 import httpx
+import re
 
 from backend.core.database import get_db
 from backend.models.organization import User, OrganizationMember
@@ -531,4 +532,108 @@ async def github_events_webhook(
         await db.commit()
         return {"status": "processed"}
 
+    elif event_type in ("issues", "issue_comment"):
+        action = payload.get("action")
+        # Only process on issue opened/edited or new comment created
+        if action not in ("opened", "created", "reopened", "labeled"):
+            return {"status": "ignored", "reason": f"action '{action}' not actionable"}
+
+        issue_data = payload.get("issue", {})
+        comment_data = payload.get("comment", {})
+        sender_data = payload.get("sender", {})
+        sender_login = (sender_data.get("login") or "").lower()
+
+        # Ignore bot triggers or loopbacks
+        if sender_login.endswith("[bot]") or "kobits" in sender_login:
+            return {"status": "ignored", "reason": "ignoring bot sender to prevent loop"}
+
+        # Extract text content
+        raw_text = comment_data.get("body") if event_type == "issue_comment" else (issue_data.get("body") or "")
+        issue_title = issue_data.get("title", "")
+        labels = [l.get("name", "").lower() for l in issue_data.get("labels", [])]
+
+        # Trigger check: '@kobits' in text, 'kobits' label, or '[kobits]' prefix in title
+        text_lower = (raw_text or "").lower()
+        has_mention = "@kobits" in text_lower or "@kobits-ai" in text_lower or "@kobits[bot]" in text_lower
+        has_label = any(lbl in ("kobits", "kobits-ai", "agent", "automated") for lbl in labels)
+        has_title_tag = issue_title.lower().startswith(("[kobits]", "kobits:", "[agent]"))
+
+        if not (has_mention or has_label or has_title_tag):
+            return {"status": "ignored", "reason": "no @kobits mention or tag found"}
+
+        # Extract prompt
+        cleaned_prompt = re.sub(r"@kobits(-ai)?(\[bot\])?", "", raw_text or "", flags=re.IGNORECASE).strip()
+        if not cleaned_prompt or len(cleaned_prompt) < 5:
+            cleaned_prompt = issue_title
+
+        repo_data = payload.get("repository", {})
+        repo_full_name = repo_data.get("full_name")
+        if not repo_full_name:
+            return {"status": "ignored", "reason": "missing repository full_name"}
+
+        stmt = select(Repository).where(Repository.full_name == repo_full_name)
+        repo = (await db.execute(stmt)).scalars().first()
+        if not repo:
+            return {"status": "ignored", "reason": f"repo {repo_full_name} not registered in Kobits"}
+
+        # Get GitHub token
+        conn = await db.get(GitHubConnection, repo.github_connection_id)
+        gh_token = ""
+        if conn and conn.metadata_json:
+            try:
+                gh_token = json.loads(conn.metadata_json).get("token", "")
+            except Exception:
+                pass
+
+        from backend.models.mission import WorkflowPhase
+        issue_num = issue_data.get("number", "1")
+        active_branch = f"kobits/issue-{issue_num}-{uuid.uuid4().hex[:6]}"
+
+        mission = Mission(
+            project_id=repo.project_id,
+            organization_id=repo.organization_id,
+            title=f"[Issue #{issue_num}] {issue_title[:100]}",
+            objective=cleaned_prompt,
+            description=f"Automated engineering mission dispatched from GitHub Issue #{issue_num} by @{sender_login}.\n\nRaw prompt:\n{raw_text}",
+            status=MissionStatus.PLANNING,
+            phase=WorkflowPhase.INTAKE,
+            base_branch=repo.selected_branch or repo.default_branch or "main",
+            active_branch=active_branch,
+            repository_id=repo.id,
+        )
+        db.add(mission)
+        await db.commit()
+        await db.refresh(mission)
+
+        # Notify via GitHub issue comment
+        if gh_token:
+            from backend.services.github_service import GitHubService
+            comment_body = (
+                f"### 🚀 Kobits Mission Dispatched\n\n"
+                f"- **Mission ID**: `{mission.id[:8]}`\n"
+                f"- **Working Branch**: `{active_branch}`\n"
+                f"- **Pipeline**: Cleanroom Ephemeral Git Sandbox → Compiler & Multi-Language Test Gate → Pull Request Delivery\n"
+                f"- **Live Console**: [https://kobits.space/#missions/{mission.id}](https://kobits.space/#missions/{mission.id})\n\n"
+                f"Kobits autonomous engineering team is now executing this issue."
+            )
+            background_tasks.add_task(
+                GitHubService.create_issue_comment,
+                repo_full_name,
+                int(issue_num),
+                comment_body,
+                gh_token,
+            )
+
+        # Dispatch background mission execution
+        from backend.services.mission_runtime import MissionRuntime
+        background_tasks.add_task(MissionRuntime.run_mission_background, mission.id)
+
+        return {
+            "status": "mission_dispatched",
+            "mission_id": mission.id,
+            "branch": active_branch,
+            "issue": issue_num,
+        }
+
     return {"status": "ignored"}
+
