@@ -1,4 +1,4 @@
-import { get } from '../api.js';
+import { get, post } from '../api.js';
 import { getThemePref, setThemePref } from '../core.js';
 import { errorBox, esc, skeleton, titleCase } from '../ui.js';
 
@@ -8,6 +8,17 @@ export async function render() {
     <h1 style="margin-bottom: 24px;">Settings</h1>
     
     <div class="stack" style="display: flex; flex-direction: column; gap: 16px; max-width: 600px;">
+      <!-- GitHub Integration Card -->
+      <div class="card" id="github-card">
+        <div class="card-head" style="display:flex;align-items:center;justify-content:space-between">
+          <h2>GitHub Integration</h2>
+          <span id="github-badge" class="badge" style="font-size:11px;padding:2px 8px;border-radius:99px;background:rgba(255,255,255,0.08);color:var(--text-3,#a1a1aa)">Checking…</span>
+        </div>
+        <div class="card-body" id="github-body">
+          ${skeleton(2)}
+        </div>
+      </div>
+
       <div class="card" id="health-card">
         <div class="card-head"><h2>LLM Provider</h2></div>
         <div class="card-body" id="health-body">
@@ -40,6 +51,7 @@ export async function render() {
   </div>`;
 
   setupThemeButtons();
+  await loadGitHub();
   await loadHealth();
 }
 
@@ -92,4 +104,90 @@ async function loadHealth() {
   } catch (e) {
     body.innerHTML = errorBox(e);
   }
+}
+
+async function loadGitHub() {
+  const badge = document.getElementById('github-badge');
+  const body = document.getElementById('github-body');
+  try {
+    const status = await get('/github/status');
+    if (status && status.connected) {
+      if (badge) {
+        badge.textContent = 'Connected';
+        badge.style.background = 'rgba(43,168,119,0.15)';
+        badge.style.color = '#2BA877';
+      }
+      body.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+            <span style="font-weight:600;font-size:14px">@${esc(status.username || 'user')}</span>
+          </div>
+          <button id="btn-reconnect-gh" class="btn btn-ghost btn-sm" style="font-size:11px">Reconnect</button>
+        </div>
+        <p class="faint" style="font-size:12.5px;margin:0">Kobits has permission to clone worktrees, run tests, and open Pull Requests on your repositories.</p>
+      `;
+      document.getElementById('btn-reconnect-gh')?.addEventListener('click', () => showGitHubForm(body, badge, status.username));
+    } else {
+      if (badge) {
+        badge.textContent = 'Not Connected';
+        badge.style.background = 'rgba(255,255,255,0.06)';
+        badge.style.color = '#71717a';
+      }
+      showGitHubForm(body, badge);
+    }
+  } catch (e) {
+    if (badge) badge.textContent = 'Offline';
+    showGitHubForm(body, badge);
+  }
+}
+
+function showGitHubForm(body, badge, prefillUser = '') {
+  body.innerHTML = `
+    <div style="font-size:13px;line-height:1.5;margin-bottom:14px;color:var(--text-2,#a1a1aa)">
+      Connect a GitHub Personal Access Token (PAT) so Kobits can create branches, commit sandbox fixes, and open Pull Requests.
+    </div>
+    <form id="gh-connect-form" style="display:flex;flex-direction:column;gap:10px">
+      <div>
+        <label style="display:block;font-size:11px;font-family:var(--font-mono);color:var(--text-3,#71717a);margin-bottom:4px;text-transform:uppercase">GitHub Username</label>
+        <input id="gh-input-username" type="text" placeholder="e.g. kobitscreation-dev" value="${esc(prefillUser)}" required
+          style="width:100%;padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;font-size:13px;font-family:inherit">
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <label style="font-size:11px;font-family:var(--font-mono);color:var(--text-3,#71717a);text-transform:uppercase">Personal Access Token (classic)</label>
+          <a href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=Kobits+Autonomous+Engineer" target="_blank" style="font-size:11px;color:var(--accent,#fff);text-decoration:none">Generate on GitHub &rarr;</a>
+        </div>
+        <input id="gh-input-token" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" required
+          style="width:100%;padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;font-size:13px;font-family:var(--font-mono)">
+      </div>
+      <div id="gh-connect-error" style="display:none;color:#E86C8D;font-size:12px;margin-top:2px"></div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button id="btn-gh-submit" type="submit" class="btn btn-primary btn-sm" style="font-weight:600">Connect GitHub</button>
+      </div>
+    </form>
+  `;
+
+  document.getElementById('gh-connect-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btn-gh-submit');
+    const errBox = document.getElementById('gh-connect-error');
+    const username = document.getElementById('gh-input-username')?.value.trim();
+    const token = document.getElementById('gh-input-token')?.value.trim();
+
+    if (!username || !token) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+    if (errBox) errBox.style.display = 'none';
+
+    try {
+      await post('/github/connect', { username, token });
+      await loadGitHub();
+    } catch (err) {
+      if (errBox) {
+        errBox.textContent = err.message || 'Failed to connect. Verify token permissions.';
+        errBox.style.display = 'block';
+      }
+      if (btn) { btn.disabled = false; btn.textContent = 'Connect GitHub'; }
+    }
+  });
 }
