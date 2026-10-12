@@ -141,4 +141,40 @@ class GitHubService:
             logger.error(f"GitHub review comment reply failed: {resp.text}")
             return {"error": resp.text, "status_code": resp.status_code}
 
+    @classmethod
+    async def create_commit_status(
+        cls,
+        repo_full_name: str,
+        sha: str,
+        state: str,
+        description: str,
+        context: str = "Kobits AI / Verification Gate",
+        token: str = "",
+        target_url: str = "https://kobits.space"
+    ) -> dict:
+        """
+        Post a commit status check directly to GitHub (pending | success | failure | error).
+        Gives real-time PR check run feedback in GitHub's conversation UI.
+        """
+        if MOCK_GITHUB_API:
+            return {"state": state, "description": description, "context": context}
+
+        if not token or not repo_full_name or not sha:
+            return {"error": "Missing required fields for commit status"}
+
+        url = f"{cls.BASE_URL}/repos/{repo_full_name}/statuses/{sha}"
+        payload = {
+            "state": state,
+            "description": description[:140],
+            "context": context,
+            "target_url": target_url or "https://kobits.space"
+        }
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(url, json=payload, headers=cls._get_headers(token))
+            if resp.status_code in (200, 201):
+                return resp.json()
+            logger.warning(f"GitHub commit status update ({state}) returned {resp.status_code}: {resp.text}")
+            return {"error": resp.text, "status_code": resp.status_code}
+
+
 

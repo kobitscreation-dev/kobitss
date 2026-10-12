@@ -625,6 +625,21 @@ async def github_events_webhook(
                 gh_token,
             )
 
+        # Post GitHub commit status check (pending)
+        pr_head_sha = pr_data.get("head", {}).get("sha")
+        if gh_token and pr_head_sha:
+            from backend.services.github_service import GitHubService
+            background_tasks.add_task(
+                GitHubService.create_commit_status,
+                repo_full_name,
+                pr_head_sha,
+                "pending",
+                f"Kobits AI reviewing {os.path.basename(file_path or 'file')}:{line_num or 1}...",
+                "Kobits AI / Verification Gate",
+                gh_token,
+                "https://kobits.space"
+            )
+
         # Dispatch background mission
         from backend.services.mission_runtime import MissionRuntime
         background_tasks.add_task(MissionRuntime.run_mission_background, mission.id)

@@ -2,6 +2,7 @@ import json
 import asyncio
 import uuid
 import os
+import shutil
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +24,7 @@ from backend.services.intelligence.risk_analysis import RiskAnalyzer
 from backend.services.intelligence.policy_engine import PolicyEngine
 from backend.services.intelligence.learning_loop import LearningLoop
 from backend.models.intelligence import TaskContract
+from backend.core.config import settings
 
 
 class MissionRuntime:
@@ -777,7 +779,7 @@ class MissionRuntime:
     # PHASE HANDLERS
     # =========================================================================
     
-    MAX_FLUID_ITERATIONS = 4
+    MAX_FLUID_ITERATIONS = int(getattr(settings, "KOBITS_MAX_FLUID_ITERATIONS", 15))
 
     @staticmethod
     def _load_mission_meta(mission: Mission) -> dict:
@@ -980,6 +982,63 @@ class MissionRuntime:
                     errors.append(f"cargo test failed: {cargo_out[-240:]}")
             except Exception as exc:
                 errors.append(f"Cargo test execution error: {exc}")
+
+        # ── Multi-Language Test Gate: Java (`mvn test` or `./gradlew test`) ───────
+        has_pom = os.path.isfile(os.path.join(sandbox_dir, "pom.xml"))
+        has_gradle = os.path.isfile(os.path.join(sandbox_dir, "build.gradle")) or os.path.isfile(os.path.join(sandbox_dir, "build.gradle.kts"))
+        gradlew_path = os.path.join(sandbox_dir, "gradlew")
+        mvn_bin = shutil.which("mvn")
+        gradle_bin = shutil.which("gradle")
+
+        if (has_pom and mvn_bin) or (has_gradle and (os.path.isfile(gradlew_path) or gradle_bin)):
+            try:
+                if has_pom and mvn_bin:
+                    java_res = subprocess.run(
+                        [mvn_bin, "test", "-q", "-B"],
+                        cwd=sandbox_dir, capture_output=True, text=True, timeout=45, env=env
+                    )
+                elif os.path.isfile(gradlew_path):
+                    java_cmd = [gradlew_path, "test", "-q"] if not os.name == "nt" else [f"{gradlew_path}.bat", "test", "-q"]
+                    java_res = subprocess.run(
+                        java_cmd,
+                        cwd=sandbox_dir, capture_output=True, text=True, timeout=45, env=env
+                    )
+                else:
+                    java_res = subprocess.run(
+                        [gradle_bin, "test", "-q"],
+                        cwd=sandbox_dir, capture_output=True, text=True, timeout=45, env=env
+                    )
+                ran_count += 1
+                java_out = (java_res.stdout or java_res.stderr or "").strip()
+                outputs.append(java_out[-500:])
+                if java_res.returncode != 0:
+                    errors.append(f"Java test runner failed: {java_out[-240:]}")
+            except Exception as exc:
+                errors.append(f"Java test execution error: {exc}")
+
+        # ── Multi-Language Test Gate: C/C++ (`make test` or `ctest`) ──────────────
+        has_makefile = os.path.isfile(os.path.join(sandbox_dir, "Makefile"))
+        make_bin = shutil.which("make")
+        ctest_bin = shutil.which("ctest")
+        if (has_makefile and make_bin) or ctest_bin:
+            try:
+                if has_makefile and make_bin:
+                    c_res = subprocess.run(
+                        [make_bin, "test"],
+                        cwd=sandbox_dir, capture_output=True, text=True, timeout=30, env=env
+                    )
+                else:
+                    c_res = subprocess.run(
+                        [ctest_bin, "--output-on-failure"],
+                        cwd=sandbox_dir, capture_output=True, text=True, timeout=30, env=env
+                    )
+                ran_count += 1
+                c_out = (c_res.stdout or c_res.stderr or "").strip()
+                outputs.append(c_out[-500:])
+                if c_res.returncode != 0:
+                    errors.append(f"C/C++ test runner failed: {c_out[-240:]}")
+            except Exception as exc:
+                errors.append(f"C/C++ test execution error: {exc}")
 
         return {
             "ran": ran_count,

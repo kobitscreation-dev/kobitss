@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     SESSION_COOKIE_SECURE: bool = False  # Set True in production (HTTPS)
     SESSION_COOKIE_SAMESITE: str = "lax"
 
+    # MicroVM & Sandbox Driver Configuration
+    E2B_API_KEY: Optional[str] = None
+    KOBITS_MICROVM_ENDPOINT: Optional[str] = None
+    KOBITS_SANDBOX_DRIVER: str = "auto"  # auto | cloud_microvm | docker | virtual_rootfs_jail
+    KOBITS_MAX_FLUID_ITERATIONS: int = 15
+
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True, extra="ignore")
 
 settings = Settings()

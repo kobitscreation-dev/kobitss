@@ -311,6 +311,22 @@ async def persist_mission_deliverable(
             "target_branch": new_pr.target_branch,
         }
 
+        # Post GitHub commit status check (success) on PR head commit
+        if token and isinstance(gh_pr, dict) and gh_pr.get("head", {}).get("sha"):
+            head_sha = gh_pr["head"]["sha"]
+            try:
+                await GitHubService.create_commit_status(
+                    repo_full_name=repo_full,
+                    sha=head_sha,
+                    state="success",
+                    description="Kobits AI: Cleanroom build & all test gates passed",
+                    context="Kobits AI / Verification Gate",
+                    token=token,
+                    target_url=pr_info.get("url") or "https://kobits.space"
+                )
+            except Exception:
+                pass
+
     await db.commit()
     cs_status_str = cs.status.value if hasattr(cs.status, "value") else str(cs.status)
     cs_dict = {
