@@ -61,3 +61,25 @@ def test_docker_host_and_daemon_detection():
         is_avail = EnvironmentBootstrapper.is_docker_daemon_available(force_check=True)
         assert is_avail is True
 
+def test_training_flywheel_stats_and_harvest():
+    # Verify TrajectoryCollector statistics computation and record formatting
+    from backend.services.trajectory_collector import TrajectoryCollector
+    stats = TrajectoryCollector.get_stats()
+    assert isinstance(stats, dict)
+    assert "total_trajectories" in stats
+    assert "readiness_percentage_for_200k_sft" in stats
+
+    # Verify formatting of multi-turn trajectory record
+    record = TrajectoryCollector.format_sharegpt_record(
+        mission_id="test_m_1",
+        title="Refactor auth",
+        objective="Extract JWT verification into middleware",
+        runs_data=[
+            {"input_text": "inspect middleware.py", "output_text": "Updated auth tokens", "tool_calls": []}
+        ]
+    )
+    assert record is not None
+    assert record["id"] == "kobits-mission-test_m_1"
+    assert len(record["conversations"]) >= 2
+
+

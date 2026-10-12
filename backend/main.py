@@ -441,6 +441,10 @@ app.include_router(org.router, prefix="/api/v1/org", tags=["Organisation"])
 from backend.api.v1 import profile
 app.include_router(profile.router, prefix="/api/v1/profile", tags=["User Profile"])
 
+from backend.api.v1 import training
+app.include_router(training.router, prefix="/api/v1/training", tags=["Model Fine-Tuning Flywheel"])
+
+
 
 # ══════════════════════════════════════════
 #  LEGACY FRONTEND ENDPOINTS
