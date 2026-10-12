@@ -30,9 +30,45 @@ class ToolDefinition:
     
     async def execute(self, context: dict = None, **kwargs) -> Any:
         if self.handler:
-            if context is not None:
-                return await self.handler(context=context, **kwargs)
-            return await self.handler(**kwargs)
+            import inspect
+            sig = inspect.signature(self.handler)
+            params = sig.parameters
+            call_kwargs = {}
+            has_var_keyword = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
+
+            # Canonical argument alias mappings
+            norm_kwargs = dict(kwargs)
+            if "cmd" in norm_kwargs and "command" not in norm_kwargs:
+                norm_kwargs["command"] = norm_kwargs["cmd"]
+            if "test_command" in norm_kwargs and "command" not in norm_kwargs:
+                norm_kwargs["command"] = norm_kwargs["test_command"]
+            if "code" in norm_kwargs and "content" not in norm_kwargs:
+                norm_kwargs["content"] = norm_kwargs["code"]
+            if "text" in norm_kwargs and "content" not in norm_kwargs:
+                norm_kwargs["content"] = norm_kwargs["text"]
+            if "search_block" in norm_kwargs and "old_string" not in norm_kwargs:
+                norm_kwargs["old_string"] = norm_kwargs["search_block"]
+            if "replace_block" in norm_kwargs and "new_string" not in norm_kwargs:
+                norm_kwargs["new_string"] = norm_kwargs["replace_block"]
+            if "old_string" in norm_kwargs and "search_block" not in norm_kwargs:
+                norm_kwargs["search_block"] = norm_kwargs["old_string"]
+            if "new_string" in norm_kwargs and "replace_block" not in norm_kwargs:
+                norm_kwargs["replace_block"] = norm_kwargs["new_string"]
+            if "file" in norm_kwargs and "path" not in norm_kwargs:
+                norm_kwargs["path"] = norm_kwargs["file"]
+            if "file_path" in norm_kwargs and "path" not in norm_kwargs:
+                norm_kwargs["path"] = norm_kwargs["file_path"]
+
+            for name, val in norm_kwargs.items():
+                if has_var_keyword or name in params:
+                    call_kwargs[name] = val
+            if "context" in params or has_var_keyword:
+                call_kwargs["context"] = context
+
+            try:
+                return await self.handler(**call_kwargs)
+            except Exception as exc:
+                return {"error": f"Tool {self.name} failed with exception: {exc}"}
         return {"error": f"No handler implemented for tool {self.name}"}
 
 
@@ -81,91 +117,363 @@ async def handle_repository_read(
     start_line: int = None,
     end_line: int = None,
     context: dict = None,
+    **kwargs
 ) -> dict:
     """Reads a file (or line range) from the repository inside a safe sandbox path."""
     try:
         if context and context.get("sandbox_session_id"):
             from backend.services.sandbox_manager import SandboxManager
-            return SandboxManager.read_file(
-                context["sandbox_session_id"],
-                path,
-                start_line=start_line,
-                end_line=end_line,
-            )
+            sess = SandboxManager.get_session(context["sandbox_session_id"])
+            if sess:
+                return SandboxManager.read_file(
+                    context["sandbox_session_id"],
+                    path,
+                    start_line=start_line,
+                    end_line=end_line,
+                )
             
-        # Fallback if no sandbox (should not happen in real execution)
-        if not os.path.exists(path):
+        target_dir = None
+        if context and context.get("sandbox_dir") and os.path.isdir(context["sandbox_dir"]):
+            target_dir = context["sandbox_dir"]
+        elif os.environ.get("KOBITS_TARGET_WORKSPACE") and os.path.isdir(os.environ.get("KOBITS_TARGET_WORKSPACE")):
+            target_dir = os.environ.get("KOBITS_TARGET_WORKSPACE")
+        else:
+            target_dir = os.getcwd()
+
+        clean_path = path.lstrip("/\\")
+        abs_target = os.path.realpath(os.path.join(target_dir, clean_path))
+        target_real = os.path.realpath(target_dir)
+        if not (abs_target == target_real or abs_target.startswith(target_real + os.sep)):
+            return {"error": f"Security Block: Path traversal attempt detected: {path}"}
+
+        if not os.path.exists(abs_target):
             return {"error": f"File not found: {path}"}
-        if os.path.isdir(path):
-            files = os.listdir(path)
-            return {"type": "directory", "files": files}
-        with open(path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        return {"type": "file", "content": content}
+        if os.path.isdir(abs_target):
+            items = []
+            for p in sorted(os.scandir(abs_target), key=lambda x: x.name):
+                kind = "[DIR]" if p.is_dir() else "[FILE]"
+                size = f"({p.stat().st_size:,} bytes)" if p.is_file() else ""
+                items.append(f"{kind:<7} {p.name} {size}")
+            return {"type": "directory", "files": [p.name for p in os.scandir(abs_target)], "content": "\n".join(items)}
+
+        with open(abs_target, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()
+        total = len(lines)
+        s = max(1, start_line) if start_line else 1
+        e = min(total, end_line) if end_line else total
+        formatted = [f"{idx + 1:4d} | {lines[idx]}" for idx in range(s - 1, e)]
+        output_str = "\n".join(formatted) if formatted else "(File is empty)"
+        return {
+            "type": "file",
+            "path": path,
+            "total_lines": total,
+            "start_line": s,
+            "end_line": e,
+            "content": output_str,
+            "raw": "\n".join(lines[s - 1:e])
+        }
     except Exception as e:
         return {"error": str(e)}
 
-async def handle_repository_write(path: str, content: str, context: dict = None) -> dict:
+async def handle_read_file(path: str, start_line: int = None, end_line: int = None, context: dict = None, **kwargs) -> str:
+    """Reads the content of a file with 1-based line numbers."""
+    res = await handle_repository_read(path=path, start_line=start_line, end_line=end_line, context=context, **kwargs)
+    if "error" in res:
+        return f"Error: {res['error']}"
+    return res.get("content", str(res))
+
+async def handle_repository_write(path: str, content: str = "", context: dict = None, **kwargs) -> dict:
     """Writes a file to the repository safely using sandbox."""
     try:
+        raw_text = content or kwargs.get("code") or kwargs.get("text") or ""
+        lines = raw_text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        clean_content = "\n".join(lines)
+
         if context and context.get("sandbox_session_id"):
             from backend.services.sandbox_manager import SandboxManager
-            return SandboxManager.write_file(context["sandbox_session_id"], path, content)
+            sess = SandboxManager.get_session(context["sandbox_session_id"])
+            if sess:
+                return SandboxManager.write_file(context["sandbox_session_id"], path, clean_content)
             
-        return {"error": "No sandbox context provided."}
+        target_dir = None
+        if context and context.get("sandbox_dir") and os.path.isdir(context["sandbox_dir"]):
+            target_dir = context["sandbox_dir"]
+        elif os.environ.get("KOBITS_TARGET_WORKSPACE") and os.path.isdir(os.environ.get("KOBITS_TARGET_WORKSPACE")):
+            target_dir = os.environ.get("KOBITS_TARGET_WORKSPACE")
+        else:
+            target_dir = os.getcwd()
+
+        clean_path = path.lstrip("/\\")
+        abs_target = os.path.realpath(os.path.join(target_dir, clean_path))
+        target_real = os.path.realpath(target_dir)
+        if not (abs_target == target_real or abs_target.startswith(target_real + os.sep)):
+            return {"error": f"Security Block: Path traversal attempt detected: {path}"}
+
+        os.makedirs(os.path.dirname(abs_target), exist_ok=True)
+        with open(abs_target, "w", encoding="utf-8") as f:
+            f.write(clean_content)
+
+        return {
+            "status": "success",
+            "message": f"Successfully wrote {len(clean_content.splitlines())} lines to {path}",
+            "lines": len(clean_content.splitlines()),
+            "path": path
+        }
     except Exception as e:
         return {"error": str(e)}
+
+async def handle_write_file(path: str, content: str = "", context: dict = None, **kwargs) -> str:
+    """Creates a new file or overwrites an existing file."""
+    res = await handle_repository_write(path=path, content=content, context=context, **kwargs)
+    if "error" in res:
+        return f"Error: {res['error']}"
+    return res.get("message", f"Successfully wrote to {path}")
 
 async def handle_repository_edit(
     path: str,
     old_string: str = "",
     new_string: str = "",
+    search_block: str = "",
+    replace_block: str = "",
     replace_all: bool = False,
     edits: list = None,
     context: dict = None,
+    **kwargs
 ) -> dict:
     """Surgically patches an existing file inside the sandbox (single or atomic multi-chunk)."""
+    search_str = old_string or search_block
+    replace_str = new_string or replace_block
     try:
         if context and context.get("sandbox_session_id"):
             from backend.services.sandbox_manager import SandboxManager
-            return SandboxManager.edit_file(
-                context["sandbox_session_id"],
-                path,
-                old_string=old_string,
-                new_string=new_string,
-                replace_all=bool(replace_all),
-                edits=edits,
-            )
-        return {"error": "No sandbox context provided."}
+            sess = SandboxManager.get_session(context["sandbox_session_id"])
+            if sess:
+                return SandboxManager.edit_file(
+                    context["sandbox_session_id"],
+                    path,
+                    old_string=search_str,
+                    new_string=replace_str,
+                    replace_all=bool(replace_all),
+                    edits=edits,
+                )
+
+        target_dir = None
+        if context and context.get("sandbox_dir") and os.path.isdir(context["sandbox_dir"]):
+            target_dir = context["sandbox_dir"]
+        elif os.environ.get("KOBITS_TARGET_WORKSPACE") and os.path.isdir(os.environ.get("KOBITS_TARGET_WORKSPACE")):
+            target_dir = os.environ.get("KOBITS_TARGET_WORKSPACE")
+        else:
+            target_dir = os.getcwd()
+
+        clean_path = path.lstrip("/\\")
+        abs_target = os.path.realpath(os.path.join(target_dir, clean_path))
+        if not os.path.exists(abs_target):
+            return {"error": f"File not found: {path}"}
+
+        with open(abs_target, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        if search_str and search_str not in content:
+            return {"error": f"search_block / old_string not found in '{path}'. Please inspect lines via read_file first."}
+
+        count = content.count(search_str) if search_str else 0
+        if replace_all:
+            updated = content.replace(search_str, replace_str)
+        else:
+            updated = content.replace(search_str, replace_str, 1)
+
+        with open(abs_target, "w", encoding="utf-8") as f:
+            f.write(updated)
+
+        return {
+            "status": "success",
+            "message": f"Successfully replaced {count if replace_all else 1} block(s) in {path}",
+            "path": path,
+            "replacements": count if replace_all else 1
+        }
     except Exception as e:
         return {"error": str(e)}
 
-async def handle_repository_delete(path: str, context: dict = None) -> dict:
+async def handle_edit_file_block(path: str, search_block: str = "", replace_block: str = "", context: dict = None, **kwargs) -> str:
+    """Performs an atomic search-and-replace edit on an existing file."""
+    res = await handle_repository_edit(path=path, search_block=search_block, replace_block=replace_block, context=context, **kwargs)
+    if "error" in res:
+        return f"Error: {res['error']}"
+    return res.get("message", f"Successfully edited {path}")
+
+async def handle_repository_delete(path: str, context: dict = None, **kwargs) -> dict:
     """Safely deletes a file inside the sandboxed repository."""
     try:
         if context and context.get("sandbox_session_id"):
             from backend.services.sandbox_manager import SandboxManager
-            return SandboxManager.delete_file(context["sandbox_session_id"], path)
-        return {"error": "No sandbox context provided."}
+            sess = SandboxManager.get_session(context["sandbox_session_id"])
+            if sess:
+                return SandboxManager.delete_file(context["sandbox_session_id"], path)
+
+        target_dir = None
+        if context and context.get("sandbox_dir") and os.path.isdir(context["sandbox_dir"]):
+            target_dir = context["sandbox_dir"]
+        elif os.environ.get("KOBITS_TARGET_WORKSPACE") and os.path.isdir(os.environ.get("KOBITS_TARGET_WORKSPACE")):
+            target_dir = os.environ.get("KOBITS_TARGET_WORKSPACE")
+        else:
+            target_dir = os.getcwd()
+
+        clean_path = path.lstrip("/\\")
+        abs_target = os.path.realpath(os.path.join(target_dir, clean_path))
+        target_real = os.path.realpath(target_dir)
+        if not (abs_target == target_real or abs_target.startswith(target_real + os.sep)):
+            return {"error": f"Security Block: Path traversal attempt detected: {path}"}
+
+        if os.path.isfile(abs_target):
+            os.remove(abs_target)
+            return {"status": "success", "message": f"Deleted file: {path}"}
+        return {"error": f"File not found: {path}"}
     except Exception as e:
         return {"error": str(e)}
 
-async def handle_tests_run(test_command: str, context: dict = None) -> dict:
-    """Runs a test command inside the isolated Kyros container / MicroVM / virtual-rootfs sandbox."""
+async def handle_terminal_execute(command: str = "", timeout: int = 60, context: dict = None, **kwargs) -> dict:
+    """Executes a shell command inside the isolated Kyros container / MicroVM / virtual-rootfs sandbox."""
+    cmd = command or kwargs.get("cmd") or kwargs.get("test_command") or ""
+    if not cmd:
+        return {"error": "Missing 'command' argument."}
     try:
         if context and context.get("sandbox_session_id"):
             from backend.services.sandbox_manager import SandboxManager
-            return SandboxManager.run_command(context["sandbox_session_id"], test_command, timeout=60)
+            sess = SandboxManager.get_session(context["sandbox_session_id"])
+            if sess:
+                return SandboxManager.run_command(context["sandbox_session_id"], cmd, timeout=timeout)
+
+        target_dir = None
         if context and context.get("sandbox_dir") and os.path.isdir(context["sandbox_dir"]):
-            from backend.services.environment_bootstrapper import EnvironmentBootstrapper
-            return EnvironmentBootstrapper.execute_isolated(
-                sandbox_dir=context["sandbox_dir"],
-                command=test_command,
-                timeout=60,
-            )
-        return {"error": "No sandbox context provided."}
+            target_dir = context["sandbox_dir"]
+        elif os.environ.get("KOBITS_TARGET_WORKSPACE") and os.path.isdir(os.environ.get("KOBITS_TARGET_WORKSPACE")):
+            target_dir = os.environ.get("KOBITS_TARGET_WORKSPACE")
+        else:
+            target_dir = os.getcwd()
+
+        from backend.services.environment_bootstrapper import EnvironmentBootstrapper
+        return EnvironmentBootstrapper.execute_isolated(
+            session_id=(context or {}).get("sandbox_session_id") or "default",
+            sandbox_dir=target_dir,
+            command=cmd,
+            timeout=timeout,
+        )
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e), "exit_code": 1, "stdout": "", "stderr": str(e)}
+
+async def handle_tests_run(test_command: str = "", context: dict = None, **kwargs) -> dict:
+    """Runs a test command inside the isolated sandbox."""
+    cmd = test_command or kwargs.get("command") or kwargs.get("cmd") or ""
+    return await handle_terminal_execute(command=cmd, timeout=60, context=context, **kwargs)
+
+async def handle_run_command(command: str = "", timeout: int = 60, context: dict = None, **kwargs) -> str:
+    """Executes a shell command inside the workspace and returns formatted exit code, stdout, and stderr."""
+    res = await handle_terminal_execute(command=command, timeout=timeout, context=context, **kwargs)
+    code = res.get("exit_code", 0 if "error" not in res else 1)
+    out = (res.get("stdout") or "").strip()
+    err = (res.get("stderr") or res.get("error") or "").strip()
+    parts = [f"Exit Code: {code}"]
+    if out:
+        parts.append(f"STDOUT:\n{out}")
+    if err:
+        parts.append(f"STDERR:\n{err}")
+    return "\n".join(parts)
+
+async def handle_list_directory(path: str = ".", context: dict = None, **kwargs) -> str:
+    """Lists files and directories with sizes in the sandbox workspace."""
+    from pathlib import Path
+    try:
+        target_dir = None
+        if context and context.get("sandbox_session_id"):
+            from backend.services.sandbox_manager import SandboxManager
+            sess = SandboxManager.get_session(context["sandbox_session_id"])
+            if sess:
+                target_dir = sess.sandbox_dir
+        if not target_dir:
+            if context and context.get("sandbox_dir") and os.path.isdir(context["sandbox_dir"]):
+                target_dir = context["sandbox_dir"]
+            elif os.environ.get("KOBITS_TARGET_WORKSPACE") and os.path.isdir(os.environ.get("KOBITS_TARGET_WORKSPACE")):
+                target_dir = os.environ.get("KOBITS_TARGET_WORKSPACE")
+            else:
+                target_dir = os.getcwd()
+
+        base = Path(target_dir)
+        target = (base / path).resolve()
+        if not str(target).startswith(str(base)):
+            return f"Error: Path traversal detected: {path}"
+        if not target.exists():
+            return f"Error: Directory '{path}' does not exist."
+        items = []
+        for p in sorted(target.iterdir()):
+            kind = "[DIR]" if p.is_dir() else "[FILE]"
+            size = f"({p.stat().st_size:,} bytes)" if p.is_file() else ""
+            items.append(f"{kind:<7} {p.name} {size}")
+        return "\n".join(items) if items else f"Directory '{path}' is empty."
+    except Exception as e:
+        return f"Error: {e}"
+
+async def handle_search_code(query: str, file_pattern: str = None, context: dict = None, **kwargs) -> str:
+    """Recursively searches for regex pattern or keyword across files in workspace."""
+    import re
+    from pathlib import Path
+    try:
+        target_dir = None
+        if context and context.get("sandbox_session_id"):
+            from backend.services.sandbox_manager import SandboxManager
+            sess = SandboxManager.get_session(context["sandbox_session_id"])
+            if sess:
+                target_dir = sess.sandbox_dir
+        if not target_dir:
+            if context and context.get("sandbox_dir") and os.path.isdir(context["sandbox_dir"]):
+                target_dir = context["sandbox_dir"]
+            elif os.environ.get("KOBITS_TARGET_WORKSPACE") and os.path.isdir(os.environ.get("KOBITS_TARGET_WORKSPACE")):
+                target_dir = os.environ.get("KOBITS_TARGET_WORKSPACE")
+            else:
+                target_dir = os.getcwd()
+
+        base = Path(target_dir)
+        pattern = re.compile(query, re.IGNORECASE)
+        matches = []
+        glob_pat = file_pattern or "*"
+        for p in base.rglob(glob_pat):
+            if p.is_file() and not any(part.startswith((".", "node_modules", "venv", "__pycache__")) for part in p.parts):
+                try:
+                    lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+                    for idx, line in enumerate(lines, 1):
+                        if pattern.search(line):
+                            rel = p.relative_to(base)
+                            matches.append(f"{rel}:{idx}: {line.strip()[:120]}")
+                            if len(matches) >= 50:
+                                break
+                except Exception:
+                    continue
+        return "\n".join(matches) if matches else f"No matches found for query: '{query}'"
+    except Exception as e:
+        return f"Error: {e}"
+
+async def handle_delegate_to_specialist(task: str, context: dict = None, **kwargs) -> str:
+    """Delegates boilerplate schemas, data models, or raw tests to the local Kobits 14B model ($0 cost)."""
+    try:
+        from kobits_client import KobitsClient
+        client = KobitsClient()
+        prompt = f"Write complete, production-grade, syntactically clean code for: {task}. Zero placeholders."
+        res = client.generate(prompt, max_tokens=2500)
+        lines = res.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        return "\n".join(lines).strip()
+    except Exception as exc:
+        return f"Specialist synthesis failed: {exc}"
+
+async def handle_finish_mission(summary: str, artifacts: dict = None, context: dict = None, **kwargs) -> str:
+    """Declares the engineering task complete with an executive summary."""
+    return f"Mission accepted as complete: {summary}"
 
 async def handle_database_migrate(migration_script: str) -> dict:
     """Applies a database migration. Mocked for safety."""
@@ -182,23 +490,6 @@ async def handle_deployment_deploy(environment: str, **kwargs) -> dict:
 async def handle_deployment_rollback(environment: str) -> dict:
     """Rolls back the deployment."""
     return {"success": True, "message": f"Successfully rolled back {environment} to the previous stable release."}
-
-async def handle_terminal_execute(command: str, timeout: int = 60, context: dict = None) -> dict:
-    """Executes a shell command inside the isolated Kyros container / MicroVM / virtual-rootfs sandbox."""
-    try:
-        if context and context.get("sandbox_session_id"):
-            from backend.services.sandbox_manager import SandboxManager
-            return SandboxManager.run_command(context["sandbox_session_id"], command, timeout=timeout)
-        if context and context.get("sandbox_dir") and os.path.isdir(context["sandbox_dir"]):
-            from backend.services.environment_bootstrapper import EnvironmentBootstrapper
-            return EnvironmentBootstrapper.execute_isolated(
-                sandbox_dir=context["sandbox_dir"],
-                command=command,
-                timeout=timeout,
-            )
-        return {"error": "No sandbox context provided."}
-    except Exception as e:
-        return {"error": str(e)}
 
 async def handle_sandbox_exec(command: str, timeout: int = 120, context: dict = None) -> dict:
     """First-class Kyros MicroVM / Container shell execution tool (`sandbox.exec`)."""
@@ -508,7 +799,9 @@ ToolRegistry.register(ToolDefinition(
     handler=handle_deployment_rollback
 ))
 async def handle_repository_search(
-    query: str,
+    arg1: str = None,
+    arg2: str = None,
+    query: str = None,
     project_id: str = None,
     file_pattern: str = None,
     exclude_pattern: str = None,
@@ -521,8 +814,23 @@ async def handle_repository_search(
     after_context: int = None,
     max_results: int = 50,
     context: dict = None,
+    **kwargs
 ) -> dict:
-    resolved_project_id = project_id or (context.get("project_id") if context else None)
+    resolved_query = query
+    resolved_project_id = project_id
+    if arg1 is not None and resolved_query is None:
+        if arg2 is not None:
+            resolved_project_id = arg1
+            resolved_query = arg2
+        else:
+            resolved_query = arg1
+    elif arg2 is not None and resolved_query is None:
+        resolved_query = arg2
+
+    if resolved_query is None:
+        resolved_query = kwargs.get("q") or ""
+    if resolved_project_id is None:
+        resolved_project_id = (context.get("project_id") if context else None)
 
     # 1. Live sandbox ripgrep-style + semantic token window search
     sandbox_res = None
@@ -530,7 +838,7 @@ async def handle_repository_search(
         from backend.services.sandbox_manager import SandboxManager
         sandbox_res = SandboxManager.search_files(
             context["sandbox_session_id"],
-            query=query,
+            query=resolved_query,
             file_pattern=file_pattern,
             exclude_pattern=exclude_pattern,
             is_regex=is_regex,
@@ -753,4 +1061,252 @@ ToolRegistry.register(ToolDefinition(
     },
     handler=lambda kwargs, ctx: f"Lesson recorded" 
 ))
+
+# ─────────────────────────────────────────────────────────────────
+# ⚡ KYROS / DEVIN RE-ACT ENGINE TOOLS REGISTRATION
+# ─────────────────────────────────────────────────────────────────
+
+ToolRegistry.register(ToolDefinition(
+    name="list_directory",
+    description="Lists files and subdirectories in a workspace path with file sizes.",
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Relative directory path (use '.' for root workspace)."
+            }
+        },
+        "required": ["path"]
+    },
+    handler=handle_list_directory
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="read_file",
+    description="Reads the content of a file with 1-based line numbers. Supports reading line slices.",
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Relative path to the file."
+            },
+            "start_line": {
+                "type": "integer",
+                "description": "Optional starting line number (1-based)."
+            },
+            "end_line": {
+                "type": "integer",
+                "description": "Optional ending line number (1-based, inclusive)."
+            }
+        },
+        "required": ["path"]
+    },
+    handler=handle_read_file
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="search_code",
+    description="Recursively searches for a regex pattern or keyword across files in the workspace.",
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Regex pattern or exact text to search."
+            },
+            "file_pattern": {
+                "type": "string",
+                "description": "Optional glob filter, e.g. '*.py' or '*.html'."
+            }
+        },
+        "required": ["query"]
+    },
+    handler=handle_search_code
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="write_file",
+    description="Creates a new file or overwrites an existing file with complete content.",
+    risk_level=RiskLevel.MEDIUM,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Relative path to the file to create/overwrite."
+            },
+            "content": {
+                "type": "string",
+                "description": "Full text content to write."
+            }
+        },
+        "required": ["path", "content"]
+    },
+    handler=handle_write_file
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="edit_file_block",
+    description="Performs an atomic search-and-replace edit on an existing file without rewriting the whole file.",
+    risk_level=RiskLevel.MEDIUM,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Relative path to the file to edit."
+            },
+            "search_block": {
+                "type": "string",
+                "description": "Exact contiguous block of code to find."
+            },
+            "replace_block": {
+                "type": "string",
+                "description": "New code to replace the search block with."
+            }
+        },
+        "required": ["path", "search_block", "replace_block"]
+    },
+    handler=handle_edit_file_block
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="run_command",
+    description="Executes a shell command (e.g. pytest, python -c ..., git status) inside the workspace.",
+    risk_level=RiskLevel.MEDIUM,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "command": {
+                "type": "string",
+                "description": "The exact command string to execute in shell."
+            },
+            "timeout": {
+                "type": "integer",
+                "description": "Optional execution timeout in seconds (default 60)."
+            }
+        },
+        "required": ["command"]
+    },
+    handler=handle_run_command
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="delegate_to_specialist",
+    description="Delegates high-volume boilerplate generation, models, or raw tests to the local Kobits 14B engine ($0 marginal cost).",
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "task": {
+                "type": "string",
+                "description": "Detailed description of the code or schema to synthesize."
+            }
+        },
+        "required": ["task"]
+    },
+    handler=handle_delegate_to_specialist
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="finish_mission",
+    description="Declares the engineering task complete with an executive summary of delivered features and verification results.",
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "summary": {
+                "type": "string",
+                "description": "Comprehensive summary of changes made, tests passed, and verification status."
+            }
+        },
+        "required": ["summary"]
+    },
+    handler=handle_finish_mission
+))
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LANGUAGE SERVER PROTOCOL (LSP) TOOLS (Kyros Parity Layer 3)
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def handle_lsp_goto_definition(symbol: str, current_file: str = None, context: dict = None) -> dict:
+    from backend.services.lsp_service import LSPService
+    ws = "."
+    if context and context.get("sandbox_dir"):
+        ws = context["sandbox_dir"]
+    return LSPService.goto_definition(symbol, current_file=current_file, workspace_dir=ws)
+
+async def handle_lsp_find_references(symbol: str, max_results: int = 25, context: dict = None) -> dict:
+    from backend.services.lsp_service import LSPService
+    ws = "."
+    if context and context.get("sandbox_dir"):
+        ws = context["sandbox_dir"]
+    return LSPService.find_references(symbol, workspace_dir=ws, max_results=max_results)
+
+async def handle_lsp_document_symbols(file_path: str, context: dict = None) -> dict:
+    from backend.services.lsp_service import LSPService
+    ws = "."
+    if context and context.get("sandbox_dir"):
+        ws = context["sandbox_dir"]
+    return LSPService.get_document_symbols(file_path, workspace_dir=ws)
+
+ToolRegistry.register(ToolDefinition(
+    name="lsp.goto_definition",
+    description=(
+        "Language Server Protocol: Jump directly to the exact definition line, file, and signature "
+        "of any class, function, method, or variable using AST & import tracing (100% compiler precision)."
+    ),
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "The exact function, class, or variable name to locate."},
+            "current_file": {"type": "string", "description": "Optional file path where the symbol is referenced (traces imports)."}
+        },
+        "required": ["symbol"]
+    },
+    handler=handle_lsp_goto_definition
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="lsp.find_references",
+    description=(
+        "Language Server Protocol: Find all exact call sites, usages, and imports of a symbol "
+        "across the entire project with line numbers and context."
+    ),
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "Symbol name to find usages for."},
+            "max_results": {"type": "integer", "description": "Maximum references to return (default 25)."}
+        },
+        "required": ["symbol"]
+    },
+    handler=handle_lsp_find_references
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="lsp.document_symbols",
+    description=(
+        "Language Server Protocol: Get the hierarchical symbol outline (classes, methods, functions) "
+        "of a specific file."
+    ),
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "file_path": {"type": "string", "description": "Relative file path in the workspace."}
+        },
+        "required": ["file_path"]
+    },
+    handler=handle_lsp_document_symbols
+))
+
+
 

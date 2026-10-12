@@ -604,6 +604,15 @@ WORKDIR /workspace
         driver = cls.detect_isolation_driver()
         vm_id = f"kobits-vm-{session_id}"
 
+        # 0. Cloud MicroVM Execution (E2B Firecracker MicroVM on AWS)
+        if driver == "cloud_microvm" and os.environ.get("E2B_API_KEY"):
+            try:
+                from backend.services.cloud_sandbox import CloudMicroVMSandbox
+                cloud_sb = CloudMicroVMSandbox()
+                return cloud_sb.run_command(command, timeout=timeout)
+            except Exception as e:
+                logger.warning(f"Cloud microVM execution failed, falling back to jail: {e}")
+
         # 1. Docker Container Execution (Persistent Per-Sprint Container)
         if driver == "docker_container":
             container_name = cls.ensure_session_container(session_id, sandbox_abs, resource_limits)
@@ -765,5 +774,15 @@ WORKDIR /workspace
             ]
             return exec_cmd, False, script_path
 
-        norm_cmd = cls.normalize_command_for_sandbox(sandbox_abs, command, is_docker=False)
-        return norm_cmd, True, ""
+        if platform.system() == "Windows":
+            script_path = os.path.join(sandbox_abs, ".kobits_run.bat")
+            venv_activate = os.path.join(sandbox_abs, ".venv", "Scripts", "activate.bat")
+            with open(script_path, "w", encoding="utf-8") as f:
+                f.write(f"@echo off\r\nif exist \"{venv_activate}\" call \"{venv_activate}\"\r\n{command}\r\n")
+            return script_path, True, script_path
+        else:
+            script_path = os.path.join(sandbox_abs, ".kobits_run.sh")
+            venv_activate = os.path.join(sandbox_abs, ".venv", "bin", "activate")
+            with open(script_path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(f"#!/bin/sh\n[ -f \"{venv_activate}\" ] && . \"{venv_activate}\"\n{command}\n")
+            return f"sh {script_path}", True, script_path

@@ -6,7 +6,7 @@ import subprocess
 from backend.services.environment_bootstrapper import EnvironmentBootstrapper
 
 def has_docker():
-    return shutil.which("docker") is not None
+    return EnvironmentBootstrapper.is_docker_daemon_available()
 
 @pytest.fixture
 def dummy_sandbox(tmpdir):

@@ -24,8 +24,8 @@ class MockProvider:
 
 import random
 async def setup_test_db():
-    db_name = f"memdb{random.randint(1, 10000)}"
-    engine = create_async_engine(f"sqlite+aiosqlite:///file:{db_name}?mode=memory&cache=shared")
+    temp_db = os.path.join(tempfile.gettempdir(), f"kobits_rec_{uuid.uuid4().hex[:8]}.db")
+    engine = create_async_engine(f"sqlite+aiosqlite:///{temp_db.replace(os.sep, '/')}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     return engine, async_sessionmaker(engine, expire_on_commit=False)
@@ -39,7 +39,7 @@ async def create_test_data(session):
 
     session.add_all([
         Agent(id="system", type=AgentType.BACKEND_ENGINEER.value, name="Backend", system_prompt="test"),
-        Mission(id=mission_id, organization_id=org_id, project_id=proj_id, created_by=user_id, title="Test Mission", objective="Test"),
+        Mission(id=mission_id, organization_id=org_id, project_id=proj_id, created_by=user_id, title="Test Mission", objective="Test", status=MissionStatus.ACTIVE),
         Task(id=task_id, mission_id=mission_id, project_id=proj_id, title="Test Task", description="Test", created_by=user_id)
     ])
     await session.commit()
@@ -83,23 +83,20 @@ async def test_missing_sandbox_safety_block():
         user_id, org_id, proj_id, mission_id, task_id = await create_test_data(db)
         
         mission = await db.get(Mission, mission_id)
-        mission.active_branch = "kobits/missing/123"
+        mission.active_branch = f"kobits/missing/{uuid.uuid4().hex}"
         task = await db.get(Task, task_id)
         task.status = TaskStatus.PENDING
         await db.commit()
         
-        runtime = MissionRuntime(mission_id=mission_id, organization_id=org_id, user_id=user_id)
-        # Mock the db inside for the test if it opens sessions, but actually we can just pass the engine or override it.
-        # MissionRuntime uses `async with get_db_session() as db:` which is global. 
-        # But wait, I'm using an in-memory DB in tests! 
-        # Let's mock `get_db_session` in the test.
-        import backend.services.mission_runtime
-        backend.services.mission_runtime.AsyncSessionLocal = session_factory
-        
-        success = await runtime.execute_task(task_id)
-        assert not success, "Task execution should have been blocked!"
-        
-        # Check run status in DB
+    runtime = MissionRuntime(mission_id=mission_id, organization_id=org_id, user_id=user_id)
+    import backend.services.mission_runtime
+    backend.services.mission_runtime.AsyncSessionLocal = session_factory
+    
+    success = await runtime.execute_task(task_id)
+    assert not success, "Task execution should have been blocked!"
+    
+    # Check run status in DB
+    async with session_factory() as db:
         from sqlalchemy import select
         stmt = select(AgentRun).where(AgentRun.task_id == task_id)
         run = (await db.execute(stmt)).scalars().first()

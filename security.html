@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kobits - AI Engineering Platform</title>
+    <title>Kobits — Security & Zero-Trust Sandbox Isolation</title>
     
-    <!-- Fonts: Inter and JetBrains Mono -->
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -22,193 +22,189 @@
                     },
                     colors: {
                         kb: {
-                            bg: '#09090b',
-                            surface: '#121214',
-                            border: '#27272a',
-                            accent: '#3b82f6',
+                            bg: '#050505',
+                            surface: '#0f0f11',
+                            border: '#222226',
+                            accent: '#ffffff',
                         }
-                    },
-                    letterSpacing: {
-                        tighter: '-.04em',
-                        tight: '-.02em',
-                        widest: '.1em',
                     }
                 }
             }
         }
     </script>
-    
-    <!-- Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
         body {
-            background-color: #09090b;
+            background-color: #050505;
             color: #fafafa;
             font-feature-settings: "cv02", "cv03", "cv04", "cv11";
             -webkit-font-smoothing: antialiased;
         }
-        
-        .fig-label {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            color: #71717a;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .fig-container {
-            border: 1px solid #27272a;
-            background: linear-gradient(180deg, rgba(24,24,27,0) 0%, rgba(24,24,27,0.4) 100%);
+        .hairline-b { border-bottom: 1px solid #222226; }
+        .hairline-t { border-top: 1px solid #222226; }
+        .card-wire {
+            background: #0f0f11;
+            border: 1px solid #222226;
             position: relative;
-            overflow: hidden;
+            transition: all 0.25s ease;
         }
-        
-        .technical-grid {
-            background-image: linear-gradient(to right, #27272a 1px, transparent 1px),
-                              linear-gradient(to bottom, #27272a 1px, transparent 1px);
-            background-size: 24px 24px;
+        .card-wire:hover {
+            border-color: #38383f;
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.03);
+            transform: translateY(-2px);
         }
-
-        .hairline-b { border-bottom: 1px solid #27272a; }
-        .hairline-t { border-top: 1px solid #27272a; }
-        .hairline-l { border-left: 1px solid #27272a; }
-        .hairline-r { border-right: 1px solid #27272a; }
-
-        .diagram-node {
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            background: rgba(255, 255, 255, 0.02);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            color: #a1a1aa;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 11px;
-            padding: 6px 12px;
-            border-radius: 6px;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            z-index: 10;
-        }
-        .diagram-node.active {
-            border-color: rgba(59, 130, 246, 0.4);
-            color: #bfdbfe;
-            background: rgba(59, 130, 246, 0.05);
-        }
-
-        /* Subtle reveal animation */
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-up {
-            animation: fadeUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            opacity: 0;
-        }
-        
-        @keyframes drawLineH {
-            from { transform: scaleX(0); }
-            to { transform: scaleX(1); }
-        }
-        .animate-draw-h {
-            transform-origin: left;
-            animation: drawLineH 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        .card-wire::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 20px; height: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            border-left: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px 0 0 0;
         }
     </style>
 </head>
-<body class="selection:bg-blue-500/30">
+<body class="selection:bg-white/20">
 
     <!-- NAVIGATION -->
-    <nav class="fixed top-0 left-0 w-full h-14 bg-kb-bg/80 backdrop-blur-md hairline-b z-50 flex items-center justify-between px-6">
+    <nav class="fixed top-0 left-0 w-full h-14 bg-[#050505]/90 backdrop-blur-md hairline-b z-50 flex items-center justify-between px-6">
         <div class="flex items-center">
-            <a href="/index.html" class="font-medium tracking-tight text-white flex items-center gap-2">
-                <div class="w-5 h-5 bg-white rounded-sm"></div>
-                KOBITS
+            <a href="/" class="font-medium tracking-tight text-white flex items-center gap-2.5 group">
+                <div class="w-7 h-7 flex items-center justify-center text-white transition-transform group-hover:scale-110">
+                    <svg class="w-6 h-6" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+                        <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+                        <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <span class="font-bold tracking-tight text-sm text-white">KOBITS</span>
             </a>
         </div>
         <div class="flex items-center gap-6 text-sm">
-            <div class="hidden lg:flex items-center gap-6 text-zinc-400 border-r border-zinc-800 pr-6">
+            <div class="hidden lg:flex items-center gap-6 text-zinc-400 border-r border-zinc-800 pr-6 text-xs font-mono uppercase tracking-wider">
                 <a href="/product.html" class="hover:text-white transition-colors">Product</a>
-                <a href="/how-it-works.html" class="hover:text-white transition-colors">How It Works</a>
                 <a href="/engineering.html" class="hover:text-white transition-colors">Engineering</a>
-                <a href="/security.html" class="text-white font-medium transition-colors">Security</a>
-                <a href="/memory.html" class="hover:text-white transition-colors">Memory</a>
+                <a href="/how-it-works.html" class="hover:text-white transition-colors">How It Works</a>
+                <a href="/security.html" class="text-white font-semibold">Security</a>
+                <a href="/pricing.html" class="hover:text-white transition-colors">Pricing</a>
             </div>
             <div class="flex items-center gap-4">
-                <a href="/portal.html#login" class="text-zinc-400 hover:text-white transition-colors">Sign in</a>
-                <a href="/portal.html#login" class="bg-white text-black px-4 py-1.5 rounded-full font-medium hover:bg-zinc-200 transition-colors">Start building</a>
+                <a href="/portal.html#login" class="text-zinc-400 hover:text-white text-xs transition-colors font-mono uppercase">Sign in</a>
+                <a href="/portal.html#login" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-medium hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)] hover:scale-[1.02]">Start building</a>
             </div>
         </div>
     </nav>
-<!-- SECTION 06: SECURITY -->
-    <section id="security" class="py-32 hairline-t bg-zinc-950">
-        <div class="max-w-[1400px] mx-auto px-6">
-            <div class="grid lg:grid-cols-2 gap-16 items-center">
-                <div class="order-2 lg:order-1">
-                    <div class="fig-container rounded-xl p-8 bg-kb-bg">
-                        <div class="flex items-center justify-between gap-2 mb-10 text-[10px] font-mono overflow-hidden whitespace-nowrap opacity-60">
-                            <div>CODE</div>
-                            <div class="flex-1 h-px bg-zinc-800"></div>
-                            <div class="text-red-400">AEGIS</div>
-                            <div class="flex-1 h-px bg-zinc-800"></div>
-                            <div>CORRECTION</div>
-                            <div class="flex-1 h-px bg-zinc-800"></div>
-                            <div>REVALIDATION</div>
-                        </div>
-                        
-                        <div class="bg-zinc-900/50 border border-zinc-800 rounded p-6">
-                            <div class="flex justify-between items-start mb-4">
-                                <div class="text-sm text-zinc-100 font-mono">Hardcoded credential detected</div>
-                                <div class="text-[10px] uppercase font-bold text-red-400 bg-red-400/10 border border-red-900/50 px-2 py-0.5 rounded tracking-wider">Critical</div>
-                            </div>
-                            <div class="text-xs text-zinc-500 font-mono mb-8">auth/service.py:14</div>
-                            <div class="flex justify-between items-center hairline-t pt-4">
-                                <div class="flex items-center gap-2">
-                                    <i data-lucide="check-circle" class="w-4 h-4 text-lime-500"></i>
-                                    <span class="text-xs text-lime-400 font-mono uppercase tracking-widest">Resolved by Sentinel</span>
-                                </div>
-                                <div class="text-xs text-zinc-600 font-mono">Just now</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="order-1 lg:order-2">
-                    <h2 class="text-4xl md:text-5xl tracking-tighter leading-[1.1] font-medium mb-6">Security is part of the engineering loop.</h2>
-                    <p class="text-lg text-zinc-400 max-w-lg">Not an afterthought. Automated security scanning and simulated code review happen concurrently with implementation, fixing vulnerabilities before code is merged.</p>
-                </div>
-            </div>
-        </div>
-    </section>
 
-    <!-- SECTION 12: FINAL CTA -->
-    <section class="py-48 hairline-t relative overflow-hidden bg-zinc-950">
-        <div class="absolute inset-0 technical-grid opacity-10"></div>
-        <div class="max-w-[1400px] mx-auto px-6 text-center relative z-10">
-            <h2 class="text-[4rem] md:text-[6.5rem] tracking-tighter leading-[0.9] font-medium mb-10 text-white">Tell Kobits<br>what to build.</h2>
-            <p class="text-xl text-zinc-400 mb-16 font-medium tracking-wide">Your engineering team is ready.</p>
-            
-            <div class="flex flex-col sm:flex-row items-center justify-center gap-6 max-w-xl mx-auto">
-                <a href="/portal.html#login" class="bg-white text-black px-8 py-4 rounded-full text-sm font-medium hover:bg-zinc-200 transition-colors w-full sm:w-auto flex items-center justify-center gap-2">
-                    Start a Mission <i data-lucide="arrow-right" class="w-4 h-4"></i>
-                </a>
-                <a href="/portal.html#preview" class="text-zinc-400 hover:text-white text-sm font-medium transition-colors border border-zinc-800 bg-zinc-900/50 px-8 py-4 rounded-full w-full sm:w-auto">
-                    Explore the Workspace
-                </a>
+    <!-- HEADER -->
+    <header class="pt-40 pb-16 px-6 max-w-[1200px] mx-auto text-center relative">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-800 bg-zinc-950 text-xs font-mono text-zinc-400 mb-6">
+            <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+            <span>ENTERPRISE DEFENSE // ZERO-TRUST SANDBOXING</span>
+        </div>
+        <h1 class="text-4xl md:text-6xl font-medium tracking-tight text-white mb-6">
+            Zero blast radius.<br>
+            <span class="text-zinc-500">Rigorous code containment.</span>
+        </h1>
+        <p class="text-zinc-400 text-base max-w-xl mx-auto leading-relaxed">
+            Autonomous engineering demands uncompromising isolation. Kobits provides kernel-level microVM barriers, private ephemeral networks, and AST credential scanners.
+        </p>
+    </header>
+
+    <!-- 4 PILLARS OF SECURITY -->
+    <section class="pb-28 px-6 max-w-[1200px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
+        
+        <!-- Pillar 1 -->
+        <div class="card-wire p-8 rounded-xl">
+            <div class="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-white mb-6">
+                <i data-lucide="shield" class="w-5 h-5"></i>
+            </div>
+            <h2 class="text-xl font-bold text-white mb-3">Hardware-Isolated MicroVMs</h2>
+            <p class="text-xs text-zinc-400 leading-relaxed mb-6">
+                Agents execute with root privileges inside a disposable, ephemeral guest Linux kernel. If malicious code or an accident occurs (e.g. `rm -rf /`), only the disposable container dies. Host integrity is mathematically unaffected.
+            </p>
+            <div class="font-mono text-[11px] text-zinc-500 space-y-1">
+                <div>• Cleanroom jail isolation</div>
+                <div>• Strict CPU, memory &amp; PID ceilings</div>
+                <div>• Ephemeral filesystem destroyed on mission exit</div>
             </div>
         </div>
+
+        <!-- Pillar 2 -->
+        <div class="card-wire p-8 rounded-xl">
+            <div class="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-white mb-6">
+                <i data-lucide="lock" class="w-5 h-5"></i>
+            </div>
+            <h2 class="text-xl font-bold text-white mb-3">Zero Secret Leakage Engine</h2>
+            <p class="text-xs text-zinc-400 leading-relaxed mb-6">
+                Secrets, API tokens, and private environment variables are never passed directly to raw LLM prompt trajectories. Environment variables are injected into the runtime container via bound secret vaults.
+            </p>
+            <div class="font-mono text-[11px] text-zinc-500 space-y-1">
+                <div>• Automatic regex token redaction on logs</div>
+                <div>• In-memory ephemeral secret injection</div>
+                <div>• No keys ever committed to git history</div>
+            </div>
+        </div>
+
+        <!-- Pillar 3 -->
+        <div class="card-wire p-8 rounded-xl">
+            <div class="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-white mb-6">
+                <i data-lucide="radar" class="w-5 h-5"></i>
+            </div>
+            <h2 class="text-xl font-bold text-white mb-3">Aegis Security Sentinel</h2>
+            <p class="text-xs text-zinc-400 leading-relaxed mb-6">
+                Every code changeset is audited by the Aegis specialist before a PR is opened. Scans for OWASP Top 10 vulnerabilities, insecure dependency versions, SQL injection vulnerabilities, and privilege escalation risks.
+            </p>
+            <div class="font-mono text-[11px] text-zinc-500 space-y-1">
+                <div>• Abstract Syntax Tree (AST) vulnerability checks</div>
+                <div>• Static analysis with bandit and semgrep rules</div>
+                <div>• Security findings block automated PR merging</div>
+            </div>
+        </div>
+
+        <!-- Pillar 4 -->
+        <div class="card-wire p-8 rounded-xl">
+            <div class="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-white mb-6">
+                <i data-lucide="git-pull-request" class="w-5 h-5"></i>
+            </div>
+            <h2 class="text-xl font-bold text-white mb-3">Human-in-the-Loop Gating</h2>
+            <p class="text-xs text-zinc-400 leading-relaxed mb-6">
+                You retain ultimate authority. Missions can be configured for strict human approval before changes are pushed to your remote repositories or before sensitive architectural DAGs execute.
+            </p>
+            <div class="font-mono text-[11px] text-zinc-500 space-y-1">
+                <div>• Configurable approval policies (autopilot or gated)</div>
+                <div>• Interactive visual diff viewer before apply</div>
+                <div>• Real-time WebSocket abort steering</div>
+            </div>
+        </div>
+
     </section>
 
     <!-- FOOTER -->
-    <footer class="py-12 hairline-t text-center text-zinc-600 text-[10px] font-mono tracking-widest bg-kb-bg">
-        KOBITS AI ENGINEERING
+    <footer class="py-12 hairline-t text-center text-zinc-600 text-[10px] font-mono tracking-widest bg-[#050505] flex flex-col sm:flex-row items-center justify-between px-8 max-w-[1400px] mx-auto gap-4">
+        <div class="flex items-center gap-2.5">
+            <div class="w-4 h-4 text-zinc-500">
+                <svg viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+                    <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+                    <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <span>KOBITS AI ENGINEERING</span>
+        </div>
+        <div class="flex items-center gap-6 text-zinc-500">
+            <a href="/product.html" class="hover:text-zinc-300 transition-colors">PRODUCT</a>
+            <a href="/engineering.html" class="hover:text-zinc-300 transition-colors">ENGINEERING</a>
+            <a href="/how-it-works.html" class="hover:text-zinc-300 transition-colors">HOW IT WORKS</a>
+            <a href="/security.html" class="hover:text-zinc-300 transition-colors text-zinc-300">SECURITY</a>
+            <a href="/pricing.html" class="hover:text-zinc-300 transition-colors">PRICING</a>
+        </div>
+        <div>
+            <span>© 2026 KOBITS</span>
+        </div>
     </footer>
 
     <script>
-        // Initialize Lucide icons
         lucide.createIcons();
     </script>
 </body>

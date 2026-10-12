@@ -275,10 +275,45 @@ function getFakeDashboard(projectId) {
 // ── API Router ─────────────────────────────────────────────────────────────
 
 export async function api(method, path, body) {
-  // Support explicit query override (?live_db=true) if ever needed
-  const isLiveRequested = window.location.search.includes('live_db=true');
+  const isDemoExplicit = typeof window !== 'undefined' && (
+    window.location.search.includes('mock=true') || window.location.search.includes('demo=true')
+  );
 
-  if (!isLiveRequested) {
+  if (!isDemoExplicit) {
+    const opts = { method, credentials: 'include', headers: {} };
+    if (typeof localStorage !== 'undefined') {
+      const token = localStorage.getItem('kobits_token');
+      if (token) {
+        opts.headers['Authorization'] = `Bearer ${token}`;
+      }
+    }
+    if (body !== undefined) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    const backendBase = (typeof window !== 'undefined' && window.KOBITS_API_URL)
+      ? window.KOBITS_API_URL
+      : (typeof window !== 'undefined' && window.location.hostname.includes('kobits.space')
+        ? 'https://kobitss.onrender.com'
+        : '');
+    try {
+      const res = await fetch(`${backendBase}/api/v1${path}`, opts);
+      const text = await res.text();
+      let data = null;
+      if (text) {
+        try { data = JSON.parse(text); } catch { data = text; }
+      }
+      if (res.ok) {
+        return data;
+      }
+      const detail = data && typeof data === 'object' ? (data.detail || JSON.stringify(data)) : (data || res.statusText);
+      throw new ApiError(res.status, typeof detail === 'string' ? detail : JSON.stringify(detail));
+    } catch (e) {
+      if (e instanceof ApiError) throw e;
+      console.warn('Backend unavailable, using showcase demo fallback:', e.message);
+    }
+  }
+
     // 1. Dashboard summary & aggregated telemetry
     if (path.startsWith('/org/dashboard')) {
       const u = new URL('http://localhost' + path);
@@ -409,37 +444,10 @@ index 0000000..9b62a4f
         const newId = "demo-msn-" + Math.random().toString(36).substring(2, 7);
         return { mission_id: newId, status: "PLANNING" };
       }
-      return { success: true, message: "Operation completed in isolated sandbox cleanroom." };
-    }
+      return { success: true, message: "Operation completed." };
   }
 
-  // Fallback to real backend fetch if live_db=true
-  const opts = { method, credentials: 'include', headers: {} };
-  if (body !== undefined) {
-    opts.headers['Content-Type'] = 'application/json';
-    opts.body = JSON.stringify(body);
-  }
-  let res;
-  const backendBase = (typeof window !== 'undefined' && window.KOBITS_API_URL)
-    ? window.KOBITS_API_URL
-    : (typeof window !== 'undefined' && window.location.hostname.includes('kobits.space')
-      ? 'https://kobitss.onrender.com'
-      : '');
-  try {
-    res = await fetch(`${backendBase}/api/v1${path}`, opts);
-  } catch (e) {
-    throw new ApiError(0, 'Cannot reach the Kobits server. Is it running?');
-  }
-  const text = await res.text();
-  let data = null;
-  if (text) {
-    try { data = JSON.parse(text); } catch { data = text; }
-  }
-  if (!res.ok) {
-    const detail = data && typeof data === 'object' ? (data.detail || JSON.stringify(data)) : (data || res.statusText);
-    throw new ApiError(res.status, typeof detail === 'string' ? detail : JSON.stringify(detail));
-  }
-  return data;
+  return null;
 }
 
 export const get = (p) => api('GET', p);

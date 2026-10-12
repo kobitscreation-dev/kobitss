@@ -24,11 +24,6 @@ from backend.models.agent import AgentRun, AgentRunStatus, Agent, AgentStatus
 from backend.services.agent_registry import AgentType
 from backend.services.agent_executor import AgentExecutor
 
-# Explicitly use Token Harbor
-os.environ['LLM_BASE_URL'] = 'https://tokenharbor.ai/v1'
-os.environ['LLM_PROVIDER'] = 'deepseek'
-os.environ['REAL_AI_TEST'] = '1'
-
 FIXTURE_DIR = Path.cwd() / "benchmark_fixture_repo"
 
 def setup_fixture():
@@ -50,7 +45,10 @@ def setup_fixture():
     (FIXTURE_DIR / ".git" / "config").write_text("[core]\n")
 
 @pytest.mark.asyncio
-async def test_benchmark_fixture():
+async def test_benchmark_fixture(monkeypatch):
+    monkeypatch.setenv("LLM_BASE_URL", "https://tokenharbor.ai/v1")
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("REAL_AI_TEST", "1")
     report = {
         "sandbox_fixture": "FAIL",
         "windows_path": "FAIL",

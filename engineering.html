@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kobits - AI Engineering Platform</title>
+    <title>Kobits — Engineering Architecture & MicroVM Specs</title>
     
-    <!-- Fonts: Inter and JetBrains Mono -->
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -22,318 +22,258 @@
                     },
                     colors: {
                         kb: {
-                            bg: '#09090b',
-                            surface: '#121214',
-                            border: '#27272a',
-                            accent: '#3b82f6',
+                            bg: '#050505',
+                            surface: '#0f0f11',
+                            border: '#222226',
+                            accent: '#ffffff',
                         }
-                    },
-                    letterSpacing: {
-                        tighter: '-.04em',
-                        tight: '-.02em',
-                        widest: '.1em',
                     }
                 }
             }
         }
     </script>
-    
-    <!-- Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
         body {
-            background-color: #09090b;
+            background-color: #050505;
             color: #fafafa;
             font-feature-settings: "cv02", "cv03", "cv04", "cv11";
             -webkit-font-smoothing: antialiased;
         }
-        
-        .fig-label {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            color: #71717a;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .fig-container {
-            border: 1px solid #27272a;
-            background: linear-gradient(180deg, rgba(24,24,27,0) 0%, rgba(24,24,27,0.4) 100%);
+        .hairline-b { border-bottom: 1px solid #222226; }
+        .hairline-t { border-top: 1px solid #222226; }
+        .card-wire {
+            background: #0f0f11;
+            border: 1px solid #222226;
             position: relative;
-            overflow: hidden;
+            transition: all 0.25s ease;
         }
-        
+        .card-wire:hover {
+            border-color: #38383f;
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.03);
+            transform: translateY(-2px);
+        }
+        .card-wire::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 20px; height: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            border-left: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px 0 0 0;
+        }
         .technical-grid {
-            background-image: linear-gradient(to right, #27272a 1px, transparent 1px),
-                              linear-gradient(to bottom, #27272a 1px, transparent 1px);
-            background-size: 24px 24px;
-        }
-
-        .hairline-b { border-bottom: 1px solid #27272a; }
-        .hairline-t { border-top: 1px solid #27272a; }
-        .hairline-l { border-left: 1px solid #27272a; }
-        .hairline-r { border-right: 1px solid #27272a; }
-
-        .diagram-node {
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            background: rgba(255, 255, 255, 0.02);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            color: #a1a1aa;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 11px;
-            padding: 6px 12px;
-            border-radius: 6px;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            z-index: 10;
-        }
-        .diagram-node.active {
-            border-color: rgba(59, 130, 246, 0.4);
-            color: #bfdbfe;
-            background: rgba(59, 130, 246, 0.05);
-        }
-
-        /* Subtle reveal animation */
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-up {
-            animation: fadeUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            opacity: 0;
-        }
-        
-        @keyframes drawLineH {
-            from { transform: scaleX(0); }
-            to { transform: scaleX(1); }
-        }
-        .animate-draw-h {
-            transform-origin: left;
-            animation: drawLineH 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            background-image: linear-gradient(to right, #1f1f23 1px, transparent 1px),
+                              linear-gradient(to bottom, #1f1f23 1px, transparent 1px);
+            background-size: 32px 32px;
         }
     </style>
 </head>
-<body class="selection:bg-blue-500/30">
+<body class="selection:bg-white/20">
 
     <!-- NAVIGATION -->
-    <nav class="fixed top-0 left-0 w-full h-14 bg-kb-bg/80 backdrop-blur-md hairline-b z-50 flex items-center justify-between px-6">
+    <nav class="fixed top-0 left-0 w-full h-14 bg-[#050505]/90 backdrop-blur-md hairline-b z-50 flex items-center justify-between px-6">
         <div class="flex items-center">
-            <a href="/index.html" class="font-medium tracking-tight text-white flex items-center gap-2">
-                <div class="w-5 h-5 bg-white rounded-sm"></div>
-                KOBITS
+            <a href="/" class="font-medium tracking-tight text-white flex items-center gap-2.5 group">
+                <div class="w-7 h-7 flex items-center justify-center text-white transition-transform group-hover:scale-110">
+                    <svg class="w-6 h-6" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+                        <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+                        <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <span class="font-bold tracking-tight text-sm text-white">KOBITS</span>
             </a>
         </div>
         <div class="flex items-center gap-6 text-sm">
-            <div class="hidden lg:flex items-center gap-6 text-zinc-400 border-r border-zinc-800 pr-6">
+            <div class="hidden lg:flex items-center gap-6 text-zinc-400 border-r border-zinc-800 pr-6 text-xs font-mono uppercase tracking-wider">
                 <a href="/product.html" class="hover:text-white transition-colors">Product</a>
+                <a href="/engineering.html" class="text-white font-semibold">Engineering</a>
                 <a href="/how-it-works.html" class="hover:text-white transition-colors">How It Works</a>
-                <a href="/engineering.html" class="text-white font-medium transition-colors">Engineering</a>
                 <a href="/security.html" class="hover:text-white transition-colors">Security</a>
-                <a href="/memory.html" class="hover:text-white transition-colors">Memory</a>
+                <a href="/pricing.html" class="hover:text-white transition-colors">Pricing</a>
             </div>
             <div class="flex items-center gap-4">
-                <a href="/portal.html#login" class="text-zinc-400 hover:text-white transition-colors">Sign in</a>
-                <a href="/portal.html#login" class="bg-white text-black px-4 py-1.5 rounded-full font-medium hover:bg-zinc-200 transition-colors">Start building</a>
+                <a href="/portal.html#login" class="text-zinc-400 hover:text-white text-xs transition-colors font-mono uppercase">Sign in</a>
+                <a href="/portal.html#login" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-medium hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)] hover:scale-[1.02]">Start building</a>
             </div>
         </div>
     </nav>
-<!-- SECTION 04: MISSION SYSTEM -->
-    <section id="engineering" class="py-32 hairline-t bg-kb-surface">
-        <div class="max-w-[1400px] mx-auto px-6">
-            <div class="text-center mb-16">
-                <h2 class="text-4xl md:text-5xl tracking-tighter font-medium mb-6">A mission is the unit of engineering work.</h2>
-            </div>
-            
-            <div class="max-w-5xl mx-auto fig-container rounded-xl bg-kb-bg overflow-hidden shadow-2xl border border-zinc-800">
-                <!-- Header -->
-                <div class="h-14 hairline-b bg-zinc-950 flex items-center justify-between px-6">
-                    <div class="flex items-center gap-3">
-                        <i data-lucide="target" class="w-4 h-4 text-zinc-400"></i>
-                        <span class="text-sm font-medium text-white tracking-wide">MISSION / Secure User Profile</span>
-                    </div>
-                    <div class="hidden sm:flex items-center gap-4">
-                        <div class="fig-label text-yellow-500">RISK: HIGH</div>
-                        <div class="diagram-node active">IMPLEMENTATION</div>
-                    </div>
+
+    <!-- HEADER -->
+    <header class="pt-40 pb-16 px-6 max-w-[1200px] mx-auto text-center relative">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-800 bg-zinc-950 text-xs font-mono text-zinc-400 mb-6">
+            <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+            <span>SPECIFICATION // ARCHITECTURAL DEEP DIVE</span>
+        </div>
+        <h1 class="text-4xl md:text-6xl font-medium tracking-tight text-white mb-6">
+            The 5-Layer Engine<br>
+            <span class="text-zinc-500">of Autonomous Engineering.</span>
+        </h1>
+        <p class="text-zinc-400 text-base max-w-2xl mx-auto leading-relaxed">
+            Kobits rejects vector-similarity guessing and unverified code injection. Every pull request is the result of isolated microVM compilation, compiler-grade LSP AST indexing, and self-healing test loops.
+        </p>
+    </header>
+
+    <!-- 5 ARCHITECTURAL LAYERS -->
+    <section class="pb-24 px-6 max-w-[1200px] mx-auto space-y-8">
+        
+        <!-- Layer 1 -->
+        <div class="card-wire p-8 rounded-xl">
+            <div class="flex flex-col md:flex-row gap-8 items-start justify-between">
+                <div class="max-w-xl">
+                    <div class="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-1">LAYER 01 // THE METAL</div>
+                    <h2 class="text-2xl font-bold text-white mb-3">Ephemeral MicroVM Cleanrooms</h2>
+                    <p class="text-sm text-zinc-400 leading-relaxed mb-4">
+                        Agents never execute unvetted code in shared local processes or containers. Kobits boots an isolated Linux microVM sandbox in under 300ms.
+                    </p>
+                    <ul class="text-xs text-zinc-300 font-mono space-y-2">
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Full root privileges inside disposable guest kernel</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Native compiler support (Python, TypeScript, Rust, Go)</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Zero blast radius to host repository or developer machine</li>
+                    </ul>
                 </div>
-                <!-- Body -->
-                <div class="p-8 grid md:grid-cols-3 gap-8">
-                    <div class="md:col-span-2 space-y-8">
-                        <div>
-                            <div class="fig-label mb-3">REPOSITORY</div>
-                            <div class="text-sm text-zinc-300 font-mono">acme/backend <span class="text-zinc-600 ml-2">â€¢ main</span></div>
-                        </div>
-                        <div>
-                            <div class="fig-label mb-3">TASKS</div>
-                            <div class="space-y-3">
-                                <div class="flex items-start gap-3 text-sm text-zinc-500">
-                                    <i data-lucide="check-circle" class="w-4 h-4 text-lime-500 mt-0.5"></i>
-                                    <div>
-                                        <div class="text-zinc-300">Update user schema for RBAC</div>
-                                        <div class="text-xs text-zinc-500 font-mono mt-1">Completed by Core</div>
-                                    </div>
-                                </div>
-                                <div class="flex items-start gap-3 text-sm text-white">
-                                    <i data-lucide="circle" class="w-4 h-4 text-blue-500 mt-0.5"></i>
-                                    <div>
-                                        <div class="text-white">Implement JWT rotation strategy</div>
-                                        <div class="text-xs text-blue-400 font-mono mt-1">In progress (Axiom)</div>
-                                    </div>
-                                </div>
-                                <div class="flex items-start gap-3 text-sm text-zinc-600">
-                                    <i data-lucide="circle" class="w-4 h-4 text-zinc-700 mt-0.5"></i>
-                                    <div>
-                                        <div class="text-zinc-500">Add Redis rate limiting</div>
-                                        <div class="text-xs text-zinc-700 font-mono mt-1">Pending</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="space-y-8 md:border-l border-zinc-800 md:pl-8">
-                        <div>
-                            <div class="fig-label mb-3">ACTIVE AGENTS</div>
-                            <div class="flex flex-col gap-2">
-                                <div class="diagram-node w-full border-zinc-800 bg-zinc-900"><i data-lucide="layout" class="w-3 h-3"></i> AXIOM</div>
-                                <div class="diagram-node w-full border-zinc-800 bg-zinc-900"><i data-lucide="code" class="w-3 h-3"></i> CORE</div>
-                            </div>
-                        </div>
-                        <div>
-                            <div class="fig-label mb-3">CHANGES</div>
-                            <div class="text-sm text-zinc-300 font-mono">+124 <span class="text-zinc-600">/</span> -18 <span class="text-zinc-600">lines</span></div>
-                        </div>
-                    </div>
+                <div class="w-full md:w-80 p-4 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-[11px] text-zinc-400">
+                    <div class="text-zinc-500 border-b border-zinc-800 pb-2 mb-2">// MICROVM BOOT TELEMETRY</div>
+                    <div class="text-white">INIT :: rootfs cleanroom</div>
+                    <div>NET  :: egress filter active</div>
+                    <div>CPUS :: 4 vCPU allocated</div>
+                    <div>MEM  :: 8192 MB bounded</div>
+                    <div class="text-white mt-2">READY IN 284ms</div>
                 </div>
             </div>
         </div>
-    </section>
 
-    <!-- SECTION 05: QUALITY -->
-    <section class="py-32 hairline-t">
-        <div class="max-w-[1400px] mx-auto px-6">
-            <h2 class="text-5xl md:text-7xl tracking-tighter leading-[1.05] font-medium text-center mb-32">
-                Engineering output is evidence,<br>
-                <span class="text-zinc-600">not a promise.</span>
-            </h2>
-
-            <div class="max-w-4xl mx-auto flex flex-col items-center relative z-10">
-                <div class="diagram-node mb-4">TASK CONTRACT</div>
-                <div class="w-px h-12 bg-zinc-800 mb-4"></div>
-                <div class="diagram-node mb-4">IMPLEMENTATION</div>
-                <div class="w-px h-12 bg-zinc-800 mb-4"></div>
-                
-                <div class="flex flex-col md:flex-row gap-8 mb-4 w-full md:w-auto">
-                    <div class="fig-container p-6 rounded-xl text-center flex-1">
-                        <div class="text-3xl font-mono text-lime-400 mb-2">48</div>
-                        <div class="fig-label text-zinc-400">TESTS PASSED</div>
-                    </div>
-                    <div class="fig-container p-6 rounded-xl text-center flex-1">
-                        <div class="text-3xl font-mono text-white mb-2">0</div>
-                        <div class="fig-label text-zinc-400">CRITICAL FINDINGS</div>
-                    </div>
-                    <div class="fig-container p-6 rounded-xl text-center flex-1">
-                        <div class="text-3xl font-mono text-lime-400 mb-2 flex justify-center"><i data-lucide="check" class="w-8 h-8"></i></div>
-                        <div class="fig-label text-zinc-400">ARCH APPROVED</div>
-                    </div>
+        <!-- Layer 2 -->
+        <div class="card-wire p-8 rounded-xl">
+            <div class="flex flex-col md:flex-row gap-8 items-start justify-between">
+                <div class="max-w-xl">
+                    <div class="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-1">LAYER 02 // COGNITIVE ARCHITECTURE</div>
+                    <h2 class="text-2xl font-bold text-white mb-3">Dual-Loop Intelligence (Strategic vs. Tactical)</h2>
+                    <p class="text-sm text-zinc-400 leading-relaxed mb-4">
+                        Single-prompt LLMs hallucinate on complex repos. Kobits separates strategic DAG planning from tactical tool loops.
+                    </p>
+                    <ul class="text-xs text-zinc-300 font-mono space-y-2">
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> <strong>Outer Loop (System-2):</strong> Builds dependency DAGs with strict preconditions and evidence contracts</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> <strong>Inner Loop (System-1):</strong> Executes high-frequency file edits, AST queries, and bash tool iterations</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> 1/20th the token compute cost of frontier-only monolithic agent loops</li>
+                    </ul>
                 </div>
-                
-                <div class="w-px h-12 bg-zinc-800 mb-4"></div>
-                <div class="diagram-node active px-6 py-2">REVALIDATION</div>
-            </div>
-        </div>
-    </section>
-
-    <!-- SECTION 08: HUMAN CONTROL -->
-    <section class="py-32 hairline-t bg-kb-surface">
-        <div class="max-w-[1400px] mx-auto px-6">
-            <div class="grid lg:grid-cols-2 gap-16 items-center">
-                <div class="order-2 lg:order-1 fig-container rounded-xl p-10 bg-kb-bg">
-                    <div class="fig-label mb-8">ARCHITECTURE REVIEW</div>
-                    
-                    <div class="space-y-6 mb-10">
-                        <div class="flex justify-between items-center pb-4 hairline-b">
-                            <span class="text-sm text-zinc-400">Risk Profile</span>
-                            <span class="text-xs text-yellow-500 font-mono bg-yellow-500/10 px-2 py-1 rounded">HIGH</span>
-                        </div>
-                        <div class="flex justify-between items-center pb-4 hairline-b">
-                            <span class="text-sm text-zinc-400">Test Coverage</span>
-                            <span class="text-xs text-lime-400 font-mono flex items-center gap-1"><i data-lucide="check" class="w-3 h-3"></i> PASS</span>
-                        </div>
-                        <div class="flex justify-between items-center pb-4 hairline-b">
-                            <span class="text-sm text-zinc-400">Security Gate</span>
-                            <span class="text-xs text-lime-400 font-mono flex items-center gap-1"><i data-lucide="check" class="w-3 h-3"></i> PASS</span>
-                        </div>
-                        <div class="flex justify-between items-center pb-4 hairline-b">
-                            <span class="text-sm text-zinc-400">Scope</span>
-                            <span class="text-sm text-zinc-200 font-mono">12 files</span>
-                        </div>
-                    </div>
-
-                    <div class="flex gap-4">
-                        <button class="flex-1 bg-white text-black py-3 rounded text-sm font-medium hover:bg-zinc-200 transition-colors">Approve</button>
-                        <button class="flex-1 border border-zinc-700 text-white py-3 rounded text-sm font-medium hover:bg-zinc-800 transition-colors">Request Changes</button>
-                    </div>
-                </div>
-
-                <div class="order-1 lg:order-2 lg:pl-12">
-                    <h2 class="text-4xl md:text-5xl tracking-tighter leading-[1.1] font-medium mb-6">AI does the engineering.<br>You control the decisions.</h2>
-                    <p class="text-lg text-zinc-400 max-w-lg">Kobits executes the complex workflows, but explicitly yields to human judgment for critical path approvals, architectural decisions, and production deployments.</p>
+                <div class="w-full md:w-80 p-4 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-[11px] text-zinc-400">
+                    <div class="text-zinc-500 border-b border-zinc-800 pb-2 mb-2">// TOPOLOGICAL DAG</div>
+                    <div>[01] INTAKE & ANALYSIS</div>
+                    <div class="text-white"> └── [02] REPRO TEST SUITE</div>
+                    <div class="text-white">      └── [03] ENGINE MODIFICATION</div>
+                    <div>           └── [04] VERIFICATION (AST)</div>
+                    <div>                └── [05] PR GENERATION</div>
                 </div>
             </div>
         </div>
-    </section>
 
-    <!-- SECTION 09: DELIVERY -->
-    <section class="py-32 hairline-t">
-        <div class="max-w-[1400px] mx-auto px-6 text-center">
-            <h2 class="text-4xl md:text-5xl tracking-tighter font-medium mb-32">From working tree to delivery.</h2>
-
-            <div class="relative w-full overflow-x-auto pb-8">
-                <div class="relative min-w-[800px] max-w-5xl mx-auto h-24 flex items-center justify-between px-4">
-                    <div class="absolute left-8 right-8 top-1/2 h-px bg-zinc-800 -translate-y-1/2"></div>
-                    
-                    <div class="relative bg-kb-bg px-3"><div class="diagram-node border-zinc-700 text-zinc-400">SANDBOX</div></div>
-                    <div class="relative bg-kb-bg px-3"><div class="diagram-node border-zinc-700 text-zinc-400">DIFF</div></div>
-                    <div class="relative bg-kb-bg px-3"><div class="diagram-node border-zinc-700 text-zinc-400">COMMIT</div></div>
-                    <div class="relative bg-kb-bg px-3"><div class="diagram-node border-zinc-700 text-zinc-400">PULL REQUEST</div></div>
-                    <div class="relative bg-kb-bg px-3"><div class="diagram-node border-zinc-700 text-zinc-400">CI</div></div>
-                    <div class="relative bg-kb-bg px-3"><div class="diagram-node active px-4">DELIVERY</div></div>
+        <!-- Layer 3 -->
+        <div class="card-wire p-8 rounded-xl">
+            <div class="flex flex-col md:flex-row gap-8 items-start justify-between">
+                <div class="max-w-xl">
+                    <div class="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-1">LAYER 03 // COMPILER INTELLIGENCE</div>
+                    <h2 class="text-2xl font-bold text-white mb-3">Language Server Protocol (LSP) AST Navigation</h2>
+                    <p class="text-sm text-zinc-400 leading-relaxed mb-4">
+                        Traditional agents use embedding search (RAG) which fails on code because cosine similarity misses callers, inheritance, and type signatures.
+                    </p>
+                    <ul class="text-xs text-zinc-300 font-mono space-y-2">
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Real language servers (Pyright & TypeScript language server) running inside the sandbox</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> 100% compiler precision for goto-definition, find-references, and symbols</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Zero probabilistic guessing for function definitions across multi-file projects</li>
+                    </ul>
+                </div>
+                <div class="w-full md:w-80 p-4 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-[11px] text-zinc-400">
+                    <div class="text-zinc-500 border-b border-zinc-800 pb-2 mb-2">// LSP SERVER HOOKS</div>
+                    <div>lsp.goto_definition("UserSchema")</div>
+                    <div class="text-white"> → backend/models/user.py:42</div>
+                    <div>lsp.find_references("verify_token")</div>
+                    <div class="text-white"> → 14 callers indexed across 6 modules</div>
+                    <div>lsp.document_symbols("auth.py")</div>
                 </div>
             </div>
         </div>
-    </section>
 
-    <!-- SECTION 12: FINAL CTA -->
-    <section class="py-48 hairline-t relative overflow-hidden bg-zinc-950">
-        <div class="absolute inset-0 technical-grid opacity-10"></div>
-        <div class="max-w-[1400px] mx-auto px-6 text-center relative z-10">
-            <h2 class="text-[4rem] md:text-[6.5rem] tracking-tighter leading-[0.9] font-medium mb-10 text-white">Tell Kobits<br>what to build.</h2>
-            <p class="text-xl text-zinc-400 mb-16 font-medium tracking-wide">Your engineering team is ready.</p>
-            
-            <div class="flex flex-col sm:flex-row items-center justify-center gap-6 max-w-xl mx-auto">
-                <a href="/portal.html#login" class="bg-white text-black px-8 py-4 rounded-full text-sm font-medium hover:bg-zinc-200 transition-colors w-full sm:w-auto flex items-center justify-center gap-2">
-                    Start a Mission <i data-lucide="arrow-right" class="w-4 h-4"></i>
-                </a>
-                <a href="/portal.html#preview" class="text-zinc-400 hover:text-white text-sm font-medium transition-colors border border-zinc-800 bg-zinc-900/50 px-8 py-4 rounded-full w-full sm:w-auto">
-                    Explore the Workspace
-                </a>
+        <!-- Layer 4 -->
+        <div class="card-wire p-8 rounded-xl">
+            <div class="flex flex-col md:flex-row gap-8 items-start justify-between">
+                <div class="max-w-xl">
+                    <div class="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-1">LAYER 04 // VERIFICATION & RECOVERY</div>
+                    <h2 class="text-2xl font-bold text-white mb-3">The TDD Sentinel &amp; Self-Healing Loop</h2>
+                    <p class="text-sm text-zinc-400 leading-relaxed mb-4">
+                        Kobits never creates a Pull Request on hope. Before touching feature files, it writes a reproduction test case that captures the objective.
+                    </p>
+                    <ul class="text-xs text-zinc-300 font-mono space-y-2">
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Automated pytest / jest test runner executions inside sandbox</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Parses exit codes, stack traces, and compiler warnings automatically</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Iterates up to budgeted attempts until every test passes green</li>
+                    </ul>
+                </div>
+                <div class="w-full md:w-80 p-4 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-[11px] text-zinc-400">
+                    <div class="text-zinc-500 border-b border-zinc-800 pb-2 mb-2">// TDD SENTINEL OUTPUT</div>
+                    <div class="text-zinc-500">ATTEMPT 1: AssertionError: 401 != 200</div>
+                    <div class="text-zinc-500">HEALING  : Adjusting auth headers...</div>
+                    <div class="text-white">ATTEMPT 2: 12 passed in 1.48s [100%]</div>
+                    <div class="text-white">STATUS   : VERIFIED GREEN</div>
+                </div>
             </div>
         </div>
+
+        <!-- Layer 5 -->
+        <div class="card-wire p-8 rounded-xl">
+            <div class="flex flex-col md:flex-row gap-8 items-start justify-between">
+                <div class="max-w-xl">
+                    <div class="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-1">LAYER 05 // RESILIENCE</div>
+                    <h2 class="text-2xl font-bold text-white mb-3">Durable Distributed State Machine</h2>
+                    <p class="text-sm text-zinc-400 leading-relaxed mb-4">
+                        Production missions can take 10 to 45 minutes. If a worker blips or network drops, Kobits resumes seamlessly without restarting from scratch.
+                    </p>
+                    <ul class="text-xs text-zinc-300 font-mono space-y-2">
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> State checkpointing in PostgreSQL and durable task lease management</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Complete history trace: every diff, agent thought, and tool output preserved</li>
+                        <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Human-in-the-loop approvals for sensitive architecture or migration gates</li>
+                    </ul>
+                </div>
+                <div class="w-full md:w-80 p-4 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-[11px] text-zinc-400">
+                    <div class="text-zinc-500 border-b border-zinc-800 pb-2 mb-2">// DURABLE CHECKPOINT</div>
+                    <div>STEP 12/18 :: CHECKPOINT STORED</div>
+                    <div class="text-white">DB COMMIT  :: 4 files modified</div>
+                    <div>LEASE RESUME :: WORKER-NODE-03</div>
+                    <div class="text-white">ZERO RE-COMPUTE NECESSARY</div>
+                </div>
+            </div>
+        </div>
+
     </section>
 
     <!-- FOOTER -->
-    <footer class="py-12 hairline-t text-center text-zinc-600 text-[10px] font-mono tracking-widest bg-kb-bg">
-        KOBITS AI ENGINEERING
+    <footer class="py-12 hairline-t text-center text-zinc-600 text-[10px] font-mono tracking-widest bg-[#050505] flex flex-col sm:flex-row items-center justify-between px-8 max-w-[1400px] mx-auto gap-4">
+        <div class="flex items-center gap-2.5">
+            <div class="w-4 h-4 text-zinc-500">
+                <svg viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+                    <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+                    <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <span>KOBITS AI ENGINEERING</span>
+        </div>
+        <div class="flex items-center gap-6 text-zinc-500">
+            <a href="/product.html" class="hover:text-zinc-300 transition-colors">PRODUCT</a>
+            <a href="/engineering.html" class="hover:text-zinc-300 transition-colors text-zinc-300">ENGINEERING</a>
+            <a href="/how-it-works.html" class="hover:text-zinc-300 transition-colors">HOW IT WORKS</a>
+            <a href="/security.html" class="hover:text-zinc-300 transition-colors">SECURITY</a>
+            <a href="/pricing.html" class="hover:text-zinc-300 transition-colors">PRICING</a>
+        </div>
+        <div>
+            <span>© 2026 KOBITS</span>
+        </div>
     </footer>
 
     <script>
-        // Initialize Lucide icons
         lucide.createIcons();
     </script>
 </body>

@@ -78,5 +78,25 @@ async def get_current_user_from_request(request: Request, db: AsyncSession = Dep
 
 
 async def get_current_active_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
-    """Primary dependency for protected endpoints. Supports both cookie and Bearer auth."""
+    """Primary dependency for protected endpoints. Supports both cookie and Bearer auth.
+    
+    Raises 401 if the account has been deactivated (is_active = False).
+    """
+    user = await get_current_user_from_request(request=request, db=db)
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account is inactive.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
+async def get_any_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
+    """Admin-only dependency: resolves the current user WITHOUT enforcing is_active.
+
+    Use this ONLY in admin/internal endpoints that legitimately need to access
+    deactivated accounts (e.g., admin panel, GDPR hard-delete verification).
+    Regular API routes MUST use get_current_active_user instead.
+    """
     return await get_current_user_from_request(request=request, db=db)

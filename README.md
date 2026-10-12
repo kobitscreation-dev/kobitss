@@ -31,29 +31,20 @@ Kobits is a standalone, terminal-native multi-agent engineering engine designed 
 
 ---
 
-## Quick Start
+## Quick Start (Under 60 Seconds)
 
-### 1. Install Globally
+See [QUICKSTART.md](file:///C:/Users/Arvind%20Kumar/.gemini/antigravity/scratch/kobits/QUICKSTART.md) for the full guide.
+
+### 1. Setup & Environment Doctor
+Configure your LLM credentials (DeepSeek, Claude, Gemini, OpenAI) in 10 seconds:
 ```bash
-py -3.12 -m pip install -e .
+kobits setup
+# Or: kobits doctor
 ```
 
-### 2. Interactive Terminal REPL
-Run `kobits` inside any project directory:
+### 2. Run an Engineering Mission
 ```bash
-kobits
-```
-Inside the REPL:
-- Type any engineering prompt to launch a sandboxed mission
-- `/diff` — Inspect unified `git diff` and Pre-Review Gate verification status
-- `/apply` — Apply verified sandbox changes to your live workspace
-- `/status` — Inspect workspace control center & active missions
-- `/agents` — View all 21 specialized agents and run counts
-- `/retry` — Resume a failed or interrupted mission from its last checkpoint
-
-### 3. One-Shot CLI Commands
-```bash
-# 1. Execute an engineering objective in an isolated sandbox
+# 1. Execute an objective in an isolated Git worktree sandbox
 kobits "Add a rate limiter utility with unit tests"
 
 # 2. Inspect the verified unified git diff
@@ -61,6 +52,26 @@ kobits diff
 
 # 3. Apply verified changes to your live working tree
 kobits apply
+```
+
+### 3. Interactive Terminal Pair Programming (REPL)
+```bash
+kobits repl
+```
+
+### 4. Launch Web Visual Dashboard
+```bash
+# Windows 1-Click
+run_dashboard.bat
+
+# Or terminal:
+py -3.12 main.py
+```
+Open **`http://localhost:8000/portal.html`** to track agents, visually review sandboxes, and manage multi-project repositories.
+
+### 5. Inspect 200k Training Flywheel
+```bash
+kobits dataset
 ```
 
 ---

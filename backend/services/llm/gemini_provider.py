@@ -79,9 +79,20 @@ class GeminiProvider(LLMProvider):
         total_input_tokens = 0
         total_output_tokens = 0
 
+        from backend.services.context_compactor import ContextCompactor
+        context_budget = int(os.environ.get("KOBITS_CONTEXT_BUDGET", "32000"))
+        compactor = ContextCompactor(max_token_budget=context_budget, recent_turns=3)
+        compaction_history = []
+
         async with httpx.AsyncClient(timeout=120.0) as client:
             while turn_count < max_turns:
                 turn_count += 1
+
+                # Dynamic Context Compaction
+                if turn_count > 1:
+                    contents, c_report = compactor.compact_gemini_contents(contents)
+                    if c_report.observations_pruned > 0 or c_report.checkpoints_created > 0:
+                        compaction_history.append(c_report.to_dict())
 
                 req_body: Dict[str, Any] = {
                     "systemInstruction": {
@@ -171,6 +182,9 @@ class GeminiProvider(LLMProvider):
                             "input_tokens": total_input_tokens,
                             "output_tokens": total_output_tokens
                         }
+                        if compaction_history:
+                            parsed["_usage"]["compaction"] = compaction_history[-1]
+                            parsed["_usage"]["compaction_history"] = compaction_history
                         return parsed
                     except Exception:
                         return {

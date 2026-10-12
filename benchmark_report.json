@@ -1,0 +1,16 @@
+{
+  "provider": "bedrock",
+  "model": "mock-model",
+  "start_time": "2026-10-10T00:09:37.033944",
+  "tasks": [],
+  "metrics": {
+    "token_usage": 0,
+    "cost": 0.0,
+    "duration_seconds": 0,
+    "files_changed": 0,
+    "tests_added": 0,
+    "security_issues": 0,
+    "failures": 0
+  },
+  "flow": []
+}

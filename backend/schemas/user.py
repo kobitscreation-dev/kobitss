@@ -6,6 +6,7 @@ class UserCreate(BaseModel):
     password: str
     full_name: Optional[str] = None
     organization_name: Optional[str] = "Default Workspace"
+    accepted_terms: Optional[bool] = True
 
 class UserResponse(BaseModel):
     id: str
@@ -15,6 +16,8 @@ class UserResponse(BaseModel):
     google_id: Optional[str] = None
     github_id: Optional[str] = None
     avatar_url: Optional[str] = None
+    access_token: Optional[str] = None
+    token_type: Optional[str] = "bearer"
 
     model_config = {"from_attributes": True}
 

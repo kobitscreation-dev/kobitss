@@ -28,14 +28,11 @@ class DeepSeekProvider(LLMProvider):
             api_key
             or settings.DEEPSEEK_API_KEY
             or os.environ.get("DEEPSEEK_API_KEY")
-            or settings.ANTHROPIC_API_KEY
-            or os.environ.get("ANTHROPIC_API_KEY")
         )
         raw_base = (
             base_url
             or getattr(settings, "LLM_BASE_URL", None)
-            or (settings.DEEPSEEK_BASE_URL if settings.DEEPSEEK_API_KEY else None)
-            or settings.ANTHROPIC_BASE_URL
+            or settings.DEEPSEEK_BASE_URL
             or "https://api.deepseek.com"
         )
         self.base_url = raw_base.rstrip("/")
@@ -120,6 +117,11 @@ class DeepSeekProvider(LLMProvider):
         if not self.base_url.endswith("/v1") and not endpoint.endswith("/chat/completions"):
             endpoint = f"{self.base_url}/v1/chat/completions"
             
+        from backend.services.context_compactor import ContextCompactor
+        context_budget = int(os.environ.get("KOBITS_CONTEXT_BUDGET", "32000"))
+        compactor = ContextCompactor(max_token_budget=context_budget, recent_turns=3)
+        compaction_history = []
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
@@ -129,6 +131,12 @@ class DeepSeekProvider(LLMProvider):
             while turn < max_turns:
                 turn += 1
                 
+                # Dynamic Context Compaction (preserves Turn 0 prefix and golden window)
+                if turn > 1:
+                    messages, c_report = compactor.compact_openai_messages(messages)
+                    if c_report.observations_pruned > 0 or c_report.checkpoints_created > 0:
+                        compaction_history.append(c_report.to_dict())
+
                 payload = {
                     "model": target_model,
                     "messages": messages,
@@ -338,11 +346,28 @@ class DeepSeekProvider(LLMProvider):
                         "retries": total_retries,
                         "tool_calls": tool_calls_count
                     }
+                    if compaction_history:
+                        result_data["_usage"]["compaction"] = compaction_history[-1]
+                        result_data["_usage"]["compaction_history"] = compaction_history
                     return result_data
                     
         # Exceeded turns
         duration = time.time() - start_time
         has_executed_tools = tool_calls_count > 0
+        exceeded_usage = {
+            "model": target_model,
+            "input_tokens": total_input_tokens,
+            "output_tokens": total_output_tokens,
+            "total_tokens": total_input_tokens + total_output_tokens,
+            "estimated_cost": round((total_input_tokens * 0.14 / 1_000_000) + (total_output_tokens * 0.28 / 1_000_000), 6),
+            "duration_seconds": round(duration, 3),
+            "requests": requests_count,
+            "retries": total_retries,
+            "tool_calls": tool_calls_count
+        }
+        if compaction_history:
+            exceeded_usage["compaction"] = compaction_history[-1]
+            exceeded_usage["compaction_history"] = compaction_history
         return {
             "status": "COMPLETED" if has_executed_tools else "FAILED",
             "summary": (
@@ -352,15 +377,5 @@ class DeepSeekProvider(LLMProvider):
             ),
             "findings": ["Task executed via interactive tool calling."] if has_executed_tools else [],
             "changes": ["Modified repository files."] if has_executed_tools else [],
-            "_usage": {
-                "model": target_model,
-                "input_tokens": total_input_tokens,
-                "output_tokens": total_output_tokens,
-                "total_tokens": total_input_tokens + total_output_tokens,
-                "estimated_cost": round((total_input_tokens * 0.14 / 1_000_000) + (total_output_tokens * 0.28 / 1_000_000), 6),
-                "duration_seconds": round(duration, 3),
-                "requests": requests_count,
-                "retries": total_retries,
-                "tool_calls": tool_calls_count
-            }
+            "_usage": exceeded_usage
         }

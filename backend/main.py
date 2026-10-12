@@ -26,14 +26,49 @@ from backend.models.debate_log import DebateLog
 from backend.models.communication import *
 from backend.models.intelligence import *
 from backend.models.memory import *
+from backend.models.audit_log import AuditLog
+from backend.models.password_reset import PasswordResetToken
 
 from backend.api.v1 import auth, projects, agents, github, missions, memory, tools
 
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Validate provider configuration on startup
+    # ── P0 SECURITY: Startup assertions ────────────────────────────────────────
     from backend.core.config import settings
+    import logging as _logging
+    _startup_logger = _logging.getLogger("kobits.startup")
+
+    # Guard 1: DEV_MODE must NEVER be enabled in a PostgreSQL (production) environment
+    if settings.KOBITS_DEV_MODE and "postgresql" in settings.DATABASE_URL.lower():
+        raise RuntimeError(
+            "SECURITY VIOLATION: KOBITS_DEV_MODE=True is NOT permitted when connecting to PostgreSQL. "
+            "DEV_MODE bypasses ALL authentication. Disable it before running in production."
+        )
+
+    # Guard 2: Warn loudly if SECRET_KEY is still the insecure default
+    if settings.SECRET_KEY in ("super-secret-key-change-me", ""):
+        _startup_logger.critical(
+            "SECURITY WARNING: SECRET_KEY is set to the insecure default value. "
+            "All JWTs signed with this key can be forged. "
+            "Set a cryptographically random 32+ byte key in the SECRET_KEY environment variable."
+        )
+
+    # Guard 3: Warn if SECRET_KEY is shorter than the HS256 minimum (32 bytes)
+    if len(settings.SECRET_KEY.encode()) < 32:
+        _startup_logger.warning(
+            f"SECRET_KEY length ({len(settings.SECRET_KEY.encode())} bytes) is below the HS256 "
+            "minimum of 32 bytes. Run: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+
+    # Guard 4: Warn if SESSION_COOKIE_SECURE is disabled in a non-SQLite env (likely production)
+    if not settings.SESSION_COOKIE_SECURE and "postgresql" in settings.DATABASE_URL.lower():
+        _startup_logger.warning(
+            "SESSION_COOKIE_SECURE=False in a PostgreSQL environment. "
+            "Set SESSION_COOKIE_SECURE=True in all HTTPS deployments."
+        )
+
+    # Validate provider configuration on startup
     from backend.services.llm import get_llm_provider
     try:
         get_llm_provider()
@@ -63,12 +98,47 @@ async def lifespan(app: FastAPI):
                 is_active=True
             )
             db.add(new_u)
-            new_org = Organization(name="Kobits Core Workspace")
+            new_org = Organization(name="Kobits Core Workspace", credit_balance=500)
             db.add(new_org)
             await db.flush()
             db.add(OrganizationMember(user_id=new_u.id, organization_id=new_org.id, role=OrgRole.OWNER))
             await db.commit()
-            print("Auto-seeded default user realuser@kobits.space")
+            print("Auto-seeded default user realuser@kobits.space with 500 credits")
+
+        # Auto-seed default SaaS credit packages if empty
+        from backend.models.billing import CreditPackage
+        existing_pkgs = (await db.execute(select(CreditPackage))).scalars().all()
+        if not existing_pkgs:
+            starter = CreditPackage(
+                id="pkg_starter",
+                name="Starter Plan",
+                credits=250,
+                currency="usd",
+                price_cents=2900,
+                stripe_price_id="price_starter",
+                is_active=True,
+            )
+            growth = CreditPackage(
+                id="pkg_growth",
+                name="Growth Plan",
+                credits=800,
+                currency="usd",
+                price_cents=7900,
+                stripe_price_id="price_growth",
+                is_active=True,
+            )
+            scale = CreditPackage(
+                id="pkg_scale",
+                name="Scale Plan",
+                credits=2500,
+                currency="usd",
+                price_cents=19900,
+                stripe_price_id="price_scale",
+                is_active=True,
+            )
+            db.add_all([starter, growth, scale])
+            await db.commit()
+            print("Auto-seeded default SaaS credit packages (Starter, Growth, Scale)")
 
     # Resume ACTIVE missions and clear dangling locks
     from backend.core.database import AsyncSessionLocal
@@ -320,6 +390,26 @@ async def websocket_endpoint(websocket: WebSocket, mission_id: str):
     except WebSocketDisconnect:
         manager.disconnect(websocket, mission_id)
 
+@app.websocket("/ws/dashboard")
+async def websocket_dashboard(websocket: WebSocket):
+    await manager.connect(websocket, "dashboard")
+    try:
+        await websocket.send_json({"type": "system", "message": "Connected to Kobits real-time dashboard stream."})
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, "dashboard")
+
+@app.websocket("/ws/missions/{mission_id}")
+async def websocket_mission(websocket: WebSocket, mission_id: str):
+    await manager.connect(websocket, mission_id)
+    try:
+        await websocket.send_json({"type": "system", "message": f"Connected to Mission {mission_id} stream."})
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, mission_id)
+
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(projects.router, prefix="/api/v1/projects", tags=["Projects & Tasks"])
 app.include_router(agents.router, prefix="/api/v1/ai", tags=["AI Agents & Orchestration"])
@@ -348,6 +438,9 @@ app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytic
 from backend.api.v1 import org
 app.include_router(org.router, prefix="/api/v1/org", tags=["Organisation"])
 
+from backend.api.v1 import profile
+app.include_router(profile.router, prefix="/api/v1/profile", tags=["User Profile"])
+
 
 # ══════════════════════════════════════════
 #  LEGACY FRONTEND ENDPOINTS
@@ -364,7 +457,45 @@ async def apply_waitlist(req: WaitlistRequest):
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "service": "Kobits API", "version": "1.0.0"}
+    """
+    Health-check endpoint for load balancers and monitoring.
+    Returns DB connectivity status, app version, and uptime.
+    Exempt from rate limiting (see RateLimiterMiddleware.exempt_paths).
+    """
+    import time as _time
+    from sqlalchemy import text as _text
+    from backend.core.database import AsyncSessionLocal
+
+    db_status = "ok"
+    db_error: str | None = None
+    try:
+        async with AsyncSessionLocal() as _db:
+            await _db.execute(_text("SELECT 1"))
+    except Exception as exc:
+        db_status = "error"
+        db_error = str(exc)
+
+    redis_status = "not_configured"
+    if settings.REDIS_URL:
+        try:
+            import aioredis  # type: ignore
+            _redis = await aioredis.from_url(settings.REDIS_URL, socket_connect_timeout=2)
+            await _redis.ping()
+            await _redis.close()
+            redis_status = "ok"
+        except Exception as exc:
+            redis_status = f"error: {exc}"
+
+    overall = "ok" if db_status == "ok" else "degraded"
+    return {
+        "status": overall,
+        "service": "Kobits API",
+        "version": "1.0.0",
+        "database": db_status,
+        "database_error": db_error,
+        "redis": redis_status,
+        "dev_mode": settings.KOBITS_DEV_MODE,
+    }
 
 
 # ══════════════════════════════════════════
@@ -413,7 +544,7 @@ async def serve_dashboard(request: Request):
     # Check if user has active session cookie or Authorization header
     token = request.cookies.get(settings.SESSION_COOKIE_NAME)
     auth_header = request.headers.get("Authorization", "")
-    if not token and not auth_header:
+    if not token and not auth_header and not settings.KOBITS_DEV_MODE:
         # Require login for accessing personal workspace
         return RedirectResponse(url="/portal.html#login", status_code=302)
 
@@ -462,7 +593,7 @@ async def serve_static(file_path: str, request: Request):
         if ext in ("", ".html"):
             token = request.cookies.get(settings.SESSION_COOKIE_NAME)
             auth_header = request.headers.get("Authorization", "")
-            if not token and not auth_header:
+            if not token and not auth_header and not settings.KOBITS_DEV_MODE:
                 return RedirectResponse(url="/portal.html#login", status_code=302)
 
     # If portal is requested

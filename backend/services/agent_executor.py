@@ -24,6 +24,8 @@ class AgentExecutor:
         self.mission_id = None
         self.project_id = None
         self.trace_logs = []
+        from backend.services.context_compactor import ContextCompactor
+        self.compactor = ContextCompactor()
 
     async def _inject_mid_turn_steering(
         self,
@@ -136,13 +138,31 @@ class AgentExecutor:
         task_category = input_data.get("task_category", "general_engineering")
         model_tier = await planner.route_model(task_category, complexity, risk_level) if planner else "default"
         
-        provider_name = settings.LLM_PROVIDER.lower() if settings.LLM_PROVIDER else (os.environ.get("LLM_PROVIDER") or "mock").lower()
+        from backend.services.llm.deepseek_provider import DeepSeekProvider
+        from backend.services.llm.bedrock_provider import BedrockProvider
+        from backend.services.llm.anthropic_provider import AnthropicProvider
+        from backend.services.llm.gemini_provider import GeminiProvider
+        from backend.services.llm.mock_provider import MockProvider
+
+        if isinstance(self.provider, DeepSeekProvider):
+            provider_name = "deepseek"
+        elif isinstance(self.provider, BedrockProvider):
+            provider_name = "bedrock"
+        elif isinstance(self.provider, AnthropicProvider):
+            provider_name = "anthropic"
+        elif isinstance(self.provider, GeminiProvider):
+            provider_name = "gemini"
+        elif isinstance(self.provider, MockProvider):
+            provider_name = "mock"
+        else:
+            provider_name = (settings.LLM_PROVIDER or os.environ.get("LLM_PROVIDER") or "mock").lower()
+
         if provider_name in ["bedrock", "aws", "aws_bedrock"]:
-            model_name = os.environ.get("BEDROCK_MODEL") or settings.BEDROCK_MODEL or "global.anthropic.claude-sonnet-4-6"
+            model_name = settings.BEDROCK_MODEL or os.environ.get("BEDROCK_MODEL") or "global.anthropic.claude-sonnet-4-6"
         elif provider_name == "anthropic":
-            model_name = os.environ.get("ANTHROPIC_MODEL", settings.ANTHROPIC_MODEL)
+            model_name = settings.ANTHROPIC_MODEL or os.environ.get("ANTHROPIC_MODEL") or "claude-3-7-sonnet-20250219"
         elif provider_name == "deepseek":
-            cfg_ds_model = os.environ.get("DEEPSEEK_MODEL") or settings.DEEPSEEK_MODEL or "deepseek-v4.1-flash:free"
+            cfg_ds_model = settings.DEEPSEEK_MODEL or os.environ.get("DEEPSEEK_MODEL") or "deepseek-v4.1-flash:free"
             model_name = "deepseek-v4.1-flash:free" if cfg_ds_model == "deepseek-flash" else cfg_ds_model
         elif provider_name == "gemini":
             model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-pro") if model_tier == "default" else f"gemini-{model_tier}"
@@ -240,21 +260,25 @@ class AgentExecutor:
         elif scope_info.get("target_files"):
             t_files = scope_info.get("target_files")
             system_prompt += (
-                f"\n\nREPOSITORY TARGET FILES (GROUNDED BY SCOPE TRIAGE): {t_files}\n"
-                "Use `repository_read` directly on the target file(s) above (you can pass `start_line` and `end_line` to read surgical slices of large files). "
-                "When modifying an existing file, prefer `repository_edit` (single `old_string` -> `new_string` or atomic `edits` list) to save tokens and prevent truncation; "
-                "check `syntax_valid` in the edit response. "
-                "When building a new application, portal, or feature, create new files using `repository_write` (e.g. `index.html`, `styles.css`, `app.js`) and output your final JSON response."
+                f"\n\nREPOSITORY TARGET FILES: {t_files}\n"
+                "Use `read_file` or `repository_read` directly on the target file(s) above (pass `start_line` and `end_line` for surgical slices). "
+                "When modifying an existing file, prefer `edit_file_block` or `repository_edit` to make precise search-and-replace changes. "
+                "When creating new modules, tests, or features, use `write_file` or `repository_write`. "
+                "ALWAYS verify your implementation by running syntax checks or tests with `run_command`."
             )
         else:
             system_prompt += (
-                "\n\nNEW APPLICATION / GREENFIELD IMPLEMENTATION:\n"
-                "When tasked with building or creating an application, website, portal, or tool:\n"
-                "You MUST build a complete, beautiful, and fully working application by creating the files directly with `repository_write`:\n"
-                "- `index.html`: Complete, modern, semantic HTML5 structure with responsive UI and components.\n"
-                "- `styles.css`: Polished modern CSS styles (clean typography, flexbox/grid, smooth styling).\n"
-                "- `app.js`: Complete client-side functionality, calculation algorithms, interactivity, form validation.\n"
-                "Write real, exhaustive code (no placeholders or 'TODO' stubs). After creating the files, return your JSON response with status 'SUCCESS'."
+                "\n\nAUTONOMOUS ENGINEERING IMPLEMENTATION (Kyros Standard):\n"
+                "When tasked with building or enhancing features, APIs, schemas, or applications:\n"
+                "1. Inspect existing files using `list_directory` and `read_file`.\n"
+                "2. Create complete, production-grade implementations using `write_file` (or `edit_file_block`).\n"
+                "   - For backend/APIs: create complete Python modules, database models, schemas, and endpoints.\n"
+                "   - For frontend/UI: create complete HTML, CSS, and modern interactive JavaScript/TypeScript.\n"
+                "   - For testing: write comprehensive unit/integration test suites.\n"
+                "3. You can offload boilerplate schemas or test suites to `delegate_to_specialist` ($0 marginal cost).\n"
+                "4. VERIFY YOUR WORK: Run tests and syntax checks using `run_command` (e.g. `pytest`, `python -m py_compile ...`).\n"
+                "5. SELF-HEAL: If any command or test fails, inspect the error output, fix the code with `edit_file_block` or `write_file`, and re-run.\n"
+                "Write real, exhaustive code (zero placeholders, zero 'TODO' stubs). Only declare success once tests pass."
             )
         system_prompt += "\n\nCOLLABORATION:\nYou are part of a multi-agent team. Your input data may contain 'upstream_artifacts' from agents who ran before you. Use this data to inform your work. When you finish, you can output structured JSON in your 'artifacts' field for downstream agents to use."
         system_prompt += "\n\nPRE-EXECUTION REASONING:\n\nBefore executing tools for major implementation work, you MUST first establish and output a clear plan including:\n1. Requirements\n2. Assumptions\n3. Constraints\n4. Dependencies\n5. Risks\n6. Expected files to modify\n7. Verification strategy\n"
@@ -455,7 +479,7 @@ class AgentExecutor:
                     schema=response_schema,
                     model=model_name,
                     tools=tools,
-                    max_turns=25,
+                    max_turns=30,
                     tool_executor=execute_tool
                 )
             except Exception as e:
@@ -666,6 +690,13 @@ class AgentExecutor:
             agent_run.estimated_cost = usage.get("estimated_cost", 0.0)
             if usage.get("model_used") or usage.get("model"):
                 agent_run.model = usage.get("model_used") or usage.get("model")
+            if "compaction" in usage:
+                result["_compaction"] = usage["compaction"]
+                trace_logs.append({
+                    "type": "context_compaction",
+                    "data": usage["compaction"],
+                    "timestamp": datetime.now().isoformat()
+                })
 
         # Attach classification telemetry to result
         result["_classification"] = {

@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kobits - AI Engineering Platform</title>
+    <title>Kobits — How Autonomous Engineering Works</title>
     
-    <!-- Fonts: Inter and JetBrains Mono -->
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -22,293 +22,237 @@
                     },
                     colors: {
                         kb: {
-                            bg: '#09090b',
-                            surface: '#121214',
-                            border: '#27272a',
-                            accent: '#3b82f6',
+                            bg: '#050505',
+                            surface: '#0f0f11',
+                            border: '#222226',
+                            accent: '#ffffff',
                         }
-                    },
-                    letterSpacing: {
-                        tighter: '-.04em',
-                        tight: '-.02em',
-                        widest: '.1em',
                     }
                 }
             }
         }
     </script>
-    
-    <!-- Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
         body {
-            background-color: #09090b;
+            background-color: #050505;
             color: #fafafa;
             font-feature-settings: "cv02", "cv03", "cv04", "cv11";
             -webkit-font-smoothing: antialiased;
         }
-        
-        .fig-label {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            color: #71717a;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .fig-container {
-            border: 1px solid #27272a;
-            background: linear-gradient(180deg, rgba(24,24,27,0) 0%, rgba(24,24,27,0.4) 100%);
+        .hairline-b { border-bottom: 1px solid #222226; }
+        .hairline-t { border-top: 1px solid #222226; }
+        .card-wire {
+            background: #0f0f11;
+            border: 1px solid #222226;
             position: relative;
-            overflow: hidden;
+            transition: all 0.25s ease;
         }
-        
-        .technical-grid {
-            background-image: linear-gradient(to right, #27272a 1px, transparent 1px),
-                              linear-gradient(to bottom, #27272a 1px, transparent 1px);
-            background-size: 24px 24px;
+        .card-wire:hover {
+            border-color: #38383f;
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.03);
+            transform: translateY(-2px);
         }
-
-        .hairline-b { border-bottom: 1px solid #27272a; }
-        .hairline-t { border-top: 1px solid #27272a; }
-        .hairline-l { border-left: 1px solid #27272a; }
-        .hairline-r { border-right: 1px solid #27272a; }
-
-        .diagram-node {
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            background: rgba(255, 255, 255, 0.02);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            color: #a1a1aa;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 11px;
-            padding: 6px 12px;
-            border-radius: 6px;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            z-index: 10;
-        }
-        .diagram-node.active {
-            border-color: rgba(59, 130, 246, 0.4);
-            color: #bfdbfe;
-            background: rgba(59, 130, 246, 0.05);
-        }
-
-        /* Subtle reveal animation */
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-up {
-            animation: fadeUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            opacity: 0;
-        }
-        
-        @keyframes drawLineH {
-            from { transform: scaleX(0); }
-            to { transform: scaleX(1); }
-        }
-        .animate-draw-h {
-            transform-origin: left;
-            animation: drawLineH 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        .card-wire::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 20px; height: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            border-left: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px 0 0 0;
         }
     </style>
 </head>
-<body class="selection:bg-blue-500/30">
+<body class="selection:bg-white/20">
 
     <!-- NAVIGATION -->
-    <nav class="fixed top-0 left-0 w-full h-14 bg-kb-bg/80 backdrop-blur-md hairline-b z-50 flex items-center justify-between px-6">
+    <nav class="fixed top-0 left-0 w-full h-14 bg-[#050505]/90 backdrop-blur-md hairline-b z-50 flex items-center justify-between px-6">
         <div class="flex items-center">
-            <a href="/index.html" class="font-medium tracking-tight text-white flex items-center gap-2">
-                <div class="w-5 h-5 bg-white rounded-sm"></div>
-                KOBITS
+            <a href="/" class="font-medium tracking-tight text-white flex items-center gap-2.5 group">
+                <div class="w-7 h-7 flex items-center justify-center text-white transition-transform group-hover:scale-110">
+                    <svg class="w-6 h-6" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+                        <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+                        <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <span class="font-bold tracking-tight text-sm text-white">KOBITS</span>
             </a>
         </div>
         <div class="flex items-center gap-6 text-sm">
-            <div class="hidden lg:flex items-center gap-6 text-zinc-400 border-r border-zinc-800 pr-6">
+            <div class="hidden lg:flex items-center gap-6 text-zinc-400 border-r border-zinc-800 pr-6 text-xs font-mono uppercase tracking-wider">
                 <a href="/product.html" class="hover:text-white transition-colors">Product</a>
-                <a href="/how-it-works.html" class="text-white font-medium transition-colors">How It Works</a>
                 <a href="/engineering.html" class="hover:text-white transition-colors">Engineering</a>
+                <a href="/how-it-works.html" class="text-white font-semibold">How It Works</a>
                 <a href="/security.html" class="hover:text-white transition-colors">Security</a>
-                <a href="/memory.html" class="hover:text-white transition-colors">Memory</a>
+                <a href="/pricing.html" class="hover:text-white transition-colors">Pricing</a>
             </div>
             <div class="flex items-center gap-4">
-                <a href="/portal.html#login" class="text-zinc-400 hover:text-white transition-colors">Sign in</a>
-                <a href="/portal.html#login" class="bg-white text-black px-4 py-1.5 rounded-full font-medium hover:bg-zinc-200 transition-colors">Start building</a>
+                <a href="/portal.html#login" class="text-zinc-400 hover:text-white text-xs transition-colors font-mono uppercase">Sign in</a>
+                <a href="/portal.html#login" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-medium hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)] hover:scale-[1.02]">Start building</a>
             </div>
         </div>
     </nav>
-<!-- SECTION 03: HOW IT WORKS -->
-    <section id="how-it-works" class="py-32 hairline-t">
-        <div class="max-w-[1400px] mx-auto px-6">
-            <h2 class="text-5xl md:text-6xl tracking-tighter leading-tight font-medium mb-24 max-w-2xl">
-                From outcome<br>to validated software.
-            </h2>
-            
-            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-y-20 gap-x-12">
-                <!-- 01 -->
-                <div>
-                    <div class="text-4xl font-mono tracking-tighter text-zinc-700 mb-4">01</div>
-                    <div class="fig-label text-zinc-300 mb-4">UNDERSTAND</div>
-                    <p class="text-sm text-zinc-400 leading-relaxed mb-6">Deep indexing of the repository structure, historical PRs, and architectural conventions.</p>
-                    <div class="h-32 fig-container rounded-lg p-4 flex flex-col justify-end relative">
-                        <div class="absolute inset-0 technical-grid opacity-30"></div>
-                        <div class="relative h-1 w-full bg-zinc-800 rounded-full mb-2"></div>
-                        <div class="relative h-1 w-2/3 bg-zinc-700 rounded-full mb-2"></div>
-                        <div class="relative h-1 w-4/5 bg-zinc-800 rounded-full"></div>
-                    </div>
-                </div>
-                <!-- 02 -->
-                <div>
-                    <div class="text-4xl font-mono tracking-tighter text-zinc-700 mb-4">02</div>
-                    <div class="fig-label text-zinc-300 mb-4">PLAN</div>
-                    <p class="text-sm text-zinc-400 leading-relaxed mb-6">Drafting an architectural blueprint and establishing the task contract for execution.</p>
-                    <div class="h-32 fig-container rounded-lg p-4 flex items-center justify-center">
-                        <div class="w-16 h-16 border border-zinc-700 rounded flex items-center justify-center bg-zinc-900/50">
-                            <i data-lucide="file-text" class="w-5 h-5 text-zinc-500"></i>
-                        </div>
-                    </div>
-                </div>
-                <!-- 03 -->
-                <div>
-                    <div class="text-4xl font-mono tracking-tighter text-zinc-700 mb-4">03</div>
-                    <div class="fig-label text-zinc-300 mb-4">BUILD</div>
-                    <p class="text-sm text-zinc-400 leading-relaxed mb-6">Specialized agents write, modify, and refactor code according to the blueprint.</p>
-                    <div class="h-32 fig-container rounded-lg p-4 flex items-end gap-2">
-                        <div class="w-1/3 bg-zinc-800 h-1/2 rounded-t"></div>
-                        <div class="w-1/3 bg-blue-900/30 border-t border-blue-500 h-3/4 rounded-t"></div>
-                        <div class="w-1/3 bg-zinc-800 h-full rounded-t"></div>
-                    </div>
-                </div>
-                <!-- 04 -->
-                <div>
-                    <div class="text-4xl font-mono tracking-tighter text-zinc-700 mb-4">04</div>
-                    <div class="fig-label text-zinc-300 mb-4">VERIFY</div>
-                    <p class="text-sm text-zinc-400 leading-relaxed mb-6">Running tests, linting, and compiling to ensure the implementation works as intended.</p>
-                    <div class="h-32 fig-container rounded-lg p-4 flex flex-col justify-center gap-3">
-                        <div class="diagram-node active text-lime-400 border-lime-900 bg-lime-900/10 self-start">
-                            <i data-lucide="check" class="w-3 h-3"></i> pytest pass
-                        </div>
-                        <div class="diagram-node active text-lime-400 border-lime-900 bg-lime-900/10 self-start">
-                            <i data-lucide="check" class="w-3 h-3"></i> tsc pass
-                        </div>
-                    </div>
-                </div>
-                <!-- 05 -->
-                <div>
-                    <div class="text-4xl font-mono tracking-tighter text-zinc-700 mb-4">05</div>
-                    <div class="fig-label text-zinc-300 mb-4">REVIEW</div>
-                    <p class="text-sm text-zinc-400 leading-relaxed mb-6">Static analysis, security scans, and peer-review simulation to catch regressions.</p>
-                    <div class="h-32 fig-container rounded-lg p-4 flex items-center justify-center relative">
-                        <div class="absolute inset-0 bg-kb-bg/40"></div>
-                        <div class="relative w-full h-8 border border-zinc-800 rounded bg-zinc-900 flex items-center px-3 mb-2">
-                            <div class="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
-                            <div class="h-1.5 w-16 bg-zinc-700 rounded"></div>
-                        </div>
-                    </div>
-                </div>
-                <!-- 06 -->
-                <div>
-                    <div class="text-4xl font-mono tracking-tighter text-zinc-700 mb-4">06</div>
-                    <div class="fig-label text-zinc-300 mb-4">DELIVER</div>
-                    <p class="text-sm text-zinc-400 leading-relaxed mb-6">Generating commit messages, opening pull requests, and integrating with CI/CD.</p>
-                    <div class="h-32 fig-container rounded-lg p-4 flex items-center justify-center">
-                        <div class="px-4 py-2 bg-zinc-100 text-black font-medium text-xs rounded shadow-lg flex items-center gap-2">
-                            <i data-lucide="git-merge" class="w-3 h-3"></i> Create PR
-                        </div>
-                    </div>
-                </div>
+
+    <!-- HEADER -->
+    <header class="pt-40 pb-16 px-6 max-w-[1200px] mx-auto text-center relative">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-800 bg-zinc-950 text-xs font-mono text-zinc-400 mb-6">
+            <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+            <span>END-TO-END AUTONOMOUS WORKFLOW</span>
+        </div>
+        <h1 class="text-4xl md:text-6xl font-medium tracking-tight text-white mb-6">
+            From Intent to PR.<br>
+            <span class="text-zinc-500">Every step verified.</span>
+        </h1>
+        <p class="text-zinc-400 text-base max-w-xl mx-auto leading-relaxed">
+            Kobits doesn't guess or improvise. Missions transition through a deterministic 8-stage state machine that models how elite engineering teams build software.
+        </p>
+    </header>
+
+    <!-- STEP BY STEP JOURNEY -->
+    <section class="pb-28 px-6 max-w-[1000px] mx-auto space-y-6">
+        
+        <!-- Step 1 -->
+        <div class="card-wire p-7 rounded-xl flex items-start gap-6">
+            <div class="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center font-mono font-bold text-white shrink-0 text-sm">
+                01
+            </div>
+            <div>
+                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">INTAKE &amp; CONTEXT EXPANSION</div>
+                <h3 class="text-lg font-bold text-white mb-2">Intent Ingestion &amp; Repository Indexing</h3>
+                <p class="text-xs text-zinc-400 leading-relaxed">
+                    You describe your engineering requirement in plain English, paste a GitHub issue, or invoke a webhook. Axiom (Orchestrator) queries the project's vector memory and fetches repository dependency trees.
+                </p>
             </div>
         </div>
-    </section>
 
-    <!-- SECTION 02: THE ENGINEERING TEAM -->
-    <section class="py-32 hairline-t bg-zinc-900/20">
-        <div class="max-w-[1400px] mx-auto px-6 text-center">
-            <h2 class="text-5xl md:text-7xl tracking-tighter leading-[1.1] font-medium mb-8">One mission.<br>A coordinated engineering team.</h2>
-            <p class="text-lg text-zinc-400 max-w-2xl mx-auto mb-24">
-                Kobits assembles the specialists required for the work instead of asking you to manually coordinate them.
-            </p>
-
-            <div class="relative w-full max-w-4xl mx-auto h-[450px] fig-container rounded-2xl hidden md:block">
-                <div class="absolute inset-0 technical-grid opacity-30 z-0"></div>
-                
-                <!-- Connectors SVG -->
-                <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-30 z-10" xmlns="http://www.w3.org/2000/svg">
-                    <line x1="50%" y1="50%" x2="50%" y2="20%" stroke="#a1a1aa" stroke-dasharray="4 4" />
-                    <line x1="50%" y1="50%" x2="50%" y2="80%" stroke="#a1a1aa" stroke-dasharray="4 4" />
-                    <line x1="50%" y1="50%" x2="20%" y2="50%" stroke="#a1a1aa" stroke-dasharray="4 4" />
-                    <line x1="50%" y1="50%" x2="80%" y2="50%" stroke="#a1a1aa" stroke-dasharray="4 4" />
-                    <line x1="50%" y1="50%" x2="30%" y2="30%" stroke="#a1a1aa" stroke-dasharray="4 4" />
-                    <line x1="50%" y1="50%" x2="70%" y2="30%" stroke="#a1a1aa" stroke-dasharray="4 4" />
-                    <line x1="50%" y1="50%" x2="30%" y2="70%" stroke="#a1a1aa" stroke-dasharray="4 4" />
-                    <line x1="50%" y1="50%" x2="70%" y2="70%" stroke="#a1a1aa" stroke-dasharray="4 4" />
-                </svg>
-
-                <!-- Central Node -->
-                <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20">
-                    <div class="w-16 h-16 rounded-2xl bg-white text-black flex items-center justify-center mb-3 shadow-lg">
-                        <i data-lucide="target" class="w-6 h-6"></i>
-                    </div>
-                    <div class="fig-label text-white bg-kb-bg px-2 rounded">MISSION</div>
-                </div>
-                
-                <!-- Orbiting Nodes -->
-                <div class="absolute top-16 left-1/2 -translate-x-1/2 diagram-node"><i data-lucide="layout" class="w-3 h-3"></i> Architecture</div>
-                <div class="absolute bottom-16 left-1/2 -translate-x-1/2 diagram-node"><i data-lucide="database" class="w-3 h-3"></i> Database</div>
-                <div class="absolute top-1/2 left-16 -translate-y-1/2 diagram-node"><i data-lucide="server" class="w-3 h-3"></i> Backend</div>
-                <div class="absolute top-1/2 right-16 -translate-y-1/2 diagram-node"><i data-lucide="smartphone" class="w-3 h-3"></i> Frontend</div>
-                
-                <div class="absolute top-24 left-32 diagram-node"><i data-lucide="shield" class="w-3 h-3"></i> Security</div>
-                <div class="absolute top-24 right-32 diagram-node"><i data-lucide="check-circle" class="w-3 h-3"></i> QA</div>
-                <div class="absolute bottom-24 left-32 diagram-node"><i data-lucide="eye" class="w-3 h-3"></i> Code Review</div>
-                <div class="absolute bottom-24 right-32 diagram-node"><i data-lucide="rocket" class="w-3 h-3"></i> Delivery</div>
+        <!-- Step 2 -->
+        <div class="card-wire p-7 rounded-xl flex items-start gap-6">
+            <div class="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center font-mono font-bold text-white shrink-0 text-sm">
+                02
             </div>
-            
-            <!-- Mobile Fallback for Team Section -->
-            <div class="grid grid-cols-2 gap-4 md:hidden">
-                <div class="diagram-node w-full justify-center"><i data-lucide="layout" class="w-3 h-3"></i> Architecture</div>
-                <div class="diagram-node w-full justify-center"><i data-lucide="server" class="w-3 h-3"></i> Backend</div>
-                <div class="diagram-node w-full justify-center"><i data-lucide="smartphone" class="w-3 h-3"></i> Frontend</div>
-                <div class="diagram-node w-full justify-center"><i data-lucide="database" class="w-3 h-3"></i> Database</div>
-                <div class="diagram-node w-full justify-center"><i data-lucide="shield" class="w-3 h-3"></i> Security</div>
-                <div class="diagram-node w-full justify-center"><i data-lucide="check-circle" class="w-3 h-3"></i> QA</div>
-                <div class="diagram-node w-full justify-center"><i data-lucide="eye" class="w-3 h-3"></i> Review</div>
-                <div class="diagram-node w-full justify-center"><i data-lucide="rocket" class="w-3 h-3"></i> Delivery</div>
+            <div>
+                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">STRATEGIC REASONING</div>
+                <h3 class="text-lg font-bold text-white mb-2">Topological Dependency DAG Planning</h3>
+                <p class="text-xs text-zinc-400 leading-relaxed">
+                    The strategic planner deconstructs the objective into a Directed Acyclic Graph (DAG) of isolated tasks. Each subtask establishes strict contracts: explicit inputs, expected outputs, assigned specialist agent, and verification criteria.
+                </p>
             </div>
         </div>
-    </section>
 
-    <!-- SECTION 12: FINAL CTA -->
-    <section class="py-48 hairline-t relative overflow-hidden bg-zinc-950">
-        <div class="absolute inset-0 technical-grid opacity-10"></div>
-        <div class="max-w-[1400px] mx-auto px-6 text-center relative z-10">
-            <h2 class="text-[4rem] md:text-[6.5rem] tracking-tighter leading-[0.9] font-medium mb-10 text-white">Tell Kobits<br>what to build.</h2>
-            <p class="text-xl text-zinc-400 mb-16 font-medium tracking-wide">Your engineering team is ready.</p>
-            
-            <div class="flex flex-col sm:flex-row items-center justify-center gap-6 max-w-xl mx-auto">
-                <a href="/portal.html#login" class="bg-white text-black px-8 py-4 rounded-full text-sm font-medium hover:bg-zinc-200 transition-colors w-full sm:w-auto flex items-center justify-center gap-2">
-                    Start a Mission <i data-lucide="arrow-right" class="w-4 h-4"></i>
-                </a>
-                <a href="/portal.html#preview" class="text-zinc-400 hover:text-white text-sm font-medium transition-colors border border-zinc-800 bg-zinc-900/50 px-8 py-4 rounded-full w-full sm:w-auto">
-                    Explore the Workspace
-                </a>
+        <!-- Step 3 -->
+        <div class="card-wire p-7 rounded-xl flex items-start gap-6">
+            <div class="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center font-mono font-bold text-white shrink-0 text-sm">
+                03
+            </div>
+            <div>
+                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">CLEANROOM INITIALIZATION</div>
+                <h3 class="text-lg font-bold text-white mb-2">MicroVM Sandbox Spawning</h3>
+                <p class="text-xs text-zinc-400 leading-relaxed">
+                    An isolated ephemeral Linux microVM spins up in <300ms. It checks out a dedicated git worktree (`sandboxes/sandbox-*`), resolves packages, boots local daemons, and prepares clean compiler environments.
+                </p>
             </div>
         </div>
+
+        <!-- Step 4 -->
+        <div class="card-wire p-7 rounded-xl flex items-start gap-6">
+            <div class="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center font-mono font-bold text-white shrink-0 text-sm">
+                04
+            </div>
+            <div>
+                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">TEST-DRIVEN DISCIPLINE</div>
+                <h3 class="text-lg font-bold text-white mb-2">Reproduction Test Authoring</h3>
+                <p class="text-xs text-zinc-400 leading-relaxed">
+                    Sentinel (QA specialist) authors a reproduction test case or benchmark before any production code is touched. This anchors the objective to hard test assertions rather than probabilistic hopes.
+                </p>
+            </div>
+        </div>
+
+        <!-- Step 5 -->
+        <div class="card-wire p-7 rounded-xl flex items-start gap-6">
+            <div class="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center font-mono font-bold text-white shrink-0 text-sm">
+                05
+            </div>
+            <div>
+                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">TACTICAL EXECUTION</div>
+                <h3 class="text-lg font-bold text-white mb-2">Compiler-Guided Implementation</h3>
+                <p class="text-xs text-zinc-400 leading-relaxed">
+                    Forge (Backend) and Muse (Frontend) write the implementation, querying the Language Server Protocol (Pyright / TS Server) for exact symbol definitions, type signatures, and callers across the codebase.
+                </p>
+            </div>
+        </div>
+
+        <!-- Step 6 -->
+        <div class="card-wire p-7 rounded-xl flex items-start gap-6">
+            <div class="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center font-mono font-bold text-white shrink-0 text-sm">
+                06
+            </div>
+            <div>
+                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">VERIFICATION SENTINEL</div>
+                <h3 class="text-lg font-bold text-white mb-2">Automated Test Execution &amp; Self-Healing</h3>
+                <p class="text-xs text-zinc-400 leading-relaxed">
+                    The agent triggers test suites inside the sandbox. If an assertion fails, the execution loop parses the traceback, diagnoses the discrepancy, and automatically heals the code until all unit tests pass green.
+                </p>
+            </div>
+        </div>
+
+        <!-- Step 7 -->
+        <div class="card-wire p-7 rounded-xl flex items-start gap-6">
+            <div class="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center font-mono font-bold text-white shrink-0 text-sm">
+                07
+            </div>
+            <div>
+                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">STATIC AUDIT &amp; REVIEW</div>
+                <h3 class="text-lg font-bold text-white mb-2">Aegis Security &amp; AST Code Review</h3>
+                <p class="text-xs text-zinc-400 leading-relaxed">
+                    Aegis audits the diff against OWASP attack surfaces, credential leakage, and AST anti-patterns. Review verifies architectural conformance against project memory guidelines.
+                </p>
+            </div>
+        </div>
+
+        <!-- Step 8 -->
+        <div class="card-wire p-7 rounded-xl flex items-start gap-6">
+            <div class="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center font-mono font-bold text-white shrink-0 text-sm">
+                08
+            </div>
+            <div>
+                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DELIVERY</div>
+                <h3 class="text-lg font-bold text-white mb-2">Verified GitHub Pull Request</h3>
+                <p class="text-xs text-zinc-400 leading-relaxed">
+                    Kobits pushes the branch, opens a GitHub Pull Request with a comprehensive changelog, test execution receipts, and AST verification proof. You review and merge with 1 click.
+                </p>
+            </div>
+        </div>
+
     </section>
 
     <!-- FOOTER -->
-    <footer class="py-12 hairline-t text-center text-zinc-600 text-[10px] font-mono tracking-widest bg-kb-bg">
-        KOBITS AI ENGINEERING
+    <footer class="py-12 hairline-t text-center text-zinc-600 text-[10px] font-mono tracking-widest bg-[#050505] flex flex-col sm:flex-row items-center justify-between px-8 max-w-[1400px] mx-auto gap-4">
+        <div class="flex items-center gap-2.5">
+            <div class="w-4 h-4 text-zinc-500">
+                <svg viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+                    <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+                    <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <span>KOBITS AI ENGINEERING</span>
+        </div>
+        <div class="flex items-center gap-6 text-zinc-500">
+            <a href="/product.html" class="hover:text-zinc-300 transition-colors">PRODUCT</a>
+            <a href="/engineering.html" class="hover:text-zinc-300 transition-colors">ENGINEERING</a>
+            <a href="/how-it-works.html" class="hover:text-zinc-300 transition-colors text-zinc-300">HOW IT WORKS</a>
+            <a href="/security.html" class="hover:text-zinc-300 transition-colors">SECURITY</a>
+            <a href="/pricing.html" class="hover:text-zinc-300 transition-colors">PRICING</a>
+        </div>
+        <div>
+            <span>© 2026 KOBITS</span>
+        </div>
     </footer>
 
     <script>
-        // Initialize Lucide icons
         lucide.createIcons();
     </script>
 </body>

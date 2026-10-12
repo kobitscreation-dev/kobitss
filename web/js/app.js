@@ -8,6 +8,7 @@ import {
   DASH, duration, esc, num, compact, PHASES, phaseIndex,
   renderDiff, RUNNING, timeAgo, titleCase, truncate,
 } from './ui.js';
+import { agentGlyph } from './agent-glyph.js';
 
 const state = {
   tab: 'overview',          // overview | milestones | deliverables | team | reports
@@ -298,7 +299,38 @@ function renderOverviewTab(d, milestones) {
   // Recent deliverables on Overview
   const recentDeliverables = milestones.slice(0, 6);
 
+  const isRunning = selectedMission && RUNNING.has(selectedMission.status);
+
   return `
+    <!-- Kyros Mission Launch Console (Interactive Input) -->
+    <div class="ky-prompt-console">
+      <div class="ky-prompt-header">
+        <div class="ky-prompt-telemetry">
+          <span class="dot"></span>
+          <span>KYROS REASONING LOOP // DUAL-LOOP ORCHESTRATION</span>
+        </div>
+        <div class="ky-prompt-selectors">
+          <select id="ky-mission-mode" class="ky-prompt-select" title="Execution Mode">
+            <option value="autopilot">⚡ Autopilot (Autonomous)</option>
+            <option value="approval_required">🛡 Requires Approval</option>
+          </select>
+          <input id="ky-mission-branch" class="ky-prompt-input-sm" value="main" placeholder="Branch" style="width:75px" title="Target Branch">
+        </div>
+      </div>
+      <textarea id="ky-mission-prompt" class="ky-prompt-textarea" placeholder="What should Kobits build, refactor, or test? (e.g. 'Add Stripe webhook verification with HMAC-SHA256 and pytest assertions')"></textarea>
+      <div class="ky-prompt-footer">
+        <div class="ky-prompt-hints">
+          <span><span>↵</span> Enter to submit</span>
+          <span>·</span>
+          <span>MicroVM cleanroom verified</span>
+        </div>
+        <button id="ky-mission-submit" type="button" class="ky-prompt-btn-launch">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Launch Mission
+        </button>
+      </div>
+    </div>
+
     <!-- 4 Kyros KPI Stat Cards (COMPLETE | DELIVERABLES | SPENT | REMAINING) -->
     <div class="ky-kpi-grid">
       <div class="ky-kpi-card">
@@ -357,13 +389,25 @@ function renderOverviewTab(d, milestones) {
                 <span class="ky-task-title">${esc(t.title)}</span>
               </div>
               <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
-                ${t.agent ? `<span class="ky-task-agent">${esc(titleCase(t.agent))}</span>` : ''}
+                ${t.agent ? `<span class="ky-task-agent">${agentGlyph(t.agent, 12)}${esc(titleCase(t.agent))}</span>` : ''}
                 ${taskStatusBadge(t.status)}
               </div>
             </div>
           `).join('') : `<div style="color:var(--text-3);padding:16px 0">No tasks recorded for this sprint yet.</div>`}
+
+          ${isRunning ? `
+            <!-- Mid-Flight Real-Time Steering Bar -->
+            <div class="ky-steer-bar">
+              <div class="ky-steer-label">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span>STEER IN REAL TIME:</span>
+              </div>
+              <input id="ky-steer-input" class="ky-steer-input" type="text" placeholder="Type instructions to guide the running agents mid-flight...">
+              <button id="ky-steer-btn" type="button" class="ky-btn ky-btn-primary ky-btn-xs" data-steer-id="${esc(selectedMission.mission_id)}">Steer</button>
+            </div>
+          ` : ''}
         </div>
-      ` : `<div style="color:var(--text-3);padding:20px 0">Run a mission via CLI to start tracking sprint tasks.</div>`}
+      ` : `<div style="color:var(--text-3);padding:20px 0">Use the prompt box above or CLI to launch a mission and track sprint tasks.</div>`}
     </div>
 
     <!-- RECENT DELIVERABLES Section (Exact Kyros Overview Bottom Section) -->
@@ -555,7 +599,7 @@ function renderTeamTab(d) {
               <div style="display:flex;align-items:center;gap:10px">
                 <span class="ky-avatar ${a.runs ? '' : 'muted'}">${esc((a.name || 'A').slice(0, 2).toUpperCase())}</span>
                 <div>
-                  <div style="font-weight:700;font-size:14.5px">${esc(a.name)}</div>
+                  <div style="font-weight:700;font-size:14.5px">${agentGlyph(a.type, 16)}${esc(a.name)}</div>
                   <div style="font-family:var(--font-mono);font-size:10.5px;color:var(--text-3)">${esc(titleCase(a.type))}</div>
                 </div>
               </div>
@@ -634,7 +678,7 @@ function renderReportsTab(d, milestones) {
         ${activeAgents.length ? activeAgents.map((a) => `
           <div class="ky-task-row" style="cursor:pointer" data-agent-inspect="${esc(a.type)}">
             <div>
-              <div style="font-weight:600">${esc(a.name)} <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-3)">(${esc(titleCase(a.type))})</span></div>
+              <div style="font-weight:600">${agentGlyph(a.type, 14)}${esc(a.name)} <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-3)">(${esc(titleCase(a.type))})</span></div>
               <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-3)">
                 Pass rate: ${a.success_rate != null ? `${a.success_rate}%` : DASH} · Tokens: ${compact(a.tokens)}
               </div>
@@ -739,6 +783,84 @@ function wireTabEvents() {
       }
     });
   });
+
+  // Mission Launch Console
+  const promptInput = document.getElementById('ky-mission-prompt');
+  const launchBtn = document.getElementById('ky-mission-submit');
+  if (launchBtn && promptInput) {
+    const doLaunch = async () => {
+      const text = promptInput.value.trim();
+      if (!text) {
+        notify('Please enter a task objective for Kobits.', 'error');
+        promptInput.focus();
+        return;
+      }
+      const branch = (document.getElementById('ky-mission-branch')?.value || 'main').trim();
+      const mode = document.getElementById('ky-mission-mode')?.value || 'autopilot';
+      launchBtn.disabled = true;
+      launchBtn.innerHTML = `<span>⚡ Booting sandbox…</span>`;
+
+      try {
+        const title = text.length > 60 ? text.slice(0, 60) + '…' : text;
+        const res = await post(`/missions/projects/${state.projectId}/missions`, {
+          title: title,
+          objective: text,
+          branch: branch,
+          execution_mode: mode,
+          auto_execute: true
+        });
+
+        notify('🚀 Mission launched into cleanroom sandbox!');
+        promptInput.value = '';
+        state.selectedMissionId = res.mission_id || res.id;
+        await fetchDashboard(true);
+      } catch (err) {
+        notify(`Failed to launch mission: ${err.message}`, 'error');
+        launchBtn.disabled = false;
+        launchBtn.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Launch Mission
+        `;
+      }
+    };
+
+    launchBtn.addEventListener('click', doLaunch);
+    promptInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey || !e.shiftKey)) {
+        e.preventDefault();
+        doLaunch();
+      }
+    });
+  }
+
+  // Mid-Flight Steering
+  const steerInput = document.getElementById('ky-steer-input');
+  const steerBtn = document.getElementById('ky-steer-btn');
+  if (steerBtn && steerInput) {
+    const doSteer = async () => {
+      const text = steerInput.value.trim();
+      const mid = steerBtn.dataset.steerId;
+      if (!text || !mid) return;
+      steerBtn.disabled = true;
+      try {
+        await post(`/missions/${encodeURIComponent(mid)}/steer`, { instruction: text });
+        notify('💬 Steering instruction injected into agent context!');
+        steerInput.value = '';
+        await fetchDashboard(true);
+      } catch (err) {
+        notify(`Steer failed: ${err.message}`, 'error');
+      } finally {
+        steerBtn.disabled = false;
+      }
+    };
+    steerBtn.addEventListener('click', doSteer);
+    steerInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        doSteer();
+      }
+    });
+  }
 }
 
 // ── Specialist Inspector Modal (Team Tab Interactive View) ──────────────────
@@ -775,7 +897,7 @@ function openSpecialistInspector(agentType) {
             <span class="ky-avatar">${esc((agent.name || 'A').slice(0, 2).toUpperCase())}</span>
             <div>
               <div class="ky-eyebrow">${esc(titleCase(agent.type))}</div>
-              <h3 style="margin:2px 0 0;font-size:18px">${esc(agent.name)}</h3>
+              <h3 style="margin:2px 0 0;font-size:18px">${agentGlyph(agent.type, 18)}${esc(agent.name)}</h3>
             </div>
           </div>
           <button type="button" class="ky-icon-btn" id="ky-modal-close">✕</button>
@@ -946,7 +1068,7 @@ async function openMissionInspector(missionId, autoFocusApply = false) {
                   <span class="ky-task-title">${esc(t.title)}</span>
                 </div>
                 <div style="display:flex;gap:6px;align-items:center">
-                  ${t.agent_role ? `<span class="ky-task-agent">${esc(titleCase(t.agent_role))}</span>` : ''}
+                  ${t.agent_role ? `<span class="ky-task-agent">${agentGlyph(t.agent_role, 12)}${esc(titleCase(t.agent_role))}</span>` : ''}
                   ${taskStatusBadge(t.status)}
                 </div>
               </div>
@@ -957,7 +1079,7 @@ async function openMissionInspector(missionId, autoFocusApply = false) {
             ${events.length ? events.slice(0, 8).map((a) => `
               <div class="ky-task-row">
                 <div style="min-width:0">
-                  <div style="font-weight:600;font-size:12.5px">${esc(a.agent_name || titleCase(a.agent_role || 'Specialist'))} · ${esc(a.task_title || '')}</div>
+                  <div style="font-weight:600;font-size:12.5px">${agentGlyph(a.agent_role || a.agent_name || '', 13)}${esc(a.agent_name || titleCase(a.agent_role || 'Specialist'))} · ${esc(a.task_title || '')}</div>
                   <div style="font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.summary || a.error || a.status || '')}</div>
                 </div>
                 <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-3)">${duration(a.duration_seconds)}</span>
@@ -1102,6 +1224,23 @@ function initTopBar() {
     fetchDashboard();
   });
 
+  const tourBtn = document.getElementById('ky-topbar-tour');
+  tourBtn?.addEventListener('click', () => {
+    openOnboardingWalkthrough(1);
+  });
+
+  const newBtn = document.getElementById('ky-topbar-new');
+  newBtn?.addEventListener('click', () => {
+    state.tab = 'overview';
+    location.hash = '#overview';
+    renderDashboard();
+    setTimeout(() => {
+      const p = document.getElementById('ky-mission-prompt');
+      p?.focus();
+      p?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+  });
+
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       document.getElementById('ky-modal-host').innerHTML = '';
@@ -1115,6 +1254,236 @@ function initTopBar() {
       renderDashboard();
     }
   });
+}
+
+// ── Real-World SaaS Product Onboarding Walkthrough (Linear/Vercel Style) ────
+
+function openOnboardingWalkthrough(step = 1) {
+  const host = document.getElementById('ky-modal-host');
+  if (!host) return;
+
+  const totalSteps = 4;
+  let content = '';
+
+  if (step === 1) {
+    content = `
+      <div class="ky-onboarding-step-badge">Step 1 of 4 • Multi-Agent Hierarchy</div>
+      <h3 class="ky-onboarding-title">Meet Your Autonomous Engineering Fleet</h3>
+      <p class="ky-onboarding-desc">
+        Kobits replaces single-turn AI chat with an orchestrated multi-agent cleanroom. 
+        Specialized agents plan, implement, verify, and security-audit code in parallel topological workstreams.
+      </p>
+      
+      <div class="ky-onboarding-card-grid" style="grid-template-columns: repeat(2, 1fr); gap: 10px;">
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px 14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            ${agentGlyph('Axiom', 14)}
+            <strong style="color:#fff;font-size:12px">Axiom (Orchestrator)</strong>
+          </div>
+          <div style="font-size:11px;color:#a1a1aa;line-height:1.4">Decomposes engineering goals into topological dependency DAGs and monitors convergence.</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px 14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            ${agentGlyph('Sentinel', 14)}
+            <strong style="color:#fff;font-size:12px">Sentinel (QA & TDD)</strong>
+          </div>
+          <div style="font-size:11px;color:#a1a1aa;line-height:1.4">Authors comprehensive pytest suites and verifies 100% test pass rates in cleanroom venvs.</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px 14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            ${agentGlyph('Forge', 14)}
+            <strong style="color:#fff;font-size:12px">Forge (Backend Core)</strong>
+          </div>
+          <div style="font-size:11px;color:#a1a1aa;line-height:1.4">Implements performant Python/FastAPI services, AST syntax trees, and data structures.</div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px 14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            ${agentGlyph('Aegis', 14)}
+            <strong style="color:#fff;font-size:12px">Aegis (Security Auditor)</strong>
+          </div>
+          <div style="font-size:11px;color:#a1a1aa;line-height:1.4">Scans for OWASP vulnerabilities, token leaks, and privilege escalations before commits.</div>
+        </div>
+      </div>
+    `;
+  } else if (step === 2) {
+    content = `
+      <div class="ky-onboarding-step-badge">Step 2 of 4 • Isolation</div>
+      <h3 class="ky-onboarding-title">5-Layer Cleanroom Sandbox Isolation</h3>
+      <p class="ky-onboarding-desc">
+        Zero repository pollution. Kobits guarantees that no broken or untested code ever touches your primary branch.
+      </p>
+
+      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:16px 20px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;font-family:var(--font-mono);font-size:11px">
+          <span style="color:#a1a1aa;background:rgba(255,255,255,0.06);padding:6px 10px;border-radius:6px">1. Host Repo</span>
+          <span style="color:#71717a">→</span>
+          <span style="color:#fff;background:rgba(255,255,255,0.1);padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2)">2. Git Worktree</span>
+          <span style="color:#71717a">→</span>
+          <span style="color:#a1a1aa;background:rgba(255,255,255,0.06);padding:6px 10px;border-radius:6px">3. Compiler AST</span>
+          <span style="color:#71717a">→</span>
+          <span style="color:#a1a1aa;background:rgba(255,255,255,0.06);padding:6px 10px;border-radius:6px">4. Pytest Pass</span>
+          <span style="color:#71717a">→</span>
+          <span style="color:#fff;background:rgba(255,255,255,0.12);padding:6px 10px;border-radius:6px">5. Verified Merge</span>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:12.5px;color:#a1a1aa;line-height:1.5">
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <span style="color:#fff;font-family:var(--font-mono);font-weight:bold">•</span>
+          <span><strong>Isolated Worktrees:</strong> Every task executes in a dedicated git worktree branch, leaving your working directory untouched.</span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <span style="color:#fff;font-family:var(--font-mono);font-weight:bold">•</span>
+          <span><strong>Full AST Verification:</strong> Syntax errors and broken imports are caught locally by language servers before tests run.</span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <span style="color:#fff;font-family:var(--font-mono);font-weight:bold">•</span>
+          <span><strong>Unified Diff Inspector:</strong> Review syntax-highlighted diffs and apply changes with one click.</span>
+        </div>
+      </div>
+    `;
+  } else if (step === 3) {
+    content = `
+      <div class="ky-onboarding-step-badge">Step 3 of 4 • Real-Time Control</div>
+      <h3 class="ky-onboarding-title">Mid-Flight Steering & The Dual-Loop Engine</h3>
+      <p class="ky-onboarding-desc">
+        Never wait for a mission to complete or restart from scratch to correct course. 
+        You can inject constraints into agents while they are working.
+      </p>
+
+      <div style="background:#050505;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:14px 16px;margin-bottom:16px">
+        <div style="font-family:var(--font-mono);font-size:10px;color:#a1a1aa;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+          <span style="width:6px;height:6px;border-radius:50%;background:#fff;box-shadow:0 0 6px #fff"></span>
+          Mid-Flight Steering Telemetry Bar
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.2);padding:8px 12px;border-radius:6px">
+          <span style="font-family:var(--font-mono);font-size:11px;color:#a1a1aa">>_ STEER:</span>
+          <span style="font-family:var(--font-sans);font-size:12px;color:#fff">"Add Redis cache fallback if database replica has high replication lag"</span>
+          <span style="margin-left:auto;font-family:var(--font-mono);font-size:10px;background:#fff;color:#000;padding:2px 8px;border-radius:4px;font-weight:600">STEERED</span>
+        </div>
+      </div>
+
+      <p style="font-size:12.5px;color:#a1a1aa;line-height:1.5">
+        Whenever a mission is executing, the <strong>Steering Bar</strong> appears at the bottom of the Overview tab. 
+        Type any adjustment, press Enter, and Axiom will dynamically re-route subtasks in real time.
+      </p>
+    `;
+  } else if (step === 4) {
+    content = `
+      <div class="ky-onboarding-step-badge">Step 4 of 4 • Get Started</div>
+      <h3 class="ky-onboarding-title">Launch Your First Engineering Mission</h3>
+      <p class="ky-onboarding-desc">
+        Choose a real-world starter mission template below or type your own goal to experience autonomous engineering:
+      </p>
+
+      <div class="ky-onboarding-card-grid" style="grid-template-columns:1fr;gap:10px;margin-bottom:16px">
+        <div class="ky-starter-card" data-prompt="Implement Token-Bucket rate limiting middleware in FastAPI with Redis/memory backing and comprehensive pytest suite.">
+          <div class="ky-starter-title">
+            <span>FastAPI Ingress Rate-Limiting</span>
+            <span style="font-family:var(--font-mono);font-size:10.5px;color:#a1a1aa">Security & QA</span>
+          </div>
+          <div class="ky-starter-prompt">"Implement Token-Bucket rate limiting middleware in FastAPI with Redis/memory backing and comprehensive pytest suite."</div>
+        </div>
+
+        <div class="ky-starter-card" data-prompt="Build an append-only write-ahead log (WAL) with deterministic replay, crash recovery semantics, and pytest concurrency checks.">
+          <div class="ky-starter-title">
+            <span>ACID Write-Ahead Log (WAL) Storage</span>
+            <span style="font-family:var(--font-mono);font-size:10.5px;color:#a1a1aa">Core Backend</span>
+          </div>
+          <div class="ky-starter-prompt">"Build an append-only write-ahead log (WAL) with deterministic replay, crash recovery semantics, and pytest concurrency checks."</div>
+        </div>
+
+        <div class="ky-starter-card" data-prompt="Analyze existing SQLite database models, add composite B-Tree indexes, and author zero-downtime migrations.">
+          <div class="ky-starter-title">
+            <span>Database Indexing & ACID Optimization</span>
+            <span style="font-family:var(--font-mono);font-size:10.5px;color:#a1a1aa">Database Engine</span>
+          </div>
+          <div class="ky-starter-prompt">"Analyze existing SQLite database models, add composite B-Tree indexes, and author zero-downtime migrations."</div>
+        </div>
+      </div>
+    `;
+  }
+
+  const dots = Array.from({ length: totalSteps }, (_, i) => {
+    return `<div class="ky-onboarding-dot ${i + 1 === step ? 'active' : ''}"></div>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="ky-onboarding-overlay">
+      <div class="ky-onboarding-modal" role="dialog" aria-modal="true" aria-label="Kobits Product Onboarding">
+        <div class="ky-onboarding-header">
+          <div class="ky-onboarding-progress">${dots}</div>
+          <button id="ky-onboarding-skip" class="ky-btn ky-btn-ghost ky-btn-xs" style="font-family:var(--font-mono);font-size:11px;color:#71717a">
+            Skip Tour
+          </button>
+        </div>
+        
+        <div class="ky-onboarding-body">${content}</div>
+
+        <div class="ky-onboarding-footer">
+          <div>
+            ${step > 1 ? `<button id="ky-onboarding-prev" class="ky-btn ky-btn-ghost ky-btn-sm" style="font-family:var(--font-mono);font-size:11.5px">← Back</button>` : ''}
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            ${step < totalSteps ? `
+              <button id="ky-onboarding-next" class="ky-btn ky-btn-primary ky-btn-sm" style="font-family:var(--font-mono);font-size:11.5px">
+                Next →
+              </button>
+            ` : `
+              <button id="ky-onboarding-finish" class="ky-btn ky-btn-primary ky-btn-sm" style="font-family:var(--font-mono);font-size:11.5px">
+                Enter Workspace
+              </button>
+            `}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Attach event handlers
+  document.getElementById('ky-onboarding-skip')?.addEventListener('click', () => {
+    localStorage.setItem('kobits.onboarded', 'true');
+    host.innerHTML = '';
+  });
+
+  document.getElementById('ky-onboarding-prev')?.addEventListener('click', () => {
+    openOnboardingWalkthrough(step - 1);
+  });
+
+  document.getElementById('ky-onboarding-next')?.addEventListener('click', () => {
+    openOnboardingWalkthrough(step + 1);
+  });
+
+  document.getElementById('ky-onboarding-finish')?.addEventListener('click', () => {
+    localStorage.setItem('kobits.onboarded', 'true');
+    host.innerHTML = '';
+    notify('Welcome to Kobits Workspace! Ready to launch missions.', 'info');
+  });
+
+  if (step === 4) {
+    host.querySelectorAll('.ky-starter-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const prompt = card.getAttribute('data-prompt');
+        localStorage.setItem('kobits.onboarded', 'true');
+        host.innerHTML = '';
+        state.tab = 'overview';
+        location.hash = '#overview';
+        renderDashboard();
+        setTimeout(() => {
+          const p = document.getElementById('ky-mission-prompt');
+          if (p) {
+            p.value = prompt;
+            p.focus();
+            p.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+          notify('Mission template loaded into prompt console.', 'info');
+        }, 120);
+      });
+    });
+  }
 }
 
 // ── Live WebSocket Telemetry Stream (<100ms Push Updates) ───────────────────
@@ -1179,6 +1548,16 @@ if (['overview', 'milestones', 'deliverables', 'team', 'reports'].includes(initi
 initTopBar();
 fetchDashboard();
 initLiveWebSocket();
+
+// Auto-trigger onboarding walkthrough on first visit or when ?onboarding=true is present
+try {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (!localStorage.getItem('kobits.onboarded') || urlParams.get('onboarding') === 'true') {
+    setTimeout(() => openOnboardingWalkthrough(1), 350);
+  }
+} catch {}
+
 setInterval(() => {
   fetchDashboard(true);
 }, 8000);
+

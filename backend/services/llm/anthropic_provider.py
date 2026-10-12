@@ -84,9 +84,20 @@ class AnthropicProvider(LLMProvider):
         total_input_tokens = 0
         total_output_tokens = 0
         
+        from backend.services.context_compactor import ContextCompactor
+        context_budget = int(os.environ.get("KOBITS_CONTEXT_BUDGET", "32000"))
+        compactor = ContextCompactor(max_token_budget=context_budget, recent_turns=3)
+        compaction_history = []
+
         while turn_count < max_turns:
             turn_count += 1
             
+            # Dynamic Context Compaction (preserves Turn 0 prefix and golden window)
+            if turn_count > 1:
+                messages, c_report = compactor.compact_anthropic_messages(messages)
+                if c_report.observations_pruned > 0 or c_report.checkpoints_created > 0:
+                    compaction_history.append(c_report.to_dict())
+
             for attempt in range(self.max_retries):
                 payload = {
                     "model": model or self.default_model,
@@ -181,6 +192,9 @@ class AnthropicProvider(LLMProvider):
                                     "estimated_cost": estimated_cost,
                                     "model_used": data.get("model", model or self.default_model)
                                 }
+                                if compaction_history:
+                                    parsed_data["_usage"]["compaction"] = compaction_history[-1]
+                                    parsed_data["_usage"]["compaction_history"] = compaction_history
                             return parsed_data
                         except json.JSONDecodeError:
                             import os

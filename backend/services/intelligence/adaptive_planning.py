@@ -502,20 +502,33 @@ class AdaptivePlanner:
         if not getattr(self, 'db', None):
             return self._static_route(task_complexity, risk_level)
             
-        stmt = select(ProcessMemory).where(ProcessMemory.task_category == task_category)
-        result = await self.db.execute(stmt)
-        memory = result.scalars().first()
+        memory = None
+        try:
+            stmt = select(ProcessMemory).where(ProcessMemory.task_category == task_category)
+            result = await self.db.execute(stmt)
+            if hasattr(result, "scalars"):
+                scalars_obj = result.scalars()
+                if hasattr(scalars_obj, "first"):
+                    first_fn = scalars_obj.first
+                    res = first_fn() if callable(first_fn) else first_fn
+                    import inspect
+                    if inspect.isawaitable(res):
+                        memory = await res
+                    else:
+                        memory = res
+        except Exception:
+            memory = None
         
         # 1. Self-Diagnostic Overrides
         # We need a decent sample size before overriding static heuristics
         if memory and getattr(memory, 'sample_size', 0) >= 2:
             # If the task historically fails or requires a lot of corrections (debate rounds), force PRO
-            if memory.success_rate < 0.75 or memory.avg_corrections > 1.5:
+            if getattr(memory, 'success_rate', 1.0) < 0.75 or getattr(memory, 'avg_corrections', 0) > 1.5:
                 # Upgrading to Pro to prevent failures
                 return 'pro'
             
             # If the task is historically trivial (100% success, 0 debate rounds), downgrade to FLASH to save tokens
-            if memory.success_rate == 1.0 and memory.avg_corrections <= 0.2:
+            if getattr(memory, 'success_rate', 0) == 1.0 and getattr(memory, 'avg_corrections', 1) <= 0.2:
                 # Even if complexity was judged MEDIUM, history proves it's easy
                 if risk_level not in ('HIGH', 'CRITICAL'):
                     return 'flash'

@@ -39,3 +39,6 @@ __all__ = [
 from backend.models.intelligence import TaskContract, ProcessMemory, IntelligenceTrace, MemoryUsefulness, HumanFeedback
 
 from backend.models.billing import LedgerTransaction, LedgerTransactionType
+
+from backend.models.audit_log import AuditLog, AuditEvent
+from backend.models.password_reset import PasswordResetToken

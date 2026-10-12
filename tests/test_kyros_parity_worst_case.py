@@ -737,7 +737,7 @@ def test_difference5_fluid_single_loop_self_healing_until_tests_pass(client, mon
     from backend.models.mission import ApprovalStatus
 
     mission_id = "m_fluid_loop_99"
-    sb_dir = Path("sandboxes") / f"mission_{mission_id[:8]}"
+    sb_dir = Path("sandboxes") / f"mission_{mission_id}"
     sb_dir.mkdir(parents=True, exist_ok=True)
 
     test_code = "from calculator import add\n\ndef test_add():\n    assert add(2, 3) == 5\n"
@@ -848,7 +848,7 @@ def test_difference5_fluid_single_loop_self_healing_until_tests_pass(client, mon
         # 3. Exhaustion guard worst-case: when code keeps failing past max_iterations=1,
         # MissionRuntime halts cleanly as FAILED with exact failure reason.
         exhaust_id = "m_fluid_exh_99"
-        sb_exh = Path("sandboxes") / f"mission_{exhaust_id[:8]}"
+        sb_exh = Path("sandboxes") / f"mission_{exhaust_id}"
         sb_exh.mkdir(parents=True, exist_ok=True)
         (sb_exh / "test_calculator.py").write_text(test_code, encoding="utf-8")
 

@@ -1,0 +1,45 @@
+# ==============================================================================
+# KOBITS ISOLATED CLOUD SANDBOX RUNNER (kobits-runner:latest)
+# Disposable microVM/container environment where agents write and test code.
+# ==============================================================================
+FROM ubuntu:24.04-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV LANG=C.UTF-8
+
+# Install foundational build tools, compilers, git, python, node, and test runners
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    git \
+    curl \
+    ca-certificates \
+    build-essential \
+    python3 \
+    python3-pip \
+    python3-venv \
+    nodejs \
+    npm \
+    ripgrep \
+    jq \
+    bubblewrap \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip and install standard test frameworks
+RUN python3 -m pip install --break-system-packages --no-cache-dir \
+    pytest \
+    pytest-asyncio \
+    pytest-timeout \
+    black \
+    flake8 \
+    httpx
+
+# Create non-root developer user for safe sandbox execution
+RUN useradd -ms /bin/bash -u 1000 kobits && \
+    mkdir -p /workspace && \
+    chown -R kobits:kobits /workspace
+
+WORKDIR /workspace
+USER kobits
+
+CMD ["/bin/bash"]

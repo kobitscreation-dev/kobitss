@@ -4,8 +4,6 @@ import json
 import os
 from datetime import datetime, timezone
 
-os.environ["LLM_PROVIDER"] = "mock"
-
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.project import Project, Base
 from backend.models.mission import Mission, MissionStatus, WorkflowPhase
@@ -25,7 +23,9 @@ async def test_adaptive_planner_validation():
         assert 'Axiom' in valid_team
 
 @pytest.mark.asyncio
-async def test_analysis_phase_transition():
+async def test_analysis_phase_transition(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    monkeypatch.setenv("KOBITS_PIPELINE_MODE", "waterfall")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)

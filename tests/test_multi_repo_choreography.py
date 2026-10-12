@@ -3,11 +3,16 @@ from httpx import AsyncClient
 import os
 import shutil
 import uuid
+from backend.core.config import settings
 from backend.core.database import engine, AsyncSessionLocal
-from backend.models.project import Base
+import backend.models  # register all models on Base.metadata
+from backend.models.base import Base
 
 @pytest.mark.asyncio
-async def test_multi_repo_choreography():
+async def test_multi_repo_choreography(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    monkeypatch.setenv("KOBITS_NO_AUTO_EXECUTE", "1")
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "mock")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
@@ -78,8 +83,7 @@ async def test_multi_repo_choreography():
             from backend.services.mission_runtime import MissionRuntime
             runtime = MissionRuntime(mission_id, org.id, user.id)
             runtime.db = test_db
-            import asyncio
-            await asyncio.sleep(2)
+            await runtime.initialize_sandbox(test_db)
             
             from backend.services.sandbox_manager import SandboxManager
             from backend.models.mission import Mission
@@ -114,5 +118,10 @@ async def test_multi_repo_choreography():
             
                 
         finally:
+            from backend.services.sandbox_manager import SandboxManager
+            if 'session' in locals() and session:
+                SandboxManager.cleanup(session.session_id)
+            if 'task_session' in locals() and task_session:
+                SandboxManager.cleanup(task_session.session_id)
             shutil.rmtree("test_repo_backend", ignore_errors=True)
             shutil.rmtree("test_repo_frontend", ignore_errors=True)

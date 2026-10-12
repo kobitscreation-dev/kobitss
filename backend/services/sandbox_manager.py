@@ -159,6 +159,9 @@ class SandboxManager:
                 shutil.copytree(str(ws_path), dest_dir, ignore=ignore, dirs_exist_ok=True)
                 return
 
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            return
+
         for subdir in ("backend", "js"):
             src = repo_root / subdir
             if src.is_dir():
@@ -172,45 +175,26 @@ class SandboxManager:
     def _create_git_worktree_sandbox(cls, sandbox_dir: str, branch_name: str, source_dir: Optional[str] = None) -> bool:
         """
         Create an isolated Git Worktree sandbox (`git worktree add -B <branch> <sandbox_dir> HEAD`)
-        directly from a Git repository or cached worktree anchor (matching Kyros).
+        directly from a valid Git repository with a HEAD commit.
         """
-        import hashlib
         repo_root = Path(__file__).resolve().parent.parent.parent
         target_ws = source_dir or os.environ.get("KOBITS_TARGET_WORKSPACE")
         if not target_ws or Path(target_ws).resolve() == repo_root:
             return False
         ws_path = Path(target_ws).resolve()
 
-        # 1. If the target workspace is already a valid Git repository with a HEAD commit, use it directly
-        anchor_dir = None
-        if (ws_path / ".git").exists():
-            head_chk = subprocess.run(
-                ["git", "rev-parse", "--verify", "HEAD"],
-                cwd=str(ws_path), capture_output=True, text=True, timeout=5
-            )
-            if head_chk.returncode == 0:
-                anchor_dir = str(ws_path)
+        # Target workspace must be a valid Git repository with a HEAD commit
+        if not (ws_path / ".git").exists():
+            return False
 
-        # 2. Otherwise maintain a fast cached Git worktree anchor inside SANDBOX_ROOT
-        if not anchor_dir:
-            ws_hash = hashlib.sha1(str(ws_path).encode("utf-8")).hexdigest()[:10]
-            anchor_dir = os.path.join(cls.SANDBOX_ROOT, f".worktree_anchor_{ws_hash}")
-            head_chk = (
-                subprocess.run(
-                    ["git", "rev-parse", "--verify", "HEAD"],
-                    cwd=anchor_dir, capture_output=True, text=True, timeout=5
-                )
-                if os.path.exists(os.path.join(anchor_dir, ".git"))
-                else None
-            )
-            if not head_chk or head_chk.returncode != 0:
-                shutil.rmtree(anchor_dir, ignore_errors=True)
-                os.makedirs(anchor_dir, exist_ok=True)
-                cls._seed_local_workspace(anchor_dir, source_dir=str(ws_path))
-                _run_git(anchor_dir, "init")
-                cls._init_git_excludes(anchor_dir)
-                _run_git(anchor_dir, "add", "-A")
-                _run_git(anchor_dir, "commit", "--allow-empty", "-m", "Initial worktree anchor")
+        head_chk = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD"],
+            cwd=str(ws_path), capture_output=True, text=True, timeout=5
+        )
+        if head_chk.returncode != 0:
+            return False
+
+        anchor_dir = str(ws_path)
 
         # Prune stale worktrees and remove empty target dir before `git worktree add`
         _run_git(anchor_dir, "worktree", "prune")
@@ -2213,8 +2197,9 @@ def _run_git(cwd: str, *args: str) -> str:
     """Helper to run a git command and return stdout."""
     import os
     import subprocess
-    is_dev = os.environ.get("KOBITS_DEV_MODE", "0").lower() in ("1", "true", "yes")
-    if not is_dev:
+    import shutil
+    has_git = shutil.which("git") is not None
+    if has_git:
         try:
             result = subprocess.run(
                 ["git"] + list(args),
@@ -2227,7 +2212,7 @@ def _run_git(cwd: str, *args: str) -> str:
             )
             return result.stdout
         except subprocess.CalledProcessError as e:
-            # Fall back to returning stderr or just raising
+            # Fall back to returning stderr or stdout
             return e.stdout or e.stderr
 
     # MOCK MODE FOR TESTS

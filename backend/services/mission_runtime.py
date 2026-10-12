@@ -520,6 +520,95 @@ class MissionRuntime:
             await manager.broadcast(self.mission_id, message)
         except Exception:
             pass  # WebSocket failures should never crash the runtime
+    async def initialize_sandbox(self, db: AsyncSession = None, mission: Mission = None):
+        """Initialize or retrieve the isolated sandbox for this mission (supporting single and multi-repo)."""
+        close_db = False
+        if db is None:
+            if hasattr(self, "db") and self.db:
+                db = self.db
+            else:
+                db = AsyncSessionLocal()
+                close_db = True
+                
+        try:
+            if not mission:
+                mission = await db.get(Mission, self.mission_id)
+                if not mission:
+                    return None
+                    
+            from backend.services.sandbox_manager import SandboxManager
+            if mission.active_branch:
+                sess = SandboxManager.get_session_by_branch(mission.active_branch)
+                if sess:
+                    return sess
+
+            branch_name = f"kobits/mission/{self.mission_id[:8]}"
+            project_root = os.environ.get("KOBITS_TARGET_WORKSPACE") or os.getcwd()
+            created = False
+            
+            # Support Multi-Repository Choreography
+            from backend.models.mission import MissionRepository
+            from backend.models.github import Repository
+            
+            stmt = select(MissionRepository).where(MissionRepository.mission_id == mission.id)
+            res = await db.execute(stmt)
+            m_repos = res.scalars().all()
+            
+            session = None
+            if m_repos:
+                repos_payload = []
+                for mr in m_repos:
+                    repo = await db.get(Repository, mr.repository_id)
+                    if repo and repo.clone_url:
+                        repos_payload.append({
+                            "clone_url": repo.clone_url,
+                            "mount_path": mr.mount_path,
+                            "base_commit_sha": mission.base_commit_sha
+                        })
+                if repos_payload:
+                    session = SandboxManager.create_sandbox(
+                        project_root="",
+                        branch_name=branch_name,
+                        repositories=repos_payload
+                    )
+                    created = True
+            elif getattr(mission, "repository_id", None):
+                repo = await db.get(Repository, mission.repository_id)
+                if repo and repo.clone_url:
+                    session = SandboxManager.create_sandbox(
+                        project_root="",
+                        clone_url=repo.clone_url,
+                        base_commit_sha=mission.base_commit_sha,
+                        branch_name=branch_name
+                    )
+                    created = True
+                    
+            if not created:
+                session = SandboxManager.create_sandbox(
+                    project_root=project_root,
+                    branch_name=branch_name
+                )
+                
+            mission.active_branch = branch_name
+            async with self._db_lock:
+                await db.commit()
+                
+            # Auto-index repository AST chunks & symbol graph when sandbox attaches
+            try:
+                from backend.services.indexer import RepositoryIndexer
+                from backend.services.graph_indexer import GraphIndexerService
+                target_index_dir = session.sandbox_dir if session else project_root
+                if mission.project_id and target_index_dir and os.path.isdir(target_index_dir):
+                    async with self._db_lock:
+                        await RepositoryIndexer.index_repository(db, mission.project_id, target_index_dir)
+                        await GraphIndexerService.index_repository(db, mission.project_id, target_index_dir)
+            except Exception:
+                pass
+                
+            return session
+        finally:
+            if close_db:
+                await db.close()
 
     async def execute(self):
         print(f"Executing mission {self.mission_id}")
@@ -1204,10 +1293,52 @@ class MissionRuntime:
 
     async def _handle_validation(self, db: AsyncSession, mission: Mission) -> str:
         if self._is_fluid_mode(mission):
-            # 1. If any explicit VALIDATION tasks were pre-created, run them without spawning ceremonial waterfall tasks
             existing_val_tasks = (
                 await db.execute(select(Task).where(Task.mission_id == mission.id, Task.phase == WorkflowPhase.VALIDATION))
             ).scalars().all()
+
+            # High-Risk Red-Team Critic Insertion:
+            risk_profile = {}
+            if mission.risk_profile_json:
+                try:
+                    risk_profile = json.loads(mission.risk_profile_json)
+                except:
+                    pass
+            high_risk = risk_profile.get("overall_risk") in ["HIGH", "CRITICAL"]
+
+            if not existing_val_tasks and high_risk:
+                tasks_to_spawn = [
+                    {
+                        "title": "QA Testing",
+                        "agent": "QA_ENGINEER",
+                        "description": "Execute the test suite and perform quality assurance to ensure the implementation meets the requirements."
+                    },
+                    {
+                        "title": "Red-Team Specialist Critic",
+                        "agent": "SECURITY_ENGINEER",
+                        "description": "Perform an adversarial red-team review of the implementation to identify high-risk logic flaws."
+                    }
+                ]
+                for spec in tasks_to_spawn:
+                    t = Task(
+                        id=str(uuid.uuid4()),
+                        mission_id=mission.id,
+                        project_id=mission.project_id,
+                        created_by=mission.created_by,
+                        title=spec["title"],
+                        description=spec["description"],
+                        status=TaskStatus.IN_PROGRESS,
+                        phase=WorkflowPhase.VALIDATION,
+                        metadata_json=json.dumps({"agent_role": spec["agent"]}),
+                        dependencies_json="[]",
+                    )
+                    db.add(t)
+                await db.commit()
+                existing_val_tasks = (
+                    await db.execute(select(Task).where(Task.mission_id == mission.id, Task.phase == WorkflowPhase.VALIDATION))
+                ).scalars().all()
+
+            # 1. If any explicit VALIDATION tasks were pre-created (or high-risk injected), run them
             pending_val = [t for t in existing_val_tasks if t.status in (TaskStatus.PENDING, TaskStatus.IN_PROGRESS)]
             if pending_val:
                 for t in pending_val:
@@ -1382,6 +1513,11 @@ class MissionRuntime:
                 await CreditPolicy.settle_reservation(db, mission.organization_id, mission.id)
             except Exception:
                 await db.rollback()
+            try:
+                from backend.services.trajectory_collector import TrajectoryCollector
+                TrajectoryCollector.harvest_from_db()
+            except Exception:
+                pass
             await db.commit()
             return "HALT"
 
@@ -1740,6 +1876,11 @@ class MissionRuntime:
                 except Exception as e:
                     print(f"Failed to settle reservation: {e}")
                     await db.rollback()
+                try:
+                    from backend.services.trajectory_collector import TrajectoryCollector
+                    TrajectoryCollector.harvest_from_db()
+                except Exception:
+                    pass
             else:
                 await self._broadcast("phase_complete", {
                     "phase": current_phase.value,
@@ -1854,75 +1995,18 @@ class MissionRuntime:
             
             # Setup sandbox branch if not set (for IMPLEMENTATION tasks)
             if not mission.active_branch:
-                from backend.services.sandbox_manager import SandboxManager
-                branch_name = f"kobits/mission/{self.mission_id[:8]}"
-                
-                # Respect KOBITS_TARGET_WORKSPACE when targeting a local or cloned GitHub repository
-                project_root = os.environ.get("KOBITS_TARGET_WORKSPACE") or os.getcwd()
-                
-                created = False
-                
-                # Support Multi-Repository Choreography
-                from backend.models.mission import MissionRepository
-                from backend.models.github import Repository
-                
-                stmt = select(MissionRepository).where(MissionRepository.mission_id == mission.id)
-                res = await db.execute(stmt)
-                m_repos = res.scalars().all()
-                
-                if m_repos:
-                    # Multi-repo mode
-                    repos_payload = []
-                    for mr in m_repos:
-                        repo = await db.get(Repository, mr.repository_id)
-                        if repo and repo.clone_url:
-                            repos_payload.append({
-                                "clone_url": repo.clone_url,
-                                "mount_path": mr.mount_path,
-                                "base_commit_sha": mission.base_commit_sha
-                            })
-                    if repos_payload:
-                        SandboxManager.create_sandbox(
-                            project_root="",
-                            branch_name=branch_name,
-                            repositories=repos_payload
-                        )
-                        created = True
-                elif getattr(mission, "repository_id", None):
-                    # Legacy single-repo mode
-                    repo = await db.get(Repository, mission.repository_id)
-                    if repo and repo.clone_url:
-                        SandboxManager.create_sandbox(
-                            project_root="",
-                            clone_url=repo.clone_url,
-                            base_commit_sha=mission.base_commit_sha,
-                            branch_name=branch_name
-                        )
-                        created = True
-                        
-                if not created:
-                    # LOCAL SANDBOX - Fallback to local project dir
-                    SandboxManager.create_sandbox(
-                        project_root=project_root,
-                        branch_name=branch_name
-                    )
-                    
-                mission.active_branch = branch_name
+                await self.initialize_sandbox(db, mission)
+
+            from backend.services.sandbox_manager import SandboxManager
+            sb_sess = SandboxManager.get_session_by_branch(mission.active_branch)
+            if not sb_sess:
+                run.status = AgentRunStatus.FAILED
+                run.error = f"CRITICAL RECOVERY ERROR: Sandbox for active branch '{mission.active_branch}' not found. Aborting execution to prevent unisolated host modification."
+                run.completed_at = datetime.now(timezone.utc)
+                task.status = TaskStatus.FAILED
                 async with self._db_lock:
                     await db.commit()
-
-                # Auto-index repository AST chunks & symbol graph when sandbox attaches
-                try:
-                    from backend.services.indexer import RepositoryIndexer
-                    from backend.services.graph_indexer import GraphIndexerService
-                    sb_sess = SandboxManager.get_session_by_branch(branch_name)
-                    target_index_dir = sb_sess.sandbox_dir if sb_sess else project_root
-                    if task.project_id and target_index_dir and os.path.isdir(target_index_dir):
-                        async with self._db_lock:
-                            await RepositoryIndexer.index_repository(db, task.project_id, target_index_dir)
-                            await GraphIndexerService.index_repository(db, task.project_id, target_index_dir)
-                except Exception:
-                    pass
+                return False
 
             task_meta = {}
             if task.metadata_json:

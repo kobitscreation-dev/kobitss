@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kobits — Pricing & Compute Credits</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        kb: {
+                            bg: '#050505',
+                            surface: '#0f0f11',
+                            border: '#222226',
+                            accent: '#ffffff',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body {
+            background-color: #050505;
+            color: #fafafa;
+            font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+            -webkit-font-smoothing: antialiased;
+        }
+        .hairline-b { border-bottom: 1px solid #222226; }
+        .hairline-t { border-top: 1px solid #222226; }
+        .card-wire {
+            background: #0f0f11;
+            border: 1px solid #222226;
+            position: relative;
+            transition: all 0.25s ease;
+        }
+        .card-wire:hover {
+            border-color: #38383f;
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.03);
+            transform: translateY(-2px);
+        }
+        .card-wire::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 20px; height: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            border-left: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px 0 0 0;
+        }
+        .technical-grid {
+            background-image: linear-gradient(to right, #1f1f23 1px, transparent 1px),
+                              linear-gradient(to bottom, #1f1f23 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+    </style>
+</head>
+<body class="selection:bg-white/20">
+
+    <!-- NAVIGATION -->
+    <nav class="fixed top-0 left-0 w-full h-14 bg-[#050505]/90 backdrop-blur-md hairline-b z-50 flex items-center justify-between px-6">
+        <div class="flex items-center">
+            <a href="/" class="font-medium tracking-tight text-white flex items-center gap-2.5 group">
+                <div class="w-7 h-7 flex items-center justify-center text-white transition-transform group-hover:scale-110">
+                    <svg class="w-6 h-6" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+                        <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+                        <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <span class="font-bold tracking-tight text-sm text-white">KOBITS</span>
+            </a>
+        </div>
+        <div class="flex items-center gap-6 text-sm">
+            <div class="hidden lg:flex items-center gap-6 text-zinc-400 border-r border-zinc-800 pr-6 text-xs font-mono uppercase tracking-wider">
+                <a href="/product.html" class="hover:text-white transition-colors">Product</a>
+                <a href="/engineering.html" class="hover:text-white transition-colors">Engineering</a>
+                <a href="/how-it-works.html" class="hover:text-white transition-colors">How It Works</a>
+                <a href="/security.html" class="hover:text-white transition-colors">Security</a>
+                <a href="/pricing.html" class="text-white font-semibold">Pricing</a>
+            </div>
+            <div class="flex items-center gap-4">
+                <a href="/portal.html#login" class="text-zinc-400 hover:text-white text-xs transition-colors font-mono uppercase">Sign in</a>
+                <a href="/portal.html#login" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-medium hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)] hover:scale-[1.02]">Start building</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HEADER -->
+    <header class="pt-40 pb-16 px-6 max-w-[1200px] mx-auto text-center relative">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-800 bg-zinc-950 text-xs font-mono text-zinc-400 mb-6">
+            <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+            <span>TRANSPARENT COMPUTE-BACKED PRICING</span>
+        </div>
+        <h1 class="text-4xl md:text-6xl font-medium tracking-tight text-white mb-6">
+            Predictable compute.<br>
+            <span class="text-zinc-500">Zero seat taxes.</span>
+        </h1>
+        <p class="text-zinc-400 text-base max-w-xl mx-auto leading-relaxed">
+            Pay for autonomous engineering output, not developer seat licenses. Every new account receives 50 complimentary welcome credits.
+        </p>
+    </header>
+
+    <!-- PRICING TIERS -->
+    <section class="pb-24 px-6 max-w-[1200px] mx-auto">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            <!-- Tier 1: Developer Starter -->
+            <div class="card-wire p-8 rounded-xl flex flex-col justify-between">
+                <div>
+                    <div class="text-xs font-mono text-zinc-400 uppercase tracking-wider mb-2">FREE DEVELOPER</div>
+                    <div class="flex items-baseline gap-1 mb-4">
+                        <span class="text-4xl font-bold text-white">$0</span>
+                        <span class="text-xs text-zinc-500 font-mono">/ forever</span>
+                    </div>
+                    <p class="text-xs text-zinc-400 mb-6 leading-relaxed">
+                        Full access to the Kobits multi-agent orchestrator to try autonomous missions on your personal repos.
+                    </p>
+                    <ul class="space-y-3 text-xs text-zinc-300 font-mono mb-8">
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> 50 Welcome Credits included
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> ~5 Autonomous Missions
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Isolated worktree cleanrooms
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Pytest & AST verification
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> GitHub OAuth integration
+                        </li>
+                    </ul>
+                </div>
+                <a href="/portal.html#login" class="w-full text-center py-2.5 rounded-lg border border-zinc-700 bg-zinc-900 text-xs font-medium text-white hover:bg-zinc-800 transition-colors">
+                    Get 50 Free Credits
+                </a>
+            </div>
+
+            <!-- Tier 2: Pro Engineering (Featured) -->
+            <div class="card-wire p-8 rounded-xl flex flex-col justify-between border-zinc-500 shadow-[0_0_40px_rgba(255,255,255,0.06)] relative">
+                <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-white text-black text-[10px] font-mono font-bold uppercase tracking-wider">
+                    RECOMMENDED
+                </div>
+                <div>
+                    <div class="text-xs font-mono text-white uppercase tracking-wider mb-2">PRO SPRINT</div>
+                    <div class="flex items-baseline gap-1 mb-4">
+                        <span class="text-4xl font-bold text-white">$29</span>
+                        <span class="text-xs text-zinc-500 font-mono">/ month</span>
+                    </div>
+                    <p class="text-xs text-zinc-400 mb-6 leading-relaxed">
+                        Designed for active builders shipping features, fixes, and refactors daily.
+                    </p>
+                    <ul class="space-y-3 text-xs text-zinc-300 font-mono mb-8">
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> 300 Credits / month (~30 missions)
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> MicroVM Linux container isolation
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Compiler-grade LSP navigation
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Automated GitHub PR authoring
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Dual-loop System-1/2 reasoning
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Priority runner execution
+                        </li>
+                    </ul>
+                </div>
+                <a href="/portal.html#login" class="w-full text-center py-2.5 rounded-lg bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors">
+                    Subscribe to Pro ($29)
+                </a>
+            </div>
+
+            <!-- Tier 3: Team / Enterprise -->
+            <div class="card-wire p-8 rounded-xl flex flex-col justify-between">
+                <div>
+                    <div class="text-xs font-mono text-zinc-400 uppercase tracking-wider mb-2">TEAM &amp; SCALE</div>
+                    <div class="flex items-baseline gap-1 mb-4">
+                        <span class="text-4xl font-bold text-white">$99</span>
+                        <span class="text-xs text-zinc-500 font-mono">/ month</span>
+                    </div>
+                    <p class="text-xs text-zinc-400 mb-6 leading-relaxed">
+                        For engineering teams running continuous autonomous backlogs and multi-repo architectures.
+                    </p>
+                    <ul class="space-y-3 text-xs text-zinc-300 font-mono mb-8">
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> 1,200 Credits / month (~120 missions)
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Multi-repository DAG choreography
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Parallel execution worktrees (up to 8)
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Bring Your Own Key (BYOK) option
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Dedicated Slack &amp; GitHub webhooks
+                        </li>
+                        <li class="flex items-center gap-2">
+                            <i data-lucide="check" class="w-3.5 h-3.5 text-white"></i> Custom microVM compute images
+                        </li>
+                    </ul>
+                </div>
+                <a href="/portal.html#login" class="w-full text-center py-2.5 rounded-lg border border-zinc-700 bg-zinc-900 text-xs font-medium text-white hover:bg-zinc-800 transition-colors">
+                    Start Team Plan ($99)
+                </a>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- MISSION ECONOMICS -->
+    <section class="py-20 px-6 max-w-[1200px] mx-auto hairline-t">
+        <div class="mb-12">
+            <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">COMPUTE ACCOUNTING</div>
+            <h2 class="text-2xl md:text-3xl font-medium text-white mb-3">How Compute Credits Work</h2>
+            <p class="text-zinc-400 text-sm max-w-xl font-normal">
+                Credits are strictly bound to compute sandbox execution and frontier LLM tokens. You are never billed for idle time.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 font-mono text-xs">
+            <div class="p-6 rounded-lg border border-zinc-800 bg-zinc-950/60">
+                <div class="text-zinc-400 mb-2 font-bold">10 CREDITS / MISSION</div>
+                <p class="text-zinc-500 leading-relaxed font-sans text-xs">
+                    Covers full 8-phase mission orchestration: DAG planning, microVM boot, test execution, AST static analysis, and verified PR delivery.
+                </p>
+            </div>
+            <div class="p-6 rounded-lg border border-zinc-800 bg-zinc-950/60">
+                <div class="text-zinc-400 mb-2 font-bold">ZERO IDLE BILLING</div>
+                <p class="text-zinc-500 leading-relaxed font-sans text-xs">
+                    Sandboxes are ephemeral. When a mission concludes, the container terminates immediately. You never pay for standing VM time.
+                </p>
+            </div>
+            <div class="p-6 rounded-lg border border-zinc-800 bg-zinc-950/60">
+                <div class="text-zinc-400 mb-2 font-bold">FAILED MISSION CREDIT BACK</div>
+                <p class="text-zinc-500 leading-relaxed font-sans text-xs">
+                    If an orchestration failure occurs due to system timeouts or infrastructure exceptions, credits are automatically refunded to your org ledger.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="py-12 hairline-t text-center text-zinc-600 text-[10px] font-mono tracking-widest bg-[#050505] flex flex-col sm:flex-row items-center justify-between px-8 max-w-[1400px] mx-auto gap-4">
+        <div class="flex items-center gap-2.5">
+            <div class="w-4 h-4 text-zinc-500">
+                <svg viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+                    <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+                    <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <span>KOBITS AI ENGINEERING</span>
+        </div>
+        <div class="flex items-center gap-6 text-zinc-500">
+            <a href="/product.html" class="hover:text-zinc-300 transition-colors">PRODUCT</a>
+            <a href="/engineering.html" class="hover:text-zinc-300 transition-colors">ENGINEERING</a>
+            <a href="/how-it-works.html" class="hover:text-zinc-300 transition-colors">HOW IT WORKS</a>
+            <a href="/security.html" class="hover:text-zinc-300 transition-colors">SECURITY</a>
+            <a href="/pricing.html" class="hover:text-zinc-300 transition-colors text-zinc-300">PRICING</a>
+        </div>
+        <div>
+            <span>© 2026 KOBITS</span>
+        </div>
+    </footer>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

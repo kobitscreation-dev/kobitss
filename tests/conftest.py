@@ -36,6 +36,31 @@ async def setup_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
+@pytest.fixture(autouse=True)
+def isolate_test_state():
+    """
+    Ensures environment variables, settings, and sandbox session caches
+    do not leak across test boundaries.
+    """
+    from backend.core.config import settings
+    from backend.services.sandbox_manager import SandboxManager
+
+    orig_env = dict(os.environ)
+    orig_llm = settings.LLM_PROVIDER
+    orig_anthropic_key = settings.ANTHROPIC_API_KEY
+    orig_deepseek_key = settings.DEEPSEEK_API_KEY
+
+    SandboxManager._sessions.clear()
+
+    yield
+
+    os.environ.clear()
+    os.environ.update(orig_env)
+    settings.LLM_PROVIDER = orig_llm
+    settings.ANTHROPIC_API_KEY = orig_anthropic_key
+    settings.DEEPSEEK_API_KEY = orig_deepseek_key
+    SandboxManager._sessions.clear()
+
 @pytest_asyncio.fixture
 async def db_session():
     """Provides an active database session for tests to use."""

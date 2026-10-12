@@ -371,15 +371,67 @@ async def github_push_webhook(
 from backend.models.github import PullRequest, PullRequestStatus
 from backend.models.mission import Mission, MissionStatus
 
+@router.post("/webhooks")
 @router.post("/webhooks/events")
 async def github_events_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
+    body_bytes = await request.body()
+    sig = request.headers.get("X-Hub-Signature-256", "")
+    from backend.services.github_app import GitHubAppService
+    if not GitHubAppService.verify_webhook_signature(body_bytes, sig):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
     event_type = request.headers.get("X-GitHub-Event", "ping")
-    payload = await request.json()
-    
+    try:
+        payload = json.loads(body_bytes) if body_bytes else {}
+    except Exception:
+        payload = {}
+
+    if event_type == "installation":
+        action = payload.get("action")
+        inst = payload.get("installation", {})
+        inst_id = str(inst.get("id"))
+        account = inst.get("account", {})
+        gh_login = account.get("login")
+        if gh_login:
+            stmt = select(GitHubConnection).where(GitHubConnection.github_username == gh_login)
+            conn = (await db.execute(stmt)).scalars().first()
+            if conn:
+                conn.installation_id = inst_id
+                conn.status = GitHubConnectionStatus.CONNECTED if action != "deleted" else GitHubConnectionStatus.DISCONNECTED
+                await db.commit()
+        return {"status": "processed", "installation_id": inst_id, "action": action}
+
+    if event_type == "push":
+        repository = payload.get("repository", {})
+        ref = payload.get("ref", "")
+        after_sha = payload.get("after")
+        repo_full_name = repository.get("full_name")
+        if not repo_full_name:
+            return {"status": "ignored"}
+        branch = ref.replace("refs/heads/", "")
+        stmt = select(Repository).where(Repository.full_name == repo_full_name)
+        result = await db.execute(stmt)
+        repo = result.scalars().first()
+        if repo and repo.selected_branch == branch:
+            repo.current_commit_sha = after_sha
+            repo.status = RepositoryStatus.SYNCING
+            act = Activity(
+                organization_id=repo.organization_id,
+                project_id=repo.project_id,
+                type=ActivityType.PROJECT_UPDATED,
+                title="GitHub Webhook Received",
+                description=f"Detected push to {branch}. New HEAD is {after_sha[:7]}."
+            )
+            db.add(act)
+            await db.commit()
+            background_tasks.add_task(sync_repository_background, repo.id, repo.organization_id)
+            return {"status": "sync_started"}
+        return {"status": "ignored"}
+
     if event_type == "pull_request":
         action = payload.get("action")
         pr_data = payload.get("pull_request", {})

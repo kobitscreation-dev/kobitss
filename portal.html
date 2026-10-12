@@ -28,7 +28,7 @@
       /* Borders */
       --kb-border:       rgba(255,255,255,0.07);
       --kb-border-mid:   rgba(255,255,255,0.10);
-      --kb-border-focus: rgba(91,141,239,0.50);
+      --kb-border-focus: rgba(255,255,255,0.35);
 
       /* Text */
       --kb-text-1:       #F4F4F5;
@@ -36,10 +36,10 @@
       --kb-text-3:       #71717A;
       --kb-text-4:       #3F3F46;
 
-      /* Brand accent */
-      --kb-accent:       #5B8DEF;
-      --kb-accent-dim:   rgba(91,141,239,0.12);
-      --kb-accent-hover: #4A7DE0;
+      /* Brand accent — monochrome */
+      --kb-accent:       #ffffff;
+      --kb-accent-dim:   rgba(255,255,255,0.09);
+      --kb-accent-hover: #e4e4e7;
 
       /* Semantic status colors */
       --kb-success:      #22C55E;
@@ -48,14 +48,14 @@
       --kb-warning-dim:  rgba(245,158,11,0.12);
       --kb-error:        #EF4444;
       --kb-error-dim:    rgba(239,68,68,0.12);
-      --kb-info:         #3B82F6;
-      --kb-info-dim:     rgba(59,130,246,0.12);
-      --kb-purple:       #A78BFA;
-      --kb-purple-dim:   rgba(167,139,250,0.12);
+      --kb-info:         #A1A1AA;
+      --kb-info-dim:     rgba(161,161,170,0.12);
+      --kb-purple:       #A1A1AA;
+      --kb-purple-dim:   rgba(161,161,170,0.10);
       --kb-orange:       #F97316;
       --kb-orange-dim:   rgba(249,115,22,0.12);
-      --kb-teal:         #14B8A6;
-      --kb-teal-dim:     rgba(20,184,166,0.12);
+      --kb-teal:         #A1A1AA;
+      --kb-teal-dim:     rgba(161,161,170,0.10);
 
       /* Typography */
       --kb-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -654,7 +654,7 @@
        ============================================================ -->
   <div id="loading-screen" class="hidden min-h-screen items-center justify-center">
     <div style="text-align:center">
-      <div style="width:28px;height:28px;border:2px solid rgba(91,141,239,0.2);border-top-color:#5B8DEF;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px"></div>
+      <div style="width:28px;height:28px;border:2px solid rgba(255,255,255,0.15);border-top-color:#ffffff;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 12px"></div>
       <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
       <div class="kb-micro" style="letter-spacing:0.1em">KOBITS</div>
     </div>
@@ -744,6 +744,17 @@
             </div>
             <input id="input-email" type="email" placeholder="Email address" class="kb-input" required autocomplete="email">
             <input id="input-password" type="password" placeholder="Password" class="kb-input" required autocomplete="current-password">
+            
+            <div id="field-terms" class="hidden" style="margin-top:4px;padding:4px 0">
+              <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--kb-text-2);line-height:1.4">
+                <input type="checkbox" id="input-terms" style="accent-color:#ffffff;margin-top:2px;cursor:pointer">
+                <span>
+                  I agree to the <a href="javascript:void(0)" onclick="window.kbShowTerms && window.kbShowTerms('tos')" style="color:#ffffff;text-decoration:underline">Terms of Service</a>, 
+                  <a href="javascript:void(0)" onclick="window.kbShowTerms && window.kbShowTerms('privacy')" style="color:#ffffff;text-decoration:underline">Privacy Policy</a>, and 
+                  <strong>Autonomous Sandbox Code Execution Agreement</strong>.
+                </span>
+              </label>
+            </div>
           </div>
           <button id="btn-auth" type="submit" class="kb-btn kb-btn-primary" style="width:100%;justify-content:center;padding:9px 16px;font-size:13px">
             Sign In
@@ -928,6 +939,7 @@
       const toggleBtn = document.getElementById('auth-toggle-btn');
       const fieldName = document.getElementById('field-name');
       const fieldOrg = document.getElementById('field-org');
+      const fieldTerms = document.getElementById('field-terms');
 
       if (isSignUp) {
         if (title) title.textContent = 'Create your workspace';
@@ -936,6 +948,7 @@
         if (toggleBtn) toggleBtn.textContent = 'Sign in';
         if (fieldName) fieldName.classList.remove('hidden');
         if (fieldOrg) fieldOrg.classList.remove('hidden');
+        if (fieldTerms) fieldTerms.classList.remove('hidden');
       } else {
         if (title) title.textContent = 'Sign in to your workspace';
         if (btn) btn.textContent = 'Sign In';
@@ -943,6 +956,7 @@
         if (toggleBtn) toggleBtn.textContent = 'Sign up';
         if (fieldName) fieldName.classList.add('hidden');
         if (fieldOrg) fieldOrg.classList.add('hidden');
+        if (fieldTerms) fieldTerms.classList.add('hidden');
       }
     }
 
@@ -952,22 +966,74 @@
       updateAuthMode();
     };
 
+    window.kbShowTerms = function(topic) {
+      let modal = document.getElementById('kb-terms-modal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'kb-terms-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+        document.body.appendChild(modal);
+      }
+      
+      const isTos = topic === 'tos';
+      modal.innerHTML = `
+        <div style="background:#09090b;border:1px solid rgba(255,255,255,0.16);border-radius:12px;width:640px;max-width:96vw;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,0.9);color:#f4f4f5">
+          <div style="padding:16px 22px;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:space-between">
+            <div style="font-weight:600;font-size:15px;letter-spacing:-0.01em">${isTos ? 'Terms of Service & Sandbox Agreement' : 'Privacy & Code Telemetry Policy'}</div>
+            <button onclick="document.getElementById('kb-terms-modal').remove()" style="background:none;border:none;color:#a1a1aa;cursor:pointer;font-size:18px;line-height:1">&times;</button>
+          </div>
+          <div style="padding:20px 24px;overflow-y:auto;font-size:13px;line-height:1.65;color:#a1a1aa;flex:1">
+            <h4 style="color:#fff;font-size:13.5px;font-weight:600;margin:0 0 6px">1. Autonomous Code Execution & Cleanroom Sandboxes</h4>
+            <p style="margin:0 0 12px">Kobits provisions isolated ephemeral git worktrees and sandboxes to test code, inspect compiler ASTs, and run pytest suites. Kobits never modifies your primary branch or commits to production repositories without explicit approval or pre-configured autopilot rules.</p>
+            
+            <h4 style="color:#fff;font-size:13.5px;font-weight:600;margin:12px 0 6px">2. 100% Intellectual Property Ownership</h4>
+            <p style="margin:0 0 12px">You own all rights, title, and interest in all source code, architectures, schemas, test suites, and documentation synthesized by Kobits agents. Kobits claims zero copyright or proprietary licensing over customer repositories.</p>
+
+            <h4 style="color:#fff;font-size:13.5px;font-weight:600;margin:12px 0 6px">3. Security & Zero Token Exposure</h4>
+            <p style="margin:0 0 12px">Your GitHub tokens and LLM API keys are encrypted-at-rest in local secure credential stores. Credentials are never written to public logs, never exposed in client responses, and never shared between organizations.</p>
+
+            <h4 style="color:#fff;font-size:13.5px;font-weight:600;margin:12px 0 6px">4. Welcome Credit Grant</h4>
+            <p style="margin:0 0 12px">New workspace registrations automatically receive an initial 50-credit welcome grant, equivalent to approximately 5 complete multi-agent engineering missions.</p>
+          </div>
+          <div style="padding:14px 22px;border-top:1px solid rgba(255,255,255,0.1);display:flex;justify-content:flex-end">
+            <button onclick="document.getElementById('kb-terms-modal').remove()" style="background:#fff;color:#000;font-weight:600;font-size:12px;padding:7px 16px;border-radius:6px;border:none;cursor:pointer">I Understand</button>
+          </div>
+        </div>
+      `;
+    };
+
     window.kbAuthSubmit = async function() {
       const email = document.getElementById('input-email')?.value;
       const password = document.getElementById('input-password')?.value;
       const name = document.getElementById('input-name')?.value;
       const org = document.getElementById('input-org')?.value;
+      const termsCheck = document.getElementById('input-terms');
       const btn = document.getElementById('btn-auth');
       const errBox = document.getElementById('auth-error');
       const errText = document.getElementById('auth-error-text');
 
       if (errBox) errBox.classList.add('hidden');
-      if (btn) btn.textContent = 'Signing in…';
+
+      if (isSignUp && termsCheck && !termsCheck.checked) {
+        if (errBox && errText) {
+          errText.textContent = 'Please accept the Terms of Service and Autonomous Code Execution Agreement.';
+          errBox.classList.remove('hidden');
+        }
+        return;
+      }
+
+      if (btn) btn.textContent = isSignUp ? 'Creating Workspace…' : 'Signing in…';
 
       try {
         const apiBase = window.KOBITS_API_URL || (window.location.hostname.includes('kobits.space') ? 'https://kobitss.onrender.com' : '');
         const endpoint = apiBase + (isSignUp ? '/api/v1/auth/register' : '/api/v1/auth/login');
-        const body = isSignUp ? { email, password, full_name: name, organization_name: org || (name ? name + "'s Workspace" : "Kobits Workspace") } : { email, password };
+        const body = isSignUp ? { 
+          email, 
+          password, 
+          full_name: name, 
+          organization_name: org || (name ? name + "'s Workspace" : "Kobits Workspace"),
+          accepted_terms: true
+        } : { email, password };
         
         const res = await fetch(endpoint, {
           method: 'POST',
@@ -976,15 +1042,28 @@
           body: JSON.stringify(body)
         });
         
+        const data = await res.json().catch(() => ({}));
+
         if (res.ok) {
-          window.location.href = '/web/index.html#overview';
+          if (data && data.access_token) {
+            localStorage.setItem('kobits_token', data.access_token);
+          }
+          if (data) {
+            localStorage.setItem('kobits_user', JSON.stringify(data));
+          }
+          if (isSignUp) {
+            // Trigger first-time onboarding walkthrough for real newly registered users
+            localStorage.removeItem('kobits.onboarded');
+            window.location.href = '/web/index.html?onboarding=true#overview';
+          } else {
+            window.location.href = '/web/index.html#overview';
+          }
         } else {
           // If running on static host (e.g. Hostinger Basic without live Python API), allow test entry
           if (res.status === 404 || res.status === 405) {
             window.location.href = '/web/index.html#overview';
             return;
           }
-          const data = await res.json().catch(() => ({}));
           if (errBox && errText) {
             errText.textContent = data.detail || 'Authentication failed. Please check credentials.';
             errBox.classList.remove('hidden');

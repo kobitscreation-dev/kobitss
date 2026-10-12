@@ -1131,22 +1131,27 @@ async def cmd_run(args: argparse.Namespace) -> int:
         return 1
 
     from backend.core.config import settings
-    has_local_llm = bool(
-        (os.environ.get("ANTHROPIC_API_KEY") or getattr(settings, "ANTHROPIC_API_KEY", None)) or
-        (os.environ.get("AWS_ACCESS_KEY_ID") or getattr(settings, "AWS_ACCESS_KEY_ID", None)) or
-        (os.environ.get("AWS_BEDROCK_API_KEY") or getattr(settings, "AWS_BEDROCK_API_KEY", None)) or
-        (os.environ.get("GEMINI_API_KEY") or getattr(settings, "GEMINI_API_KEY", None)) or
-        (os.environ.get("DEEPSEEK_API_KEY") or getattr(settings, "DEEPSEEK_API_KEY", None))
-    )
-    
-    use_cloud = getattr(args, "cloud", False) or (not has_local_llm and not getattr(args, "local", False)) or os.environ.get("KOBITS_USE_CLOUD") == "1"
+    from backend.services.llm import detect_configured_provider
+    provider = detect_configured_provider()
+    has_local_llm = provider != "mock" or getattr(args, "provider", None) == "mock"
 
-    if use_cloud:
+    if getattr(args, "cloud", False) or os.environ.get("KOBITS_USE_CLOUD") == "1":
         return await cloud_create_and_run_mission(
             objective=objective,
             title=args.title,
             branch=args.branch,
         )
+
+    if not has_local_llm:
+        print(f"\n{YELLOW}{BOLD}╔══════════════════════════════════════════════════════════════════╗{RESET}")
+        print(f"{YELLOW}{BOLD}║                 KOBITS SETUP REQUIRED FOR LIVE AI                ║{RESET}")
+        print(f"{YELLOW}{BOLD}╚══════════════════════════════════════════════════════════════════╝{RESET}")
+        print(f"  No live LLM API key detected in your environment or .env file.")
+        print(f"  To configure your API key in 10 seconds, run:")
+        print(f"      {CYAN}{BOLD}kobits setup{RESET}")
+        print(f"\n  Or to test without live API charges in mock mode, run:")
+        print(f"      {CYAN}kobits run --provider mock \"{objective}\"{RESET}\n")
+        return 1
 
     await local_create_and_run_mission(
         objective=objective,
@@ -2641,6 +2646,169 @@ async def cmd_worker(args: argparse.Namespace) -> int:
     return 0
 
 
+async def cmd_dataset(args: argparse.Namespace) -> int:
+    from backend.services.trajectory_collector import TrajectoryCollector
+    print(f"\n{CYAN}{BOLD}╔══════════════════════════════════════════════════════════════════╗{RESET}")
+    print(f"{CYAN}{BOLD}║         KOBITS 200K DATASET HARVESTER & TRAINING FLYWHEEL        ║{RESET}")
+    print(f"{CYAN}{BOLD}╚══════════════════════════════════════════════════════════════════╝{RESET}")
+
+    res = TrajectoryCollector.harvest_from_db()
+    new_cnt = res.get("harvested_new", 0)
+    if new_cnt > 0:
+        print(f"  {GREEN}✓ Harvested {new_cnt} new verified golden trajectories from local runs.{RESET}\n")
+
+    stats = TrajectoryCollector.get_stats()
+    print(f"  {BOLD}Total Golden Trajectories:{RESET} {GREEN}{stats.get('total_trajectories', 0)}{RESET}")
+    print(f"  {BOLD}Total Tokens Harvested   :{RESET} {CYAN}{stats.get('total_tokens_approx', 0):,} tokens{RESET}")
+    print(f"  {BOLD}Average Trajectory Size  :{RESET} {YELLOW}{stats.get('avg_tokens_per_trajectory', 0):,} tokens{RESET}")
+    print(f"  {BOLD}Max Single Trajectory    :{RESET} {stats.get('max_trajectory_tokens', 0):,} tokens")
+    print(f"  {BOLD}200k SFT Milestone Target:{RESET} {stats.get('readiness_percentage_for_200k_sft', 0.0)}% of 1,000 runs")
+    print(f"\n  {BOLD}Exported Dataset Files (Ready for Axolotl / Unsloth):{RESET}")
+    print(f"    • ShareGPT : {stats.get('sharegpt_path')}")
+    print(f"    • ChatML   : {stats.get('chatml_path')}\n")
+    return 0
+
+
+async def cmd_setup(args: argparse.Namespace) -> int:
+    import subprocess
+    print(f"\n{CYAN}{BOLD}╔══════════════════════════════════════════════════════════════════╗{RESET}")
+    print(f"{CYAN}{BOLD}║                KOBITS SYSTEM SETUP & DIAGNOSTICS                 ║{RESET}")
+    print(f"{CYAN}{BOLD}╚══════════════════════════════════════════════════════════════════╝{RESET}")
+
+    # 1. Python Check
+    py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    if sys.version_info >= (3, 10):
+        print(f"  {GREEN}✓{RESET} Python Runtime       : {GREEN}{py_ver}{RESET} ({sys.executable})")
+    else:
+        print(f"  {RED}✗{RESET} Python Runtime       : {RED}{py_ver}{RESET} (Requires Python 3.10+)")
+
+    # 2. Git Check
+    try:
+        git_res = subprocess.run(["git", "--version"], capture_output=True, text=True, check=False)
+        if git_res.returncode == 0:
+            print(f"  {GREEN}✓{RESET} Version Control      : {GREEN}{git_res.stdout.strip()}{RESET}")
+        else:
+            print(f"  {YELLOW}!{RESET} Version Control      : Git returned exit code {git_res.returncode}")
+    except Exception:
+        print(f"  {YELLOW}!{RESET} Version Control      : Git not found on PATH")
+
+    # 3. Database Check
+    try:
+        from backend.core.database import AsyncSessionLocal
+        from sqlalchemy import text
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        print(f"  {GREEN}✓{RESET} SQLite Database      : {GREEN}Initialized & Connected{RESET} (kobits.db)")
+    except Exception as e:
+        print(f"  {YELLOW}!{RESET} SQLite Database      : {YELLOW}Will auto-initialize on first run ({e}){RESET}")
+
+    # 4. Workspace Target
+    print(f"  {GREEN}✓{RESET} Active Workspace     : {BOLD}{WORKSPACE_DIR}{RESET}")
+
+    # 4b. Sandbox Isolation Driver Check
+    from backend.services.environment_bootstrapper import EnvironmentBootstrapper
+    sb_driver = EnvironmentBootstrapper.detect_isolation_driver()
+    docker_installed = False
+    try:
+        d_res = subprocess.run(["docker", "--version"], capture_output=True, text=True, timeout=2)
+        docker_installed = d_res.returncode == 0
+    except Exception:
+        docker_installed = False
+
+    if sb_driver == "cloud_microvm":
+        print(f"  {GREEN}✓{RESET} Sandbox Isolation    : {GREEN}Cloud MicroVM (E2B Firecracker Engine){RESET}")
+    elif sb_driver == "docker_container":
+        print(f"  {GREEN}✓{RESET} Sandbox Isolation    : {GREEN}Docker Container (Kernel Isolated){RESET}")
+    elif docker_installed:
+        print(f"  {YELLOW}!{RESET} Sandbox Isolation    : {YELLOW}Virtual Rootfs Jail (Local Safe Mode){RESET}")
+        print(f"    {CYAN}↳ Docker is installed! Start Docker Desktop to activate 100% Container Isolation.{RESET}")
+    else:
+        print(f"  {YELLOW}!{RESET} Sandbox Isolation    : {YELLOW}Virtual Rootfs Jail (Local Safe Mode){RESET}")
+
+    # 5. LLM Provider Detection
+    from backend.services.llm import detect_configured_provider
+    provider = detect_configured_provider()
+    print(f"\n  {BOLD}LLM Intelligence Layer:{RESET}")
+
+    env_path = ROOT_DIR / ".env"
+
+    if provider != "mock":
+        print(f"  {GREEN}✓ Active Provider    :{RESET} {CYAN}{BOLD}{provider.upper()}{RESET}")
+        key_var = {
+            "deepseek": "DEEPSEEK_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+            "bedrock": "AWS_BEDROCK_API_KEY",
+            "openai": "OPENAI_API_KEY",
+        }.get(provider, "API_KEY")
+        key_val = os.environ.get(key_var) or ""
+        masked_key = (key_val[:4] + "••••" + key_val[-4:]) if len(key_val) >= 8 else "Configured"
+        print(f"  {GREEN}✓ Credentials        :{RESET} {masked_key} ({key_var})")
+        print(f"\n  {GREEN}{BOLD}🎉 Kobits is 100% configured and ready to execute missions!{RESET}")
+        print(f"  Try running: {CYAN}kobits \"Add unit tests for my code\"{RESET}\n")
+        return 0
+
+    print(f"  {YELLOW}! Active Provider    :{RESET} {YELLOW}Mock / None configured{RESET}")
+    print(f"  {GRAY}No live LLM credentials detected in your environment or .env file.{RESET}\n")
+
+    if not sys.stdin.isatty():
+        print(f"  {YELLOW}To configure, please set DEEPSEEK_API_KEY or ANTHROPIC_API_KEY in {env_path}{RESET}\n")
+        return 0
+
+    try:
+        print(f"  {BOLD}Select an LLM Provider to configure:{RESET}")
+        print(f"    1) DeepSeek (Recommended - High reasoning, 80% cheaper)")
+        print(f"    2) Anthropic Claude (Claude 3.5 Sonnet)")
+        print(f"    3) Google Gemini (Gemini 1.5 Pro / Flash)")
+        print(f"    4) OpenAI (GPT-4o)")
+        print(f"    5) Skip (Keep mock mode for testing)")
+        choice = input(f"  Choice [1-5] (default: 1): ").strip() or "1"
+
+        provider_map = {
+            "1": ("deepseek", "DEEPSEEK_API_KEY", "https://api.deepseek.com", "deepseek-chat"),
+            "2": ("anthropic", "ANTHROPIC_API_KEY", "", "claude-3-5-sonnet-20241022"),
+            "3": ("gemini", "GEMINI_API_KEY", "", "gemini-1.5-pro"),
+            "4": ("openai", "OPENAI_API_KEY", "https://api.openai.com/v1", "gpt-4o"),
+        }
+
+        if choice in provider_map:
+            p_name, p_key_var, p_base, p_model = provider_map[choice]
+            api_key = input(f"  Enter your {p_name.capitalize()} API Key: ").strip()
+            if api_key:
+                existing_env = ""
+                if env_path.exists():
+                    existing_env = env_path.read_text(encoding="utf-8")
+
+                new_lines = []
+                key_found = False
+                for line in existing_env.splitlines():
+                    if line.startswith(f"{p_key_var}=") or line.startswith(f"#{p_key_var}="):
+                        new_lines.append(f"{p_key_var}={api_key}")
+                        key_found = True
+                    elif line.startswith("LLM_PROVIDER="):
+                        new_lines.append(f"LLM_PROVIDER={p_name}")
+                    else:
+                        new_lines.append(line)
+
+                if not key_found:
+                    new_lines.append(f"LLM_PROVIDER={p_name}")
+                    new_lines.append(f"{p_key_var}={api_key}")
+
+                env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+                os.environ[p_key_var] = api_key
+                os.environ["LLM_PROVIDER"] = p_name
+
+                print(f"\n  {GREEN}✓ Successfully saved {p_name.upper()} credentials to {env_path}!{RESET}")
+                print(f"  {GREEN}{BOLD}🎉 Kobits is 100% configured and ready!{RESET}")
+                print(f"  Try running: {CYAN}kobits \"Write a hello world function\"{RESET}\n")
+                return 0
+    except (KeyboardInterrupt, EOFError):
+        print(f"\n{YELLOW}Setup cancelled.{RESET}\n")
+        return 0
+
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(
@@ -2779,12 +2947,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_worker.add_argument("-c", "--concurrency", type=int, default=2, help="Number of concurrent worker slots (default: 2)")
     p_worker.add_argument("-q", "--queue", default="default", help="Queue name to consume from (default: default)")
 
+    # kobits dataset
+    p_dataset = sub.add_parser("dataset", aliases=["data"], parents=[common], help="View dataset stats or harvest golden 200k training trajectories")
+    p_dataset.add_argument("--harvest", action="store_true", help="Harvest new completed trajectories from local database")
+
+    # kobits setup / doctor
+    sub.add_parser("setup", aliases=["doctor"], parents=[common], help="Interactive setup & diagnostic doctor for LLM keys and environment")
+
     return parser
 
 
 KNOWN_COMMANDS = {
     "run", "connect", "search", "repl", "chat", "status", "missions", "agents", "projects",
     "approve", "retry", "resume", "reject", "cancel", "steer", "diff", "apply", "worker",
+    "dataset", "data", "setup", "doctor",
 }
 
 _VALUE_FLAGS = {"-w", "--workspace", "-R", "--repo", "--provider", "-m", "--model", "-p", "--project", "-t", "--title", "-b", "--branch"}
@@ -2875,6 +3051,10 @@ async def async_main() -> int:
         "diff": cmd_diff,
         "apply": cmd_apply,
         "worker": cmd_worker,
+        "dataset": cmd_dataset,
+        "data": cmd_dataset,
+        "setup": cmd_setup,
+        "doctor": cmd_setup,
     }
     handler = dispatch.get(args.command)
     if not handler:

@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------------------
+  # Layer 3: Production Multi-Tenant PostgreSQL
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: kobits-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: kobits_prod
+      POSTGRES_USER: kobits
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kobits_secure_password_2026}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kobits -d kobits_prod"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------------------------
+  # Layer 4: Distributed Message Queue & Heartbeat Broker
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: kobits-redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------------------------
+  # Control Plane: FastAPI Backend & Web Portal (Ports 8000)
+  # ----------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kobits-api
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://kobits:${POSTGRES_PASSWORD:-kobits_secure_password_2026}@postgres:5432/kobits_prod
+      - REDIS_URL=redis://redis:6379/0
+      - KOBITS_SANDBOX_DRIVER=docker
+      - LLM_PROVIDER=${LLM_PROVIDER:-deepseek}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GITHUB_APP_ID=${GITHUB_APP_ID}
+      - GITHUB_APP_PRIVATE_KEY_PATH=${GITHUB_APP_PRIVATE_KEY_PATH:-/app/kobits-app.pem}
+      - PORT=8000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # Allows spawning isolated sandbox containers
+      - ./data:/app/data
+      - ./sandboxes:/app/sandboxes
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ----------------------------------------------------------------------------
+  # Layer 4: Distributed Worker Pool (Durable Background Execution)
+  # ----------------------------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kobits-worker
+    restart: always
+    command: ["py", "-3.12", "kobits_cli.py", "worker", "-c", "4"]
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://kobits:${POSTGRES_PASSWORD:-kobits_secure_password_2026}@postgres:5432/kobits_prod
+      - REDIS_URL=redis://redis:6379/0
+      - KOBITS_SANDBOX_DRIVER=docker
+      - LLM_PROVIDER=${LLM_PROVIDER:-deepseek}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data
+      - ./sandboxes:/app/sandboxes
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

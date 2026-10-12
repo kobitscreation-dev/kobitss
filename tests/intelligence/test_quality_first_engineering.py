@@ -151,7 +151,7 @@ async def test_anti_loop_protection(db_session: AsyncSession):
     from backend.services.agent_executor import agent_executor
     
     class LoopProvider:
-        async def generate_structured_output(self, system_prompt, user_prompt, schema, model, tools, tool_executor):
+        async def generate_structured_output(self, system_prompt, user_prompt, schema, model, tools, tool_executor, *args, **kwargs):
             # simulate looping
             for _ in range(4):
                 await tool_executor("some_tool", {"arg": 1})

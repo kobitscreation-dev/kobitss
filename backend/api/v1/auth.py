@@ -13,6 +13,7 @@ from backend.core.database import get_db
 from backend.core.config import settings
 from backend.core.security import get_password_hash, verify_password, create_access_token
 from backend.models.organization import User, Organization, OrganizationMember, OrgRole
+from backend.models.billing import LedgerTransaction, LedgerTransactionType
 from backend.schemas.user import UserCreate, UserResponse, Token
 
 router = APIRouter()
@@ -85,9 +86,22 @@ async def _find_or_create_user_and_org(
     db.add(new_user)
 
     org_name = (full_name or email.split("@")[0]) + "'s Workspace"
-    new_org = Organization(name=org_name)
+    new_org = Organization(name=org_name, credit_balance=50)
     db.add(new_org)
     await db.flush()
+
+    # SaaS Free Tier Welcome Grant (5 free missions = 50 credits)
+    welcome_tx = LedgerTransaction(
+        id=str(uuid.uuid4()),
+        organization_id=new_org.id,
+        type=LedgerTransactionType.TOPUP,
+        amount=50,
+        currency="credits",
+        reference_id="welcome_grant",
+        status="completed",
+        metadata_json='{"reason": "free_tier_signup_grant", "missions_granted": 5}',
+    )
+    db.add(welcome_tx)
 
     membership = OrganizationMember(
         user_id=new_user.id,
@@ -107,6 +121,12 @@ async def _find_or_create_user_and_org(
 @router.post("/signup", response_model=UserResponse)
 @router.post("/register", response_model=UserResponse)
 async def signup(user_in: UserCreate, response: Response, db: AsyncSession = Depends(get_db)):
+    if user_in.accepted_terms is False:
+        raise HTTPException(
+            status_code=400,
+            detail="You must accept the Terms of Service and Autonomous Code Execution Agreement to register."
+        )
+
     result = await db.execute(select(User).where(User.email == user_in.email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -118,9 +138,22 @@ async def signup(user_in: UserCreate, response: Response, db: AsyncSession = Dep
     )
     db.add(new_user)
 
-    new_org = Organization(name=user_in.organization_name)
+    new_org = Organization(name=user_in.organization_name, credit_balance=50)
     db.add(new_org)
     await db.flush()
+
+    # SaaS Free Tier Welcome Grant (5 free missions = 50 credits)
+    welcome_tx = LedgerTransaction(
+        id=str(uuid.uuid4()),
+        organization_id=new_org.id,
+        type=LedgerTransactionType.TOPUP,
+        amount=50,
+        currency="credits",
+        reference_id="welcome_grant",
+        status="completed",
+        metadata_json='{"reason": "free_tier_signup_grant", "missions_granted": 5}',
+    )
+    db.add(welcome_tx)
 
     membership = OrganizationMember(
         user_id=new_user.id,
@@ -135,7 +168,10 @@ async def signup(user_in: UserCreate, response: Response, db: AsyncSession = Dep
     token = create_access_token(subject=new_user.id)
     _set_session_cookie(response, token)
 
-    return new_user
+    resp = UserResponse.model_validate(new_user)
+    resp.access_token = token
+    resp.token_type = "bearer"
+    return resp
 
 
 @router.post("/login", response_model=Token)

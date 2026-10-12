@@ -1,29 +1,14 @@
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-    RewriteBase /
+RewriteEngine On
 
-    # Enforce HTTPS
-    RewriteCond %{HTTPS} off
-    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# Force HTTPS
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-    # Protect personal dashboard - redirect to login
-    RewriteRule ^dashboard/?$ /portal.html#login [R=302,NE,L]
-    RewriteRule ^web/?$ /portal.html#login [R=302,NE,L]
+# Do not rewrite existing files or directories
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
 
-    # Route /landing to index.html
-    RewriteRule ^landing/?$ /index.html [L]
-
-    # Allow direct access to real existing files & folders
-    RewriteCond %{REQUEST_FILENAME} -f [OR]
-    RewriteCond %{REQUEST_FILENAME} -d
-    RewriteRule ^ - [L]
-
-    # Default fallback to index.html
-    RewriteRule ^ /index.html [L]
-</IfModule>
-
-# Security Headers & Caching
-<IfModule mod_headers.c>
-    Header set X-Content-Type-Options "nosniff"
-    Header set X-Frame-Options "SAMEORIGIN"
-</IfModule>
+# Clean URL rewriting (.html extension hiding)
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^([^\.]+)$ $1.html [NC,L]

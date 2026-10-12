@@ -32,13 +32,16 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: Optional[str] = None
     GITHUB_CLIENT_ID: Optional[str] = None
     GITHUB_CLIENT_SECRET: Optional[str] = None
+    GITHUB_APP_ID: Optional[str] = None
+    GITHUB_APP_PRIVATE_KEY_PATH: Optional[str] = None
+    GITHUB_WEBHOOK_SECRET: Optional[str] = None
     OAUTH_REDIRECT_BASE: str = "http://localhost:8000"
     FRONTEND_URL: str = "http://localhost:8081"
 
     # Billing Configuration
     STRIPE_SECRET_KEY: Optional[str] = None
     STRIPE_WEBHOOK_SECRET: Optional[str] = None
-    MISSION_CREDIT_COST: Optional[int] = None
+    MISSION_CREDIT_COST: int = 10
 
     # Distributed Worker & Concurrency Configuration
     REDIS_URL: Optional[str] = None
