@@ -41,7 +41,7 @@ ENV PATH="/usr/local/go/bin:/root/.cargo/bin:${PATH}"
 # Install python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir asyncpg psycopg2-binary redis arq docker
+    && pip install --no-cache-dir asyncpg psycopg2-binary redis arq docker e2b
 
 # Copy application source code
 COPY . .
@@ -49,5 +49,5 @@ COPY . .
 # Expose HTTP / WebSocket port
 EXPOSE 8000
 
-# Default entrypoint starts the FastAPI production server using Render's dynamic $PORT
-CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2"]
+# Single async worker + 75s keep-alive prevents Google Frontend (GFE) 503 keep-alive race and SQLite worker collisions
+CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --timeout-keep-alive 75"]

@@ -3,13 +3,15 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import urllib.parse
 import json
 import uuid
 import secrets
 import httpx
+import jwt
 
-from backend.core.database import get_db
+from backend.core.database import get_db, AsyncSessionLocal
 from backend.core.config import settings
 from backend.core.security import get_password_hash, verify_password, create_access_token
 from backend.models.organization import User, Organization, OrganizationMember, OrgRole
@@ -19,9 +21,50 @@ from backend.schemas.user import UserCreate, UserResponse, Token
 router = APIRouter()
 
 # ════════════════════════════════════════════════════════════
-#  IN-MEMORY OAUTH STATE STORE (production: use Redis or DB)
+#  STATELESS + IN-MEMORY OAUTH STATE STORE
 # ════════════════════════════════════════════════════════════
 _oauth_states: dict = {}
+
+
+def _create_oauth_state(provider: str) -> str:
+    """Create a cryptographically signed stateless OAuth state token that survives container restarts and multi-instance scaling."""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "provider": provider,
+        "nonce": secrets.token_urlsafe(12),
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=15)).timestamp()),
+    }
+    state = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    _oauth_states[state] = {"provider": provider, "created_at": now.isoformat()}
+    return state
+
+
+def _verify_oauth_state(state: str, provider: str) -> bool:
+    """Verify OAuth state via in-memory cache or stateless HMAC-SHA256 JWT signature."""
+    if not state:
+        return False
+    if state in _oauth_states:
+        _oauth_states.pop(state, None)
+        return True
+    try:
+        payload = jwt.decode(state, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        return payload.get("provider") == provider
+    except Exception:
+        return False
+
+
+def _resolve_redirect_base(request: Request) -> str:
+    """Resolve OAuth redirect base URL cleanly, stripping whitespace and auto-detecting domain behind Cloud Run proxy if needed."""
+    configured = (settings.OAUTH_REDIRECT_BASE or "").strip().rstrip("/")
+    if configured and "localhost" not in configured and "127.0.0.1" not in configured:
+        return configured
+    if request:
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+        proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+        if host and "localhost" not in host and "127.0.0.1" not in host:
+            return f"{proto}://{host}".rstrip("/")
+    return configured or "http://localhost:8000"
 
 
 def _set_session_cookie(response: Response, token: str):
@@ -291,28 +334,30 @@ GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 
 @router.get("/google/login")
-async def google_login(db: AsyncSession = Depends(get_db)):
-    if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
+async def google_login(request: Request):
+    client_id = (settings.GOOGLE_CLIENT_ID or "").strip()
+    client_secret = (settings.GOOGLE_CLIENT_SECRET or "").strip()
+    if not client_id or not client_secret:
         if settings.KOBITS_DEV_MODE:
-            user = await _find_or_create_user_and_org(
-                db=db,
-                email="developer.google@gmail.com",
-                full_name="Google Verified Developer",
-                google_id="google_dev_109283746",
-                avatar_url="https://lh3.googleusercontent.com/a/default-user=s96-c",
-            )
-            session_token = create_access_token(subject=user.id)
-            response = RedirectResponse(url="/web/index.html?onboarding=true#overview", status_code=302)
-            _set_session_cookie(response, session_token)
-            return response
+            async with AsyncSessionLocal() as db:
+                user = await _find_or_create_user_and_org(
+                    db=db,
+                    email="developer.google@gmail.com",
+                    full_name="Google Verified Developer",
+                    google_id="google_dev_109283746",
+                    avatar_url="https://lh3.googleusercontent.com/a/default-user=s96-c",
+                )
+                session_token = create_access_token(subject=user.id)
+                response = RedirectResponse(url="/web/index.html?onboarding=true#overview", status_code=302)
+                _set_session_cookie(response, session_token)
+                return response
         return RedirectResponse(url="/portal.html?auth_error=google_not_configured#login", status_code=302)
 
-    state = secrets.token_urlsafe(32)
-    _oauth_states[state] = {"provider": "google", "created_at": datetime.now(timezone.utc).isoformat()}
-
-    redirect_uri = f"{settings.OAUTH_REDIRECT_BASE}/api/v1/auth/google/callback"
+    state = _create_oauth_state("google")
+    redirect_base = _resolve_redirect_base(request)
+    redirect_uri = f"{redirect_base}/api/v1/auth/google/callback"
     params = {
-        "client_id": settings.GOOGLE_CLIENT_ID,
+        "client_id": client_id,
         "redirect_uri": redirect_uri,
         "response_type": "code",
         "scope": "openid email profile",
@@ -320,53 +365,61 @@ async def google_login(db: AsyncSession = Depends(get_db)):
         "access_type": "offline",
         "prompt": "consent",
     }
-    url = GOOGLE_AUTH_URL + "?" + "&".join(f"{k}={v}" for k, v in params.items())
-    return RedirectResponse(url=url)
+    url = f"{GOOGLE_AUTH_URL}?{urllib.parse.urlencode(params)}"
+    return RedirectResponse(url=url, status_code=302)
 
 
 @router.get("/google/callback")
-async def google_callback(code: str = None, state: str = None, error: str = None, db: AsyncSession = Depends(get_db)):
+async def google_callback(
+    request: Request,
+    code: str = None,
+    state: str = None,
+    error: str = None,
+    db: AsyncSession = Depends(get_db),
+):
     if error:
-        return RedirectResponse(url="/portal.html?auth_error=google_cancelled")
+        return RedirectResponse(url="/portal.html?auth_error=google_cancelled#login", status_code=302)
 
-    if not state or state not in _oauth_states:
-        return RedirectResponse(url="/portal.html?auth_error=invalid_state")
+    if not _verify_oauth_state(state, "google"):
+        return RedirectResponse(url="/portal.html?auth_error=invalid_state#login", status_code=302)
 
-    del _oauth_states[state]
+    redirect_base = _resolve_redirect_base(request)
+    redirect_uri = f"{redirect_base}/api/v1/auth/google/callback"
+    client_id = (settings.GOOGLE_CLIENT_ID or "").strip()
+    client_secret = (settings.GOOGLE_CLIENT_SECRET or "").strip()
 
-    redirect_uri = f"{settings.OAUTH_REDIRECT_BASE}/api/v1/auth/google/callback"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            token_resp = await client.post(
+                GOOGLE_TOKEN_URL,
+                data={
+                    "code": code,
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "redirect_uri": redirect_uri,
+                    "grant_type": "authorization_code",
+                },
+            )
+            if token_resp.status_code != 200:
+                return RedirectResponse(url="/portal.html?auth_error=google_token_failed#login", status_code=302)
 
-    # Exchange code for tokens server-side
-    async with httpx.AsyncClient() as client:
-        token_resp = await client.post(
-            GOOGLE_TOKEN_URL,
-            data={
-                "code": code,
-                "client_id": settings.GOOGLE_CLIENT_ID,
-                "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                "redirect_uri": redirect_uri,
-                "grant_type": "authorization_code",
-            },
-        )
-        if token_resp.status_code != 200:
-            return RedirectResponse(url="/portal.html?auth_error=google_token_failed")
+            tokens = token_resp.json()
+            access_token = tokens.get("access_token")
 
-        tokens = token_resp.json()
-        access_token = tokens.get("access_token")
+            userinfo_resp = await client.get(
+                GOOGLE_USERINFO_URL,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            if userinfo_resp.status_code != 200:
+                return RedirectResponse(url="/portal.html?auth_error=google_userinfo_failed#login", status_code=302)
 
-        # Fetch user info
-        userinfo_resp = await client.get(
-            GOOGLE_USERINFO_URL,
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        if userinfo_resp.status_code != 200:
-            return RedirectResponse(url="/portal.html?auth_error=google_userinfo_failed")
-
-        userinfo = userinfo_resp.json()
+            userinfo = userinfo_resp.json()
+    except Exception:
+        return RedirectResponse(url="/portal.html?auth_error=google_network_error#login", status_code=302)
 
     email = userinfo.get("email")
     if not email or not userinfo.get("verified_email", False):
-        return RedirectResponse(url="/portal.html?auth_error=email_not_verified")
+        return RedirectResponse(url="/portal.html?auth_error=email_not_verified#login", status_code=302)
 
     user = await _find_or_create_user_and_org(
         db=db,
@@ -376,9 +429,8 @@ async def google_callback(code: str = None, state: str = None, error: str = None
         avatar_url=userinfo.get("picture"),
     )
 
-    # Create session and redirect WITHOUT credentials in the URL
     session_token = create_access_token(subject=user.id)
-    response = RedirectResponse(url="/portal.html#dashboard", status_code=302)
+    response = RedirectResponse(url="/web/index.html#overview", status_code=302)
     _set_session_cookie(response, session_token)
     return response
 
@@ -394,90 +446,99 @@ GITHUB_EMAILS_URL = "https://api.github.com/user/emails"
 
 
 @router.get("/github/login")
-async def github_login(db: AsyncSession = Depends(get_db)):
-    if not settings.GITHUB_CLIENT_ID or not settings.GITHUB_CLIENT_SECRET:
+async def github_login(request: Request):
+    client_id = (settings.GITHUB_CLIENT_ID or "").strip()
+    client_secret = (settings.GITHUB_CLIENT_SECRET or "").strip()
+    if not client_id or not client_secret:
         if settings.KOBITS_DEV_MODE:
-            user = await _find_or_create_user_and_org(
-                db=db,
-                email="developer.github@example.com",
-                full_name="GitHub Verified Developer",
-                github_id="github_dev_98234710",
-                avatar_url="https://avatars.githubusercontent.com/u/9919?v=4",
-            )
-            session_token = create_access_token(subject=user.id)
-            response = RedirectResponse(url="/web/index.html?onboarding=true#overview", status_code=302)
-            _set_session_cookie(response, session_token)
-            return response
+            async with AsyncSessionLocal() as db:
+                user = await _find_or_create_user_and_org(
+                    db=db,
+                    email="developer.github@example.com",
+                    full_name="GitHub Verified Developer",
+                    github_id="github_dev_98234710",
+                    avatar_url="https://avatars.githubusercontent.com/u/9919?v=4",
+                )
+                session_token = create_access_token(subject=user.id)
+                response = RedirectResponse(url="/web/index.html?onboarding=true#overview", status_code=302)
+                _set_session_cookie(response, session_token)
+                return response
         return RedirectResponse(url="/portal.html?auth_error=github_not_configured#login", status_code=302)
 
-    state = secrets.token_urlsafe(32)
-    _oauth_states[state] = {"provider": "github", "created_at": datetime.now(timezone.utc).isoformat()}
-
-    redirect_uri = f"{settings.OAUTH_REDIRECT_BASE}/api/v1/auth/github/callback"
+    state = _create_oauth_state("github")
+    redirect_base = _resolve_redirect_base(request)
+    redirect_uri = f"{redirect_base}/api/v1/auth/github/callback"
     params = {
-        "client_id": settings.GITHUB_CLIENT_ID,
+        "client_id": client_id,
         "redirect_uri": redirect_uri,
         "scope": "user:email",
         "state": state,
     }
-    url = GITHUB_AUTH_URL + "?" + "&".join(f"{k}={v}" for k, v in params.items())
-    return RedirectResponse(url=url)
+    url = f"{GITHUB_AUTH_URL}?{urllib.parse.urlencode(params)}"
+    return RedirectResponse(url=url, status_code=302)
 
 
 @router.get("/github/callback")
-async def github_callback(code: str = None, state: str = None, error: str = None, db: AsyncSession = Depends(get_db)):
+async def github_callback(
+    request: Request,
+    code: str = None,
+    state: str = None,
+    error: str = None,
+    db: AsyncSession = Depends(get_db),
+):
     if error:
-        return RedirectResponse(url="/portal.html?auth_error=github_cancelled")
+        return RedirectResponse(url="/portal.html?auth_error=github_cancelled#login", status_code=302)
 
-    if not state or state not in _oauth_states:
-        return RedirectResponse(url="/portal.html?auth_error=invalid_state")
+    if not _verify_oauth_state(state, "github"):
+        return RedirectResponse(url="/portal.html?auth_error=invalid_state#login", status_code=302)
 
-    del _oauth_states[state]
+    client_id = (settings.GITHUB_CLIENT_ID or "").strip()
+    client_secret = (settings.GITHUB_CLIENT_SECRET or "").strip()
 
-    # Exchange code for access token server-side
-    async with httpx.AsyncClient() as client:
-        token_resp = await client.post(
-            GITHUB_TOKEN_URL,
-            data={
-                "code": code,
-                "client_id": settings.GITHUB_CLIENT_ID,
-                "client_secret": settings.GITHUB_CLIENT_SECRET,
-            },
-            headers={"Accept": "application/json"},
-        )
-        if token_resp.status_code != 200:
-            return RedirectResponse(url="/portal.html?auth_error=github_token_failed")
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            token_resp = await client.post(
+                GITHUB_TOKEN_URL,
+                data={
+                    "code": code,
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                },
+                headers={"Accept": "application/json"},
+            )
+            if token_resp.status_code != 200:
+                return RedirectResponse(url="/portal.html?auth_error=github_token_failed#login", status_code=302)
 
-        tokens = token_resp.json()
-        gh_access_token = tokens.get("access_token")
-        if not gh_access_token:
-            return RedirectResponse(url="/portal.html?auth_error=github_token_failed")
+            tokens = token_resp.json()
+            gh_access_token = tokens.get("access_token")
+            if not gh_access_token:
+                return RedirectResponse(url="/portal.html?auth_error=github_token_failed#login", status_code=302)
 
-        # Fetch GitHub user profile
-        user_resp = await client.get(
-            GITHUB_USER_URL,
-            headers={"Authorization": f"Bearer {gh_access_token}", "Accept": "application/vnd.github.v3+json"},
-        )
-        if user_resp.status_code != 200:
-            return RedirectResponse(url="/portal.html?auth_error=github_userinfo_failed")
-
-        gh_user = user_resp.json()
-
-        # Fetch verified email
-        email = gh_user.get("email")
-        if not email:
-            emails_resp = await client.get(
-                GITHUB_EMAILS_URL,
+            user_resp = await client.get(
+                GITHUB_USER_URL,
                 headers={"Authorization": f"Bearer {gh_access_token}", "Accept": "application/vnd.github.v3+json"},
             )
-            if emails_resp.status_code == 200:
-                for em in emails_resp.json():
-                    if em.get("primary") and em.get("verified"):
-                        email = em.get("email")
-                        break
+            if user_resp.status_code != 200:
+                return RedirectResponse(url="/portal.html?auth_error=github_userinfo_failed#login", status_code=302)
 
-        if not email:
-            return RedirectResponse(url="/portal.html?auth_error=email_not_verified")
+            gh_user = user_resp.json()
+
+            email = gh_user.get("email")
+            if not email:
+                emails_resp = await client.get(
+                    GITHUB_EMAILS_URL,
+                    headers={"Authorization": f"Bearer {gh_access_token}", "Accept": "application/vnd.github.v3+json"},
+                )
+                if emails_resp.status_code == 200:
+                    for em in emails_resp.json():
+                        if em.get("primary") and em.get("verified"):
+                            email = em.get("email")
+                            break
+
+            if not email:
+                return RedirectResponse(url="/portal.html?auth_error=email_not_verified#login", status_code=302)
+    except Exception:
+        return RedirectResponse(url="/portal.html?auth_error=github_network_error#login", status_code=302)
 
     user = await _find_or_create_user_and_org(
         db=db,
@@ -488,7 +549,7 @@ async def github_callback(code: str = None, state: str = None, error: str = None
     )
 
     session_token = create_access_token(subject=user.id)
-    response = RedirectResponse(url="/portal.html#dashboard", status_code=302)
+    response = RedirectResponse(url="/web/index.html#overview", status_code=302)
     _set_session_cookie(response, session_token)
     return response
 get_current_active_user = get_current_user_info

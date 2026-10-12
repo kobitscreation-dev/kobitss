@@ -79,8 +79,11 @@ async def lifespan(app: FastAPI):
         print(f"Warning: Provider misconfigured: {e}")
 
     # Ensure database tables exist (idempotent, safe for SQLite on cloud containers)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as _schema_err:
+        _startup_logger.warning(f"Schema init notice (likely initialized by peer worker): {_schema_err}")
 
     # Auto-seed default user if database is fresh
     from backend.core.database import AsyncSessionLocal
@@ -89,93 +92,106 @@ async def lifespan(app: FastAPI):
     from sqlalchemy import select
 
     async with AsyncSessionLocal() as db:
-        admin_user = (await db.execute(select(User).where(User.email == "realuser@kobits.space"))).scalar_one_or_none()
-        if not admin_user:
-            new_u = User(
-                email="realuser@kobits.space",
-                hashed_password=get_password_hash("MyPass12345!"),
-                full_name="Kobits Founder",
-                is_active=True
-            )
-            db.add(new_u)
-            new_org = Organization(name="Kobits Core Workspace", credit_balance=500)
-            db.add(new_org)
-            await db.flush()
-            db.add(OrganizationMember(user_id=new_u.id, organization_id=new_org.id, role=OrgRole.OWNER))
-            await db.commit()
-            print("Auto-seeded default user realuser@kobits.space with 500 credits")
+        try:
+            admin_user = (await db.execute(select(User).where(User.email == "realuser@kobits.space"))).scalar_one_or_none()
+            if not admin_user:
+                new_u = User(
+                    email="realuser@kobits.space",
+                    hashed_password=get_password_hash("MyPass12345!"),
+                    full_name="Kobits Founder",
+                    is_active=True
+                )
+                db.add(new_u)
+                new_org = Organization(name="Kobits Core Workspace", credit_balance=500)
+                db.add(new_org)
+                await db.flush()
+                db.add(OrganizationMember(user_id=new_u.id, organization_id=new_org.id, role=OrgRole.OWNER))
+                await db.commit()
+                print("Auto-seeded default user realuser@kobits.space with 500 credits")
+        except Exception as _seed_err:
+            await db.rollback()
+            _startup_logger.info(f"Default user already seeded by peer worker: {_seed_err}")
 
-        # Auto-seed default SaaS credit packages if empty
-        from backend.models.billing import CreditPackage
-        existing_pkgs = (await db.execute(select(CreditPackage))).scalars().all()
-        if not existing_pkgs:
-            starter = CreditPackage(
-                id="pkg_starter",
-                name="Starter Plan",
-                credits=250,
-                currency="usd",
-                price_cents=2900,
-                stripe_price_id="price_starter",
-                is_active=True,
-            )
-            growth = CreditPackage(
-                id="pkg_growth",
-                name="Growth Plan",
-                credits=800,
-                currency="usd",
-                price_cents=7900,
-                stripe_price_id="price_growth",
-                is_active=True,
-            )
-            scale = CreditPackage(
-                id="pkg_scale",
-                name="Scale Plan",
-                credits=2500,
-                currency="usd",
-                price_cents=19900,
-                stripe_price_id="price_scale",
-                is_active=True,
-            )
-            db.add_all([starter, growth, scale])
-            await db.commit()
-            print("Auto-seeded default SaaS credit packages (Starter, Growth, Scale)")
+        try:
+            # Auto-seed default SaaS credit packages if empty
+            from backend.models.billing import CreditPackage
+            existing_pkgs = (await db.execute(select(CreditPackage))).scalars().all()
+            if not existing_pkgs:
+                starter = CreditPackage(
+                    id="pkg_starter",
+                    name="Starter Plan",
+                    credits=250,
+                    currency="usd",
+                    price_cents=2900,
+                    stripe_price_id="price_starter",
+                    is_active=True,
+                )
+                growth = CreditPackage(
+                    id="pkg_growth",
+                    name="Growth Plan",
+                    credits=800,
+                    currency="usd",
+                    price_cents=7900,
+                    stripe_price_id="price_growth",
+                    is_active=True,
+                )
+                scale = CreditPackage(
+                    id="pkg_scale",
+                    name="Scale Plan",
+                    credits=2500,
+                    currency="usd",
+                    price_cents=19900,
+                    stripe_price_id="price_scale",
+                    is_active=True,
+                )
+                db.add_all([starter, growth, scale])
+                await db.commit()
+                print("Auto-seeded default SaaS credit packages (Starter, Growth, Scale)")
+        except Exception as _pkg_err:
+            await db.rollback()
+            _startup_logger.info(f"Credit packages already seeded by peer worker: {_pkg_err}")
 
     # Resume ACTIVE missions and clear dangling locks
-    from backend.core.database import AsyncSessionLocal
     from backend.models.mission import Mission, MissionStatus
     from backend.services.mission_runtime import MissionRuntime
-    import asyncio
-    from sqlalchemy import select, update
+    from sqlalchemy import update
     
     async with AsyncSessionLocal() as db:
-        from datetime import datetime, timezone
-        # Clear any dangling locks that have expired
-        stmt = (
-            update(Mission)
-            .where(Mission.execution_lock_id != None)
-            .where(
-                (Mission.execution_lock_expires_at == None) | 
-                (Mission.execution_lock_expires_at < datetime.now(timezone.utc))
+        try:
+            from datetime import datetime, timezone
+            # Clear any dangling locks that have expired
+            stmt = (
+                update(Mission)
+                .where(Mission.execution_lock_id != None)
+                .where(
+                    (Mission.execution_lock_expires_at == None) | 
+                    (Mission.execution_lock_expires_at < datetime.now(timezone.utc))
+                )
+                .values(execution_lock_id=None, execution_lock_expires_at=None)
             )
-            .values(execution_lock_id=None, execution_lock_expires_at=None)
-        )
-        await db.execute(stmt)
-        await db.commit()
-        
-        # Resume active missions that aren't currently locked
-        stmt = (
-            select(Mission)
-            .where(Mission.status == MissionStatus.ACTIVE)
-            .where(Mission.execution_lock_id == None)
-        )
-        res = await db.execute(stmt)
-        for m in res.scalars().all():
-            print(f"Resuming active mission {m.id}")
-            asyncio.create_task(MissionRuntime(m.id, m.organization_id, m.created_by).execute())
+            await db.execute(stmt)
+            await db.commit()
+            
+            # Resume active missions that aren't currently locked
+            stmt = (
+                select(Mission)
+                .where(Mission.status == MissionStatus.ACTIVE)
+                .where(Mission.execution_lock_id == None)
+            )
+            res = await db.execute(stmt)
+            for m in res.scalars().all():
+                print(f"Resuming active mission {m.id}")
+                asyncio.create_task(MissionRuntime(m.id, m.organization_id, m.created_by).execute())
+        except Exception as _resume_err:
+            await db.rollback()
+            _startup_logger.warning(f"Mission recovery warning: {_resume_err}")
 
     # Load custom tools from database into ToolRegistry
-    from backend.api.v1.tools import load_custom_tools_on_startup
-    await load_custom_tools_on_startup()
+    try:
+        from backend.api.v1.tools import load_custom_tools_on_startup
+        await load_custom_tools_on_startup()
+    except Exception as _tool_err:
+        _startup_logger.warning(f"Custom tools load warning: {_tool_err}")
 
     yield
     await engine.dispose()
@@ -206,7 +222,14 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         app: ASGIApp,
         max_requests: int = 100,
         window_seconds: int = 60,
-        exempt_paths: Tuple[str, ...] = ("/api/health",),
+        exempt_paths: Tuple[str, ...] = (
+            "/api/health",
+            "/api/v1/auth/google/login",
+            "/api/v1/auth/google/callback",
+            "/api/v1/auth/github/login",
+            "/api/v1/auth/github/callback",
+            "/api/v1/auth/dev-mode",
+        ),
     ) -> None:
         super().__init__(app)
         self.max_requests = max_requests
