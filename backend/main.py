@@ -499,10 +499,39 @@ async def health_check():
 
 
 # ══════════════════════════════════════════
-#  STATIC FRONTEND SERVING
+#  STATIC FRONTEND & CLI INSTALLER SERVING
 # ══════════════════════════════════════════
 
+@app.get("/install.sh")
+async def get_install_sh():
+    from fastapi.responses import FileResponse, Response
+    import os
+    if os.path.isfile("install.sh"):
+        return FileResponse("install.sh", media_type="text/plain")
+    fallback = (
+        "#!/usr/bin/env bash\n"
+        "set -e\n"
+        "echo '⚡ Installing Kobits CLI...'\n"
+        "pip install --upgrade 'git+https://github.com/kobitscreation-dev/kobitss.git'\n"
+        "echo '✅ Kobits installed successfully!'\n"
+    )
+    return Response(content=fallback, media_type="text/plain")
+
+@app.get("/install.ps1")
+async def get_install_ps1():
+    from fastapi.responses import FileResponse, Response
+    import os
+    if os.path.isfile("install.ps1"):
+        return FileResponse("install.ps1", media_type="text/plain")
+    fallback = (
+        "Write-Host '⚡ Installing Kobits CLI...' -ForegroundColor Cyan\n"
+        "py -3.12 -m pip install --upgrade 'git+https://github.com/kobitscreation-dev/kobitss.git'\n"
+        "Write-Host '✅ Kobits installed successfully!' -ForegroundColor Green\n"
+    )
+    return Response(content=fallback, media_type="text/plain")
+
 @app.get("/")
+
 async def serve_index():
     from fastapi.responses import FileResponse
     import os
