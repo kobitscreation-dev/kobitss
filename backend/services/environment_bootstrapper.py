@@ -373,6 +373,11 @@ WORKDIR /workspace
         """Tear down and remove the disposable container / MicroVM for a sandbox session."""
         container_name = vm_id or cls._active_containers.pop(session_id, None) or f"kobits-vm-{session_id}"
         cls._active_containers.pop(session_id, None)
+        try:
+            from backend.services.cloud_sandbox import CloudMicroVMSandbox
+            CloudMicroVMSandbox.close_session(session_id)
+        except Exception:
+            pass
         if shutil.which("docker") and cls.is_docker_daemon_available():
             try:
                 subprocess.run(
@@ -614,12 +619,13 @@ WORKDIR /workspace
         driver = cls.detect_isolation_driver()
         vm_id = f"kobits-vm-{session_id}"
 
-        # 0. Cloud MicroVM Execution (E2B Firecracker MicroVM on AWS)
+        # 0. Cloud MicroVM Execution (E2B Firecracker MicroVM on AWS/GCP)
         if driver == "cloud_microvm" and os.environ.get("E2B_API_KEY"):
             try:
                 from backend.services.cloud_sandbox import CloudMicroVMSandbox
-                cloud_sb = CloudMicroVMSandbox()
-                return cloud_sb.run_command(command, timeout=timeout)
+                cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=session_id)
+                cloud_sb.ensure_synced(local_dir=sandbox_abs, remote_dir="/workspace")
+                return cloud_sb.run_command(command, timeout=timeout, workdir="/workspace")
             except Exception as e:
                 logger.warning(f"Cloud microVM execution failed, falling back to jail: {e}")
 
