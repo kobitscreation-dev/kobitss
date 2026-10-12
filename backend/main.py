@@ -560,26 +560,47 @@ async def serve_landing():
     target = "landing.html" if os.path.isfile("landing.html") else "index.html"
     return FileResponse(target, headers=headers)
 
+def _has_valid_session_token(request: Request) -> str | None:
+    """Return the validated JWT string if the request carries a valid session cookie, query token, or Bearer header."""
+    import jwt as _jwt
+    candidates = [
+        request.query_params.get("session_token"),
+        request.cookies.get(settings.SESSION_COOKIE_NAME),
+        request.headers.get("Authorization", "").replace("Bearer ", "").strip(),
+    ]
+    for tok in candidates:
+        if not tok:
+            continue
+        try:
+            payload = _jwt.decode(tok, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            if payload.get("sub"):
+                return tok
+        except Exception:
+            continue
+    return None
+
+
 @app.get("/dashboard")
 @app.get("/dashboard/")
 async def serve_dashboard(request: Request):
     from fastapi.responses import FileResponse, RedirectResponse
+    from backend.api.v1.auth import _set_session_cookie
     import os
     headers = {
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "Pragma": "no-cache",
         "Expires": "0",
     }
-    # Check if user has active session cookie or Authorization header
-    token = request.cookies.get(settings.SESSION_COOKIE_NAME)
-    auth_header = request.headers.get("Authorization", "")
-    if not token and not auth_header and not settings.KOBITS_DEV_MODE:
+    valid_token = _has_valid_session_token(request)
+    if not valid_token and not settings.KOBITS_DEV_MODE:
         # Require login for accessing personal workspace
         return RedirectResponse(url="/portal.html#login", status_code=302)
 
-    if os.path.isfile("web/index.html"):
-        return FileResponse("web/index.html", headers=headers)
-    return FileResponse("portal.html", headers=headers)
+    target = "web/index.html" if os.path.isfile("web/index.html") else "portal.html"
+    resp = FileResponse(target, headers=headers)
+    if valid_token and request.query_params.get("session_token"):
+        _set_session_cookie(resp, valid_token)
+    return resp
 
 @app.get("/home")
 async def serve_home():
@@ -596,6 +617,7 @@ async def serve_static(file_path: str, request: Request):
     from fastapi import HTTPException
     import os
     from fastapi.responses import FileResponse, RedirectResponse
+    from backend.api.v1.auth import _set_session_cookie
     
     clean_path = file_path.strip("/").rstrip(".")
 
@@ -616,19 +638,29 @@ async def serve_static(file_path: str, request: Request):
         if os.path.isfile("index.html"):
             return FileResponse("index.html", headers=headers)
 
-    # Protect personal dashboard workspace routes behind authentication
-    if clean_path in ("dashboard", "portal", "web/index.html", "web") or clean_path.startswith("web/"):
-        ext = os.path.splitext(clean_path)[1].lower()
-        if ext in ("", ".html"):
-            token = request.cookies.get(settings.SESSION_COOKIE_NAME)
-            auth_header = request.headers.get("Authorization", "")
-            if not token and not auth_header and not settings.KOBITS_DEV_MODE:
-                return RedirectResponse(url="/portal.html#login", status_code=302)
-
-    # If portal is requested
+    # If portal is requested, auto-redirect to dashboard if user already has an active session
     if clean_path in ("portal.html", "portal"):
+        if (
+            not request.query_params.get("logout")
+            and not request.query_params.get("auth_error")
+            and _has_valid_session_token(request)
+        ):
+            return RedirectResponse(url="/web/index.html#overview", status_code=302)
         if os.path.isfile("portal.html"):
             return FileResponse("portal.html", headers=headers)
+
+    # Protect personal dashboard workspace routes behind authentication
+    if clean_path in ("dashboard", "web/index.html", "web") or clean_path.startswith("web/"):
+        ext = os.path.splitext(clean_path)[1].lower()
+        if ext in ("", ".html"):
+            valid_token = _has_valid_session_token(request)
+            if not valid_token and not settings.KOBITS_DEV_MODE:
+                return RedirectResponse(url="/portal.html#login", status_code=302)
+            if clean_path in ("dashboard", "web/index.html", "web") and os.path.isfile("web/index.html"):
+                resp = FileResponse("web/index.html", headers=headers)
+                if valid_token and request.query_params.get("session_token"):
+                    _set_session_cookie(resp, valid_token)
+                return resp
 
     # If dashboard is requested (authenticated)
     if clean_path == "dashboard":

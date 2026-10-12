@@ -67,16 +67,38 @@ def _resolve_redirect_base(request: Request) -> str:
     return configured or "http://localhost:8000"
 
 
+SESSION_PERSIST_DAYS = 30
+SESSION_MAX_AGE_SECONDS = SESSION_PERSIST_DAYS * 24 * 3600
+
+
 def _set_session_cookie(response: Response, token: str):
-    """Set a secure HttpOnly session cookie."""
+    """Set a persistent 30-day HttpOnly session cookie that survives browser restarts."""
+    expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_PERSIST_DAYS)
     response.set_cookie(
         key=settings.SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
         secure=settings.SESSION_COOKIE_SECURE,
         samesite=settings.SESSION_COOKIE_SAMESITE,
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        max_age=SESSION_MAX_AGE_SECONDS,
+        expires=expires_at,
         path="/",
+    )
+
+
+def _issue_user_token(user: User) -> str:
+    """Create a 30-day signed JWT containing rehydration claims so sessions survive Cloud Run scale-to-zero restarts."""
+    return create_access_token(
+        subject=user.id,
+        expires_delta=timedelta(days=SESSION_PERSIST_DAYS),
+        extra_claims={
+            "email": user.email,
+            "name": user.full_name,
+            "google_id": user.google_id,
+            "github_id": user.github_id,
+            "avatar_url": user.avatar_url,
+            "rehydratable": True,
+        },
     )
 
 
@@ -117,8 +139,12 @@ async def _find_or_create_user_and_org(
         await db.commit()
         return user
 
+    # Deterministic user ID from email so container restarts map to the same user ID
+    deterministic_user_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, email.lower().strip()))
+
     # Create new user + organization
     new_user = User(
+        id=deterministic_user_id,
         email=email,
         hashed_password="__oauth_no_password__",  # OAuth users don't have a password
         full_name=full_name,
@@ -207,8 +233,8 @@ async def signup(user_in: UserCreate, response: Response, db: AsyncSession = Dep
     await db.commit()
     await db.refresh(new_user)
 
-    # Set session cookie
-    token = create_access_token(subject=new_user.id)
+    # Set persistent 30-day session cookie
+    token = _issue_user_token(new_user)
     _set_session_cookie(response, token)
 
     resp = UserResponse.model_validate(new_user)
@@ -265,10 +291,33 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token = create_access_token(subject=user.id)
+    access_token = _issue_user_token(user)
     _set_session_cookie(response, access_token)
 
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/restore")
+async def restore_session(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    """Restore the HttpOnly session cookie from a valid Bearer token stored in localStorage."""
+    from backend.api.deps import get_current_user
+    raw_token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+    if not raw_token:
+        try:
+            body = await request.json()
+            raw_token = (body.get("token") or "").strip()
+        except Exception:
+            pass
+    if not raw_token:
+        raw_token = request.cookies.get(settings.SESSION_COOKIE_NAME)
+
+    if not raw_token:
+        raise HTTPException(status_code=401, detail="No session token provided")
+
+    user = await get_current_user(token=raw_token, db=db)
+    fresh_token = _issue_user_token(user)
+    _set_session_cookie(response, fresh_token)
+    return {"status": "ok", "access_token": fresh_token, "user_id": user.id}
 
 
 @router.post("/logout")
@@ -347,8 +396,8 @@ async def google_login(request: Request):
                     google_id="google_dev_109283746",
                     avatar_url="https://lh3.googleusercontent.com/a/default-user=s96-c",
                 )
-                session_token = create_access_token(subject=user.id)
-                response = RedirectResponse(url="/web/index.html?onboarding=true#overview", status_code=302)
+                session_token = _issue_user_token(user)
+                response = RedirectResponse(url=f"/web/index.html?onboarding=true&session_token={session_token}#overview", status_code=302)
                 _set_session_cookie(response, session_token)
                 return response
         return RedirectResponse(url="/portal.html?auth_error=google_not_configured#login", status_code=302)
@@ -363,7 +412,7 @@ async def google_login(request: Request):
         "scope": "openid email profile",
         "state": state,
         "access_type": "offline",
-        "prompt": "consent",
+        "prompt": "select_account",
     }
     url = f"{GOOGLE_AUTH_URL}?{urllib.parse.urlencode(params)}"
     return RedirectResponse(url=url, status_code=302)
@@ -429,8 +478,8 @@ async def google_callback(
         avatar_url=userinfo.get("picture"),
     )
 
-    session_token = create_access_token(subject=user.id)
-    response = RedirectResponse(url="/web/index.html#overview", status_code=302)
+    session_token = _issue_user_token(user)
+    response = RedirectResponse(url=f"/web/index.html?session_token={session_token}#overview", status_code=302)
     _set_session_cookie(response, session_token)
     return response
 
@@ -459,8 +508,8 @@ async def github_login(request: Request):
                     github_id="github_dev_98234710",
                     avatar_url="https://avatars.githubusercontent.com/u/9919?v=4",
                 )
-                session_token = create_access_token(subject=user.id)
-                response = RedirectResponse(url="/web/index.html?onboarding=true#overview", status_code=302)
+                session_token = _issue_user_token(user)
+                response = RedirectResponse(url=f"/web/index.html?onboarding=true&session_token={session_token}#overview", status_code=302)
                 _set_session_cookie(response, session_token)
                 return response
         return RedirectResponse(url="/portal.html?auth_error=github_not_configured#login", status_code=302)
@@ -548,8 +597,8 @@ async def github_callback(
         avatar_url=gh_user.get("avatar_url"),
     )
 
-    session_token = create_access_token(subject=user.id)
-    response = RedirectResponse(url="/web/index.html#overview", status_code=302)
+    session_token = _issue_user_token(user)
+    response = RedirectResponse(url=f"/web/index.html?session_token={session_token}#overview", status_code=302)
     _set_session_cookie(response, session_token)
     return response
 get_current_active_user = get_current_user_info

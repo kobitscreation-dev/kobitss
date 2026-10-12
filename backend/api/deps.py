@@ -19,24 +19,22 @@ async def get_current_user(token: str = None, db: AsyncSession = Depends(get_db)
     2. Explicitly passed token (from cookie or header)
     3. OAuth2 Bearer header (auto-injected by FastAPI)
     """
-    # DEV MODE: skip all auth
-    if settings.KOBITS_DEV_MODE:
-        result = await db.execute(select(User).limit(1))
-        user = result.scalar_one_or_none()
-        if not user:
-            from backend.models.organization import Organization, OrganizationMember, OrgRole
-            user = User(id="dev_user_1", email="dev@kobits.ai", full_name="Dev User", hashed_password="x")
-            org = Organization(id="dev_org_1", name="Dev Workspace")
-            db.add(user)
-            db.add(org)
-            await db.flush()
-            member = OrganizationMember(user_id=user.id, organization_id=org.id, role=OrgRole.ADMIN)
-            db.add(member)
-            await db.commit()
-            await db.refresh(user)
-        return user
-
     if not token:
+        if settings.KOBITS_DEV_MODE:
+            result = await db.execute(select(User).limit(1))
+            user = result.scalar_one_or_none()
+            if not user:
+                from backend.models.organization import Organization, OrganizationMember, OrgRole
+                user = User(id="dev_user_1", email="dev@kobits.ai", full_name="Dev User", hashed_password="x")
+                org = Organization(id="dev_org_1", name="Dev Workspace")
+                db.add(user)
+                db.add(org)
+                await db.flush()
+                member = OrganizationMember(user_id=user.id, organization_id=org.id, role=OrgRole.ADMIN)
+                db.add(member)
+                await db.commit()
+                await db.refresh(user)
+            return user
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
@@ -58,6 +56,42 @@ async def get_current_user(token: str = None, db: AsyncSession = Depends(get_db)
 
     result = await db.execute(select(User).filter(User.id == user_id))
     user = result.scalar_one_or_none()
+    if user is None and payload.get("email"):
+        result_by_email = await db.execute(select(User).filter(User.email == payload.get("email")))
+        user = result_by_email.scalar_one_or_none()
+
+    if user is None and payload.get("rehydratable") and payload.get("email"):
+        # Ephemeral container rehydration: restore verified user & workspace across Cloud Run scale-to-zero restarts
+        from backend.models.organization import Organization, OrganizationMember, OrgRole
+        import uuid
+        email = payload["email"]
+        full_name = payload.get("name") or email.split("@")[0]
+        user = User(
+            id=user_id,
+            email=email,
+            hashed_password="__oauth_no_password__",
+            full_name=full_name,
+            google_id=payload.get("google_id"),
+            github_id=payload.get("github_id"),
+            avatar_url=payload.get("avatar_url"),
+            is_active=True,
+        )
+        db.add(user)
+        org_id = str(uuid.uuid5(uuid.NAMESPACE_OID, email.lower().strip()))
+        existing_org = await db.get(Organization, org_id)
+        if not existing_org:
+            org = Organization(id=org_id, name=f"{full_name}'s Workspace", credit_balance=50)
+            db.add(org)
+        try:
+            await db.flush()
+            db.add(OrganizationMember(user_id=user.id, organization_id=org_id, role=OrgRole.OWNER))
+            await db.commit()
+            await db.refresh(user)
+        except Exception:
+            await db.rollback()
+            result = await db.execute(select(User).filter(User.email == email))
+            user = result.scalar_one_or_none()
+
     if user is None:
         raise credentials_exception
     return user

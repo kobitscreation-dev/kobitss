@@ -1241,6 +1241,18 @@ function initTopBar() {
     }, 80);
   });
 
+  const logoutBtn = document.getElementById('ky-topbar-logout');
+  logoutBtn?.addEventListener('click', async () => {
+    try {
+      await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
+    } catch (_) {}
+    try {
+      localStorage.removeItem('kobits_token');
+      localStorage.removeItem('kobits_user');
+    } catch (_) {}
+    window.location.href = '/portal.html?logout=1#login';
+  });
+
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       document.getElementById('ky-modal-host').innerHTML = '';

@@ -930,6 +930,38 @@
        SCRIPTS
        ============================================================ -->
   <script>
+    (async function checkExistingSession() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('logout') === '1') {
+          localStorage.removeItem('kobits_token');
+          localStorage.removeItem('kobits_user');
+          return;
+        }
+        if (params.get('auth_error')) {
+          return;
+        }
+        const savedToken = localStorage.getItem('kobits_token');
+        const headers = savedToken ? { 'Authorization': 'Bearer ' + savedToken } : {};
+        // Restore HttpOnly cookie and verify session in one call
+        const res = await fetch('/api/v1/auth/restore', {
+          method: 'POST',
+          credentials: 'include',
+          headers: headers,
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data && data.access_token) {
+            localStorage.setItem('kobits_token', data.access_token);
+          }
+          window.location.replace('/web/index.html#overview');
+          return;
+        } else if (res.status === 401 && savedToken) {
+          localStorage.removeItem('kobits_token');
+        }
+      } catch (_) {}
+    })();
+
     if (window.location.hash === '#dashboard' || window.location.hash === '#overview') {
       window.location.replace('/web/index.html#overview');
     }

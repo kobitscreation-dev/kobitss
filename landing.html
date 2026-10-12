@@ -1707,6 +1707,36 @@
         canvas.style.display = 'none';
       }
     })();
+
+    // Auto-detect active session and upgrade Sign In / CTA buttons to go straight to Dashboard
+    (async function syncLandingAuthSession() {
+      try {
+        const savedToken = localStorage.getItem('kobits_token');
+        const headers = savedToken ? { 'Authorization': 'Bearer ' + savedToken } : {};
+        const res = await fetch('/api/v1/auth/restore', {
+          method: 'POST',
+          credentials: 'include',
+          headers: headers,
+        });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data && data.access_token) {
+            localStorage.setItem('kobits_token', data.access_token);
+          }
+          document.querySelectorAll('a[href*="/portal.html"]').forEach((el) => {
+            el.setAttribute('href', '/web/index.html#overview');
+            const txt = (el.textContent || '').trim().toLowerCase();
+            if (txt === 'sign in') {
+              el.textContent = 'Dashboard';
+            } else if (txt === 'start building') {
+              el.textContent = 'Open Workspace →';
+            }
+          });
+        } else if (res.status === 401 && savedToken) {
+          localStorage.removeItem('kobits_token');
+        }
+      } catch (_) {}
+    })();
     </script>
 </body>
 </html>
