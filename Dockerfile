@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONPATH=/app
 
-# Install system dependencies (git for worktrees, curl, gcc, ripgrep, compilers, java)
+# Install core system dependencies (heavy polyglot compilers run in E2B Firecracker MicroVMs)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
@@ -19,24 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ripgrep \
     ca-certificates \
     libpq-dev \
-    openjdk-17-jre-headless \
     && rm -rf /var/lib/apt/lists/*
-
-# Install Node.js 20 LTS + npm + pnpm (for React, Next.js, TypeScript repos)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && npm install -g pnpm \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Go 1.22+ (for Golang microservices and `go test`)
-RUN curl -fsSL https://go.dev/dl/go1.22.8.linux-amd64.tar.gz | tar -C /usr/local -xz
-
-# Install Rust stable minimal toolchain (for Rust crates, `rustc`, and `cargo test`)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal \
-    && rm -rf /root/.rustup/toolchains/stable-*/share/doc
-
-ENV PATH="/usr/local/go/bin:/root/.cargo/bin:${PATH}"
-
 
 # Install python dependencies
 COPY requirements.txt .
