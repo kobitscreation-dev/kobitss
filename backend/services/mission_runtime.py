@@ -26,11 +26,24 @@ from backend.models.intelligence import TaskContract
 
 
 class MissionRuntime:
-    def __init__(self, mission_id: str, organization_id: str, user_id: str):
+    def __init__(self, mission_id: str, organization_id: str = None, user_id: str = None):
         self.mission_id = mission_id
-        self.organization_id = organization_id
-        self.user_id = user_id
+        self.organization_id = organization_id or "default_org"
+        self.user_id = user_id or "system_automator"
         self._db_lock = asyncio.Lock()
+
+    @classmethod
+    async def run_mission_background(cls, mission_id: str, organization_id: str = None, user_id: str = None):
+        """Asynchronously initialize and execute a mission runtime in the background."""
+        if not organization_id or not user_id:
+            async with AsyncSessionLocal() as db:
+                mission = await db.get(Mission, mission_id)
+                if mission:
+                    organization_id = organization_id or mission.organization_id
+                    user_id = user_id or "system_automator"
+        runtime = cls(mission_id, organization_id or "default_org", user_id or "system_automator")
+        return await runtime.execute()
+
 
     @staticmethod
     def _verify_sandbox_code(sandbox_dir: str, target_files: list = None) -> dict:

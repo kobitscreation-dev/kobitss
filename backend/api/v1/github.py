@@ -8,6 +8,7 @@ import json
 import uuid
 import httpx
 import re
+import os
 
 from backend.core.database import get_db
 from backend.models.organization import User, OrganizationMember
@@ -532,7 +533,111 @@ async def github_events_webhook(
         await db.commit()
         return {"status": "processed"}
 
+    elif event_type == "pull_request_review_comment":
+        action = payload.get("action")
+        if action not in ("created", "edited"):
+            return {"status": "ignored", "reason": f"action '{action}' not actionable"}
+
+        comment_data = payload.get("comment", {})
+        pr_data = payload.get("pull_request", {})
+        repo_data = payload.get("repository", {})
+        sender_data = payload.get("sender", {})
+        sender_login = (sender_data.get("login") or "").lower()
+
+        # Ignore bot senders to prevent infinite feedback loops
+        if sender_login.endswith("[bot]") or "kobits" in sender_login:
+            return {"status": "ignored", "reason": "ignoring bot sender to prevent loop"}
+
+        comment_body = comment_data.get("body", "")
+        # Check if @kobits is mentioned in the PR line comment
+        if "@kobits" not in comment_body.lower() and "@kobits-ai" not in comment_body.lower():
+            return {"status": "ignored", "reason": "no @kobits mention in review comment"}
+
+        file_path = comment_data.get("path")
+        line_num = comment_data.get("line") or comment_data.get("original_line")
+        diff_hunk = comment_data.get("diff_hunk", "")
+        comment_id = comment_data.get("id")
+        pr_number = pr_data.get("number")
+        repo_full_name = repo_data.get("full_name")
+        pr_head_branch = pr_data.get("head", {}).get("ref")
+
+        if not repo_full_name or not pr_head_branch:
+            return {"status": "ignored", "reason": "missing repository or PR branch context"}
+
+        stmt = select(Repository).where(Repository.full_name == repo_full_name)
+        repo = (await db.execute(stmt)).scalars().first()
+        if not repo:
+            return {"status": "ignored", "reason": f"repo {repo_full_name} not registered in Kobits"}
+
+        # Get GitHub token
+        conn = await db.get(GitHubConnection, repo.github_connection_id)
+        gh_token = ""
+        if conn and conn.metadata_json:
+            try:
+                gh_token = json.loads(conn.metadata_json).get("token", "")
+            except Exception:
+                pass
+
+        # Clean prompt
+        cleaned_prompt = re.sub(r"@kobits(-ai)?(\[bot\])?", "", comment_body, flags=re.IGNORECASE).strip()
+        objective = (
+            f"Address PR #{pr_number} review comment from @{sender_login} on `{file_path}`"
+            f"{f' (line {line_num})' if line_num else ''}:\n\n"
+            f"Instruction: {cleaned_prompt}\n\n"
+            f"Diff Context:\n```\n{diff_hunk}\n```"
+        )
+
+        from backend.models.mission import WorkflowPhase
+        creator_id = conn.user_id if conn else "system_automator"
+        mission = Mission(
+            project_id=repo.project_id,
+            organization_id=repo.organization_id,
+            created_by=creator_id,
+            title=f"[PR #{pr_number} Review] Fix {os.path.basename(file_path or 'file')}:{line_num or 1}",
+            objective=objective,
+            description=f"Automated PR review fix dispatched from Pull Request #{pr_number} line comment by @{sender_login}.",
+            status=MissionStatus.PLANNING,
+            phase=WorkflowPhase.INTAKE,
+            active_branch=pr_head_branch,  # Commits and pushes directly to the existing PR branch
+            repository_id=repo.id,
+        )
+
+        db.add(mission)
+        await db.commit()
+        await db.refresh(mission)
+
+        # Reply directly on the PR line comment thread
+        if gh_token and pr_number and comment_id:
+            from backend.services.github_service import GitHubService
+            reply_text = (
+                f"🤖 **Kobits PR Correction Dispatched** (Mission `{mission.id[:8]}`)\n\n"
+                f"- **Target File**: `{file_path}` (line {line_num})\n"
+                f"- **Branch**: `{pr_head_branch}`\n"
+                f"- **Workflow**: Isolated AST Analysis → Compiler & Test Suite Check → Direct Push to PR\n\n"
+                f"Kobits is analyzing the directive and will push a commit directly to this PR branch once tests pass."
+            )
+            background_tasks.add_task(
+                GitHubService.reply_to_pr_review_comment,
+                repo_full_name,
+                int(pr_number),
+                int(comment_id),
+                reply_text,
+                gh_token,
+            )
+
+        # Dispatch background mission
+        from backend.services.mission_runtime import MissionRuntime
+        background_tasks.add_task(MissionRuntime.run_mission_background, mission.id)
+
+        return {
+            "status": "pr_review_correction_dispatched",
+            "mission_id": mission.id,
+            "branch": pr_head_branch,
+            "pr_number": pr_number,
+        }
+
     elif event_type in ("issues", "issue_comment"):
+
         action = payload.get("action")
         # Only process on issue opened/edited or new comment created
         if action not in ("opened", "created", "reopened", "labeled"):
@@ -588,19 +693,21 @@ async def github_events_webhook(
         from backend.models.mission import WorkflowPhase
         issue_num = issue_data.get("number", "1")
         active_branch = f"kobits/issue-{issue_num}-{uuid.uuid4().hex[:6]}"
+        creator_id = conn.user_id if conn else "system_automator"
 
         mission = Mission(
             project_id=repo.project_id,
             organization_id=repo.organization_id,
+            created_by=creator_id,
             title=f"[Issue #{issue_num}] {issue_title[:100]}",
             objective=cleaned_prompt,
             description=f"Automated engineering mission dispatched from GitHub Issue #{issue_num} by @{sender_login}.\n\nRaw prompt:\n{raw_text}",
             status=MissionStatus.PLANNING,
             phase=WorkflowPhase.INTAKE,
-            base_branch=repo.selected_branch or repo.default_branch or "main",
             active_branch=active_branch,
             repository_id=repo.id,
         )
+
         db.add(mission)
         await db.commit()
         await db.refresh(mission)

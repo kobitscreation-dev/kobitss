@@ -122,3 +122,23 @@ class GitHubService:
             logger.error(f"GitHub issue comment failed: {resp.text}")
             return {"error": resp.text, "status_code": resp.status_code}
 
+    @classmethod
+    async def reply_to_pr_review_comment(cls, repo_full_name: str, pr_number: int, comment_id: int, body: str, token: str) -> dict:
+        """Reply directly to a line-level review comment in a Pull Request."""
+        if MOCK_GITHUB_API:
+            return {"id": 123456, "body": body}
+
+        url = f"{cls.BASE_URL}/repos/{repo_full_name}/pulls/{pr_number}/comments/{comment_id}/replies"
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(url, json={"body": body}, headers=cls._get_headers(token))
+            if resp.status_code in (200, 201):
+                return resp.json()
+            # Fallback to standard PR issue comment if thread reply fails
+            fallback_url = f"{cls.BASE_URL}/repos/{repo_full_name}/issues/{pr_number}/comments"
+            fb_resp = await client.post(fallback_url, json={"body": body}, headers=cls._get_headers(token))
+            if fb_resp.status_code in (200, 201):
+                return fb_resp.json()
+            logger.error(f"GitHub review comment reply failed: {resp.text}")
+            return {"error": resp.text, "status_code": resp.status_code}
+
+
