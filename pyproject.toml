@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "kobits"
 version = "2.0.0"
-description = "Kobits Terminal Engine - Autonomous Multi-Agent Software Engineering CLI"
+description = "Kobits — Autonomous Multi-Agent Software Engineering Cloud Platform"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
