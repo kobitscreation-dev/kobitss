@@ -1,5 +1,5 @@
 // ============================================================================
-// KOBITS — KYROS-STYLE MONOCHROME ENGINEERING DASHBOARD
+// KOBITS — AUTONOMOUS MONOCHROME ENGINEERING DASHBOARD
 // 100% Real Database Telemetry (/api/v1/org/dashboard, /missions/{id}/diff, /apply)
 // ============================================================================
 
@@ -307,7 +307,7 @@ function renderOverviewTab(d, milestones) {
       <div class="ky-prompt-header">
         <div class="ky-prompt-telemetry">
           <span class="dot"></span>
-          <span>KYROS REASONING LOOP // DUAL-LOOP ORCHESTRATION</span>
+          <span>KOBITS REASONING LOOP // DUAL-LOOP ORCHESTRATION</span>
         </div>
         <div class="ky-prompt-selectors">
           <select id="ky-mission-mode" class="ky-prompt-select" title="Execution Mode">
