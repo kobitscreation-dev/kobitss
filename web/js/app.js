@@ -180,6 +180,15 @@ async function fetchDashboard(silent = false) {
       localStorage.removeItem('kobits.projectId');
     }
     populateProjectSelect(data);
+    const curH = (location.hash || '').replace(/^#\/?/, '');
+    if (curH === 'settings') {
+      if (!silent) renderSettingsPage();
+      return;
+    }
+    if (curH === 'new-project') {
+      if (!silent) renderNewProjectPage();
+      return;
+    }
     renderDashboard();
   } catch (err) {
     if (!silent) {
@@ -1318,13 +1327,13 @@ function initTopBar() {
   });
 
   window.addEventListener('hashchange', () => {
-    const h = location.hash.replace(/^#\/?/, '');
+    const h = (location.hash || '').replace(/^#\/?/, '');
     if (h === 'settings') {
-      openSettingsModal('account');
+      renderSettingsPage();
       return;
     }
     if (h === 'new-project') {
-      openNewProjectModal();
+      renderNewProjectPage();
       return;
     }
     if (['overview', 'milestones', 'deliverables', 'team', 'reports'].includes(h)) {
@@ -1334,180 +1343,135 @@ function initTopBar() {
   });
 }
 
-// ── Dedicated Create Project & Launch Workspace Modal ───────────────────────
+// ── Standard New Project Page ───────────────────────────────────────────────
 
-function openNewProjectModal() {
+function renderNewProjectPage() {
+  const view = document.getElementById('view') || document.getElementById('main-content');
+  if (!view) return;
+
   const host = document.getElementById('ky-modal-host');
-  if (!host) return;
+  if (host) host.innerHTML = '';
 
-  const templates = [
-    {
-      name: 'FinTech Payment API',
-      desc: 'Python / FastAPI service with idempotent webhook handlers, HMAC signatures, and SQLite/PostgreSQL storage.',
-      mission: 'Implement a production-ready Stripe webhook verification module with HMAC-SHA256 validation, replay protection, and a comprehensive pytest suite.'
-    },
-    {
-      name: 'SaaS Auth & RBAC Core',
-      desc: 'Multi-tenant authentication microservice with JWT rotation, rate limiting, and audit logging.',
-      mission: 'Build a token bucket rate limiter and JWT RBAC permission guard with unit tests covering edge cases and concurrency.'
-    },
-    {
-      name: 'Data Pipeline & Analytics Engine',
-      desc: 'High-throughput ETL ingestion worker, schema validator, and anomaly detection pipeline.',
-      mission: 'Create a resilient JSONL telemetry ingestion parser with dead-letter queue recovery, secret scrubbing, and full pytest coverage.'
-    }
-  ];
+  view.innerHTML = `
+    <div class="ky-newproject-container" style="max-width:680px;margin:0 auto;padding:12px 0 60px">
+      <!-- Back Navigation & Header -->
+      <div style="margin-bottom:24px">
+        <a href="#overview" class="ky-btn ky-btn-ghost ky-btn-xs" style="margin-bottom:12px;display:inline-flex;align-items:center;gap:6px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          <span>Back to Dashboard</span>
+        </a>
+        <h1 style="font-size:24px;font-weight:700;margin:0;letter-spacing:-0.02em">Create a new project</h1>
+        <p style="color:var(--text-2);margin:6px 0 0;font-size:13.5px">A project organizes your codebase, automated engineering missions, and team deliverables.</p>
+      </div>
 
-  host.innerHTML = `
-    <div class="ky-modal-backdrop" id="ky-newproj-backdrop">
-      <div class="ky-modal" role="dialog" aria-modal="true" aria-labelledby="ky-newproj-title" style="max-width:640px;width:95vw">
-        <div class="ky-modal-head" style="border-bottom:1px solid var(--border);padding:16px 20px;display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div class="ky-eyebrow">WORKSPACE INITIALIZATION</div>
-            <h3 class="ky-modal-title" id="ky-newproj-title" style="margin-top:2px">Start a New Engineering Project</h3>
-          </div>
-          <button type="button" class="ky-modal-close" id="ky-newproj-close" aria-label="Close">×</button>
-        </div>
-
-        <div class="ky-modal-body" style="padding:20px;display:flex;flex-direction:column;gap:16px">
-          <div>
-            <div class="ky-eyebrow" style="margin-bottom:8px">QUICK-START BLUEPRINTS (OPTIONAL 1-CLICK FILL)</div>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-              ${templates.map((t, idx) => `
-                <button type="button" class="ky-tpl-btn" data-tpl-idx="${idx}" style="text-align:left;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color .15s">
-                  <div style="font-weight:600;font-size:12px;color:var(--text-1)">${esc(t.name)}</div>
-                  <div style="font-size:10.5px;color:var(--text-2);margin-top:3px;line-height:1.35">${esc(t.desc.slice(0, 68))}…</div>
-                </button>
-              `).join('')}
-            </div>
+      <!-- Main Form Card -->
+      <div class="ky-card" style="padding:28px">
+        <form id="ky-np-form" onsubmit="return false;">
+          <!-- Project Name -->
+          <div style="margin-bottom:20px">
+            <label for="ky-np-name" style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">
+              Project Name <span style="color:var(--err-fg, #ef4444)">*</span>
+            </label>
+            <input id="ky-np-name" type="text" placeholder="e.g. my-awesome-app" required autofocus style="width:100%;padding:10px 13px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13.5px;color:var(--text-1);outline:none" />
+            <div style="font-size:12px;color:var(--text-3);margin-top:5px">Great project names are short and memorable.</div>
           </div>
 
-          <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:12px">
-            <div>
-              <label style="display:block;font-size:11px;color:var(--text-2);margin-bottom:5px;font-family:var(--font-mono)">PROJECT NAME *</label>
-              <input id="ky-np-name" type="text" placeholder="e.g. Core Backend API" style="width:100%;padding:9px 11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text-1)" />
-            </div>
-            <div>
-              <label style="display:block;font-size:11px;color:var(--text-2);margin-bottom:5px;font-family:var(--font-mono)">GITHUB REPO URL (OPTIONAL)</label>
-              <input id="ky-np-repo" type="text" placeholder="https://github.com/org/repo" style="width:100%;padding:9px 11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12.5px;font-family:var(--font-mono);color:var(--text-1)" />
-            </div>
+          <!-- Description -->
+          <div style="margin-bottom:20px">
+            <label for="ky-np-desc" style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">
+              Description <span style="font-size:11.5px;font-weight:400;color:var(--text-3)">(optional)</span>
+            </label>
+            <input id="ky-np-desc" type="text" placeholder="e.g. Next.js customer portal with Stripe integration" style="width:100%;padding:10px 13px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13.5px;color:var(--text-1);outline:none" />
+            <div style="font-size:12px;color:var(--text-3);margin-top:5px">Brief summary of what this project does or the stack it uses.</div>
           </div>
 
-          <div>
-            <label style="display:block;font-size:11px;color:var(--text-2);margin-bottom:5px;font-family:var(--font-mono)">ARCHITECTURE & STACK DESCRIPTION</label>
-            <input id="ky-np-desc" type="text" placeholder="e.g. Python 3.12, FastAPI, SQLite/PostgreSQL, Pytest cleanroom verification" style="width:100%;padding:9px 11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text-1)" />
+          <!-- GitHub Repo URL -->
+          <div style="margin-bottom:20px">
+            <label for="ky-np-repo" style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">
+              Git Repository URL <span style="font-size:11.5px;font-weight:400;color:var(--text-3)">(optional)</span>
+            </label>
+            <input id="ky-np-repo" type="text" placeholder="https://github.com/organization/repository" style="width:100%;padding:10px 13px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--font-mono);color:var(--text-1);outline:none" />
+            <div style="font-size:12px;color:var(--text-3);margin-top:5px">Connect an existing GitHub repo, or leave blank to start a new workspace.</div>
           </div>
 
-          <div style="padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-              <label style="font-size:11px;color:var(--text-1);font-family:var(--font-mono);font-weight:600">FIRST MISSION OBJECTIVE (OPTIONAL — AUTO-LAUNCHES IMMEDIATELY)</label>
-              <span style="font-size:10.5px;color:var(--text-3);font-family:var(--font-mono)">E2B / Cleanroom Sandbox</span>
-            </div>
-            <textarea id="ky-np-mission" rows="3" placeholder="Leave blank to just create the project, or describe your first task here to immediately boot the 6-agent engineering team…" style="width:100%;padding:9px 11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12.5px;color:var(--text-1);resize:vertical;font-family:var(--font-sans)"></textarea>
+          <!-- Default Branch -->
+          <div style="margin-bottom:26px">
+            <label for="ky-np-branch" style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">
+              Default Branch
+            </label>
+            <input id="ky-np-branch" type="text" value="main" style="width:160px;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--font-mono);color:var(--text-1);outline:none" />
           </div>
-        </div>
 
-        <div class="ky-modal-foot" style="border-top:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between">
-          <span style="font-size:11.5px;color:var(--text-3);font-family:var(--font-mono)">Isolated per-organization workspace</span>
-          <div style="display:flex;gap:8px">
-            <button type="button" class="ky-btn ky-btn-ghost ky-btn-sm" id="ky-newproj-cancel">Cancel</button>
-            <button type="button" class="ky-btn ky-btn-primary ky-btn-sm" id="ky-newproj-submit">+ Create Project</button>
+          <!-- Actions -->
+          <div style="border-top:1px solid var(--border);padding-top:20px;display:flex;align-items:center;justify-content:space-between">
+            <a href="#overview" class="ky-btn ky-btn-ghost ky-btn-sm">Cancel</a>
+            <button id="ky-np-submit" type="button" class="ky-btn ky-btn-primary ky-btn-sm" style="padding:9px 20px;font-size:13px">
+              Create Project
+            </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   `;
 
-  const closeModal = () => { host.innerHTML = ''; };
-  document.getElementById('ky-newproj-close')?.addEventListener('click', closeModal);
-  document.getElementById('ky-newproj-cancel')?.addEventListener('click', closeModal);
-  document.getElementById('ky-newproj-backdrop')?.addEventListener('click', (ev) => {
-    if (ev.target.id === 'ky-newproj-backdrop') closeModal();
-  });
-
   const nameInput = document.getElementById('ky-np-name');
   const descInput = document.getElementById('ky-np-desc');
-  const missionInput = document.getElementById('ky-np-mission');
-  const submitBtn = document.getElementById('ky-newproj-submit');
+  const repoInput = document.getElementById('ky-np-repo');
+  const submitBtn = document.getElementById('ky-np-submit');
 
   setTimeout(() => nameInput?.focus(), 50);
 
-  missionInput?.addEventListener('input', () => {
-    if (submitBtn) {
-      submitBtn.textContent = missionInput.value.trim()
-        ? '🚀 Create & Launch Mission'
-        : '+ Create Project';
-    }
-  });
-
-  host.querySelectorAll('.ky-tpl-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const idx = Number(btn.getAttribute('data-tpl-idx'));
-      const t = templates[idx];
-      if (!t) return;
-      if (nameInput) nameInput.value = t.name;
-      if (descInput) descInput.value = t.desc;
-      if (missionInput) missionInput.value = t.mission;
-      if (submitBtn) submitBtn.textContent = '🚀 Create & Launch Mission';
-    });
-  });
-
-  submitBtn?.addEventListener('click', async () => {
+  const handleCreate = async () => {
     const name = nameInput?.value?.trim();
-    const repository_url = document.getElementById('ky-np-repo')?.value?.trim() || null;
-    const description = descInput?.value?.trim() || 'Autonomous Software Engineering Workspace';
-    const firstMission = missionInput?.value?.trim() || '';
+    const description = descInput?.value?.trim() || '';
+    const repository_url = repoInput?.value?.trim() || null;
 
     if (!name) {
-      notify('Please enter a project name (or click a Quick-Start Blueprint above).', 'error');
+      notify('Please enter a project name.', 'error');
       nameInput?.focus();
       return;
     }
 
     submitBtn.disabled = true;
-    submitBtn.textContent = firstMission ? '⚡ Creating & Booting Sandbox…' : 'Creating Project…';
+    submitBtn.textContent = 'Creating…';
 
     try {
       const created = await post('/projects', { name, description, repository_url });
       const newPid = created?.id || 'default';
       state.projectId = newPid;
       localStorage.setItem('kobits.projectId', newPid);
+      state.selectedMissionId = null;
+      notify(`Project "${name}" created!`);
 
-      if (firstMission) {
-        const title = firstMission.length > 60 ? firstMission.slice(0, 60) + '…' : firstMission;
-        const mRes = await post(`/missions/projects/${encodeURIComponent(newPid)}/missions`, {
-          title,
-          objective: firstMission,
-          branch: 'main',
-          execution_mode: localStorage.getItem('kobits.execMode') || 'autopilot',
-          auto_execute: true,
-        });
-        state.selectedMissionId = mRes.mission_id || mRes.id;
-        notify(`🚀 Project "${name}" created & mission launched!`);
-      } else {
-        state.selectedMissionId = null;
-        notify(`Project "${name}" created!`);
-      }
-
-      closeModal();
-      state.tab = 'overview';
+      location.hash = '#overview';
       await fetchDashboard();
     } catch (err) {
       notify(err.message || 'Failed to create project.', 'error');
       submitBtn.disabled = false;
-      submitBtn.textContent = firstMission ? '🚀 Create & Launch Mission' : '+ Create Project';
+      submitBtn.textContent = 'Create Project';
+    }
+  };
+
+  submitBtn?.addEventListener('click', handleCreate);
+  nameInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleCreate();
     }
   });
 }
 
-// ── Comprehensive Workspace & Account Settings Modal ────────────────────────
+function openNewProjectModal() {
+  location.hash = '#new-project';
+  renderNewProjectPage();
+}
+
+// ── Standard Settings Page ─────────────────────────────────────────────────
 
 let _settingsCache = {
   user: null,
   balance: null,
   github: null,
-  provider: null,
-  training: null,
 };
 
 async function performLogout() {
@@ -1521,331 +1485,189 @@ async function performLogout() {
   window.location.href = '/portal.html?logout=1#login';
 }
 
-async function openSettingsModal(activeTab = 'account') {
-  const host = document.getElementById('ky-modal-host');
-  if (!host) return;
+async function renderSettingsPage() {
+  const view = document.getElementById('view') || document.getElementById('main-content');
+  if (!view) return;
 
-  const renderModalShell = () => {
+  const host = document.getElementById('ky-modal-host');
+  if (host) host.innerHTML = '';
+
+  const renderContent = () => {
     const u = _settingsCache.user || {};
     const org = (u.organizations && u.organizations[0]) || { name: 'Personal Workspace', role: 'OWNER' };
     const gh = _settingsCache.github || {};
-    const prov = _settingsCache.provider || {};
-    const tr = _settingsCache.training || {};
     const bal = _settingsCache.balance?.balance ?? 50;
-
     const curTheme = document.documentElement.getAttribute('data-theme') || 'noir';
-    const curDensity = document.documentElement.getAttribute('data-density') || 'default';
-    const curWidth = document.documentElement.getAttribute('data-width') || 'standard';
-    const curBg = document.documentElement.getAttribute('data-bg') || 'grid';
-    const curExecMode = localStorage.getItem('kobits.execMode') || 'autopilot';
+    const initial = esc((u.full_name || u.email || 'K').charAt(0).toUpperCase());
 
-    const tabs = [
-      { id: 'account', label: 'Account & Profile' },
-      { id: 'github', label: 'GitHub & Projects' },
-      { id: 'engine', label: 'Engine & Sandbox' },
-      { id: 'flywheel', label: 'Model Flywheel' },
-      { id: 'appearance', label: 'Appearance' },
-    ];
+    view.innerHTML = `
+      <div class="ky-settings-container" style="max-width:820px;margin:0 auto;padding:12px 0 60px">
+        <!-- Back Navigation & Header -->
+        <div style="margin-bottom:24px">
+          <a href="#overview" class="ky-btn ky-btn-ghost ky-btn-xs" style="margin-bottom:12px;display:inline-flex;align-items:center;gap:6px">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            <span>Back to Dashboard</span>
+          </a>
+          <h1 style="font-size:24px;font-weight:700;margin:0;letter-spacing:-0.02em">Settings</h1>
+          <p style="color:var(--text-2);margin:4px 0 0;font-size:13px">Manage your account, integrations, and workspace preferences.</p>
+        </div>
 
-    let bodyHtml = '';
-
-    if (activeTab === 'account') {
-      bodyHtml = `
-        <div style="display:flex;flex-direction:column;gap:16px">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-            <div style="display:flex;align-items:center;gap:12px">
-              <div style="width:40px;height:40px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-weight:700;font-size:15px">
-                ${esc((u.full_name || u.email || 'K').charAt(0).toUpperCase())}
-              </div>
-              <div>
-                <div style="font-weight:600;font-size:14px;color:var(--text-1)">${esc(u.full_name || 'Kobits Engineer')}</div>
-                <div style="font-family:var(--font-mono);font-size:11.5px;color:var(--text-2)">${esc(u.email || 'Loading account…')}</div>
-              </div>
+        <!-- 1. Profile / Account -->
+        <div class="ky-card" style="margin-bottom:20px;padding:24px">
+          <div class="ky-card-head" style="margin-bottom:18px">
+            <div>
+              <div class="ky-section-title" style="font-size:15px;font-weight:600">Profile</div>
+              <div style="font-size:12px;color:var(--text-2);margin-top:2px">Your personal account details</div>
             </div>
-            <span class="ky-badge ky-badge-done">30-Day Session Active</span>
+            <span class="ky-badge ky-badge-done">Active Session</span>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div style="padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-              <div class="ky-eyebrow">ORGANIZATION WORKSPACE</div>
-              <div style="font-weight:600;font-size:13.5px;margin-top:4px">${esc(org.name)}</div>
-              <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-2);margin-top:2px">Role: ${esc((org.role || 'OWNER').toUpperCase())}</div>
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--border)">
+            <div style="width:48px;height:48px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;font-family:var(--font-mono)">
+              ${initial}
             </div>
-            <div style="padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:space-between">
-              <div>
-                <div class="ky-eyebrow">MISSION CREDITS</div>
-                <div style="font-family:var(--font-mono);font-weight:700;font-size:16px;margin-top:4px">${num(bal)} credits</div>
-                <div style="font-size:11px;color:var(--text-3)">~${Math.max(0, Math.floor(bal / 10))} autonomous missions</div>
-              </div>
-              <a href="/pricing.html" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border)">Top Up →</a>
+            <div>
+              <div style="font-weight:600;font-size:14px">${esc(u.full_name || 'Kobits User')}</div>
+              <div style="font-size:12.5px;color:var(--text-2);font-family:var(--font-mono)">${esc(u.email || 'Loading…')}</div>
             </div>
           </div>
 
-          <div style="padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-            <div class="ky-eyebrow" style="margin-bottom:10px">UPDATE PROFILE</div>
-            <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end">
-              <div>
-                <label style="display:block;font-size:11px;color:var(--text-2);margin-bottom:4px;font-family:var(--font-mono)">DISPLAY NAME</label>
-                <input id="ky-set-fullname" type="text" value="${esc(u.full_name || '')}" placeholder="Your full name" style="width:100%;padding:8px 11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px" />
-              </div>
-              <button id="ky-set-save-profile" type="button" class="ky-btn ky-btn-primary ky-btn-sm">Save Profile</button>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px">
+            <div>
+              <label for="ky-set-fullname" style="display:block;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">Display Name</label>
+              <input id="ky-set-fullname" type="text" value="${esc(u.full_name || '')}" placeholder="Your full name" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text-1);outline:none" />
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:6px">Email Address</label>
+              <input type="text" value="${esc(u.email || '')}" disabled style="width:100%;padding:9px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text-3);cursor:not-allowed;font-family:var(--font-mono)" />
             </div>
           </div>
 
-          <div style="padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-            <div class="ky-eyebrow" style="margin-bottom:10px">CONNECTED SIGN-IN PROVIDERS</div>
-            <div style="display:flex;flex-wrap:wrap;gap:10px">
-              <div style="flex:1;min-width:180px;display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
-                <span style="font-family:var(--font-mono);font-size:12px">Google OAuth</span>
-                ${u.has_google ? `<span class="ky-badge ky-badge-done">Linked</span>` : `<a href="/api/v1/auth/google/login" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border)">Link Google</a>`}
-              </div>
-              <div style="flex:1;min-width:180px;display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
-                <span style="font-family:var(--font-mono);font-size:12px">GitHub OAuth</span>
-                ${u.has_github ? `<span class="ky-badge ky-badge-done">Linked</span>` : `<a href="/api/v1/auth/github/login" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border)">Link GitHub</a>`}
-              </div>
-            </div>
+          <div style="display:flex;justify-content:flex-end">
+            <button id="ky-set-save-profile" type="button" class="ky-btn ky-btn-primary ky-btn-sm">Save Changes</button>
           </div>
         </div>
-      `;
-    } else if (activeTab === 'github') {
-      bodyHtml = `
-        <div style="display:flex;flex-direction:column;gap:16px">
-          <div style="padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-              <div>
-                <div class="ky-eyebrow">GITHUB REPOSITORY CREDENTIALS</div>
-                <div style="font-size:12px;color:var(--text-2);margin-top:2px">Allow Kobits agents to clone repositories, push cleanroom branches, and open Pull Requests.</div>
-              </div>
-              ${gh.connected ? `<span class="ky-badge ky-badge-done">@${esc(gh.username)}</span>` : `<span class="ky-badge">Not Connected</span>`}
+
+        <!-- 2. GitHub Connection -->
+        <div class="ky-card" style="margin-bottom:20px;padding:24px">
+          <div class="ky-card-head" style="margin-bottom:18px">
+            <div>
+              <div class="ky-section-title" style="font-size:15px;font-weight:600">GitHub Integration</div>
+              <div style="font-size:12px;color:var(--text-2);margin-top:2px">Connect GitHub to sync repositories and push pull requests</div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1.4fr auto;gap:8px;align-items:end;margin-top:10px">
+            ${gh.connected
+              ? `<span class="ky-badge ky-badge-done">Connected as @${esc(gh.username)}</span>`
+              : `<span class="ky-badge">Not connected</span>`
+            }
+          </div>
+
+          ${gh.connected ? `
+            <div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:space-between">
+              <div>
+                <div style="font-weight:600;font-size:13px">Connected as @${esc(gh.username)}</div>
+                <div style="font-size:11.5px;color:var(--text-2);margin-top:2px">Kobits has access to clone and push pull requests for your projects.</div>
+              </div>
+              <button id="ky-set-gh-toggle-update" type="button" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border)">Update Token</button>
+            </div>
+            <div id="ky-set-gh-update-form" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+              <div style="display:grid;grid-template-columns:1fr 1.4fr auto;gap:10px;align-items:end">
+                <div>
+                  <label style="display:block;font-size:11px;color:var(--text-2);margin-bottom:4px;font-family:var(--font-mono)">GITHUB USERNAME</label>
+                  <input id="ky-set-gh-user" type="text" value="${esc(gh.username || '')}" placeholder="username" style="width:100%;padding:9px 11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text-1)" />
+                </div>
+                <div>
+                  <label style="display:block;font-size:11px;color:var(--text-2);margin-bottom:4px;font-family:var(--font-mono)">PERSONAL ACCESS TOKEN</label>
+                  <input id="ky-set-gh-token" type="password" placeholder="ghp_••••••••••••••••••••" style="width:100%;padding:9px 11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text-1)" />
+                </div>
+                <button id="ky-set-gh-connect" type="button" class="ky-btn ky-btn-primary ky-btn-sm">Save Token</button>
+              </div>
+            </div>
+          ` : `
+            <div style="display:grid;grid-template-columns:1fr 1.4fr auto;gap:10px;align-items:end">
               <div>
                 <label style="display:block;font-size:11px;color:var(--text-2);margin-bottom:4px;font-family:var(--font-mono)">GITHUB USERNAME</label>
-                <input id="ky-set-gh-user" type="text" value="${esc(gh.username || '')}" placeholder="octocat" style="width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12.5px;font-family:var(--font-mono)" />
+                <input id="ky-set-gh-user" type="text" placeholder="e.g. octocat" style="width:100%;padding:9px 11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text-1)" />
               </div>
               <div>
                 <label style="display:block;font-size:11px;color:var(--text-2);margin-bottom:4px;font-family:var(--font-mono)">PERSONAL ACCESS TOKEN (PAT)</label>
-                <input id="ky-set-gh-token" type="password" placeholder="ghp_••••••••••••••••••••" style="width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12.5px;font-family:var(--font-mono)" />
+                <input id="ky-set-gh-token" type="password" placeholder="ghp_••••••••••••••••••••" style="width:100%;padding:9px 11px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text-1)" />
               </div>
-              <button id="ky-set-gh-connect" type="button" class="ky-btn ky-btn-primary ky-btn-sm">${gh.connected ? 'Update Token' : 'Connect'}</button>
+              <button id="ky-set-gh-connect" type="button" class="ky-btn ky-btn-primary ky-btn-sm">Connect</button>
             </div>
-            <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-3)">
-              <span>Tokens are stored server-side and never exposed to client responses.</span>
-              <a href="https://github.com/settings/tokens/new?scopes=repo" target="_blank" style="color:var(--text-1);text-decoration:underline;font-family:var(--font-mono)">Generate GitHub PAT ↗</a>
+            <div style="margin-top:10px;font-size:11.5px;color:var(--text-3)">
+              Need a token? <a href="https://github.com/settings/tokens/new?scopes=repo" target="_blank" style="text-decoration:underline;color:var(--text-1)">Generate a GitHub PAT (select 'repo' scope) ↗</a>
+            </div>
+          `}
+        </div>
+
+        <!-- 3. Workspace Details -->
+        <div class="ky-card" style="margin-bottom:20px;padding:24px">
+          <div class="ky-card-head" style="margin-bottom:18px">
+            <div>
+              <div class="ky-section-title" style="font-size:15px;font-weight:600">Workspace</div>
+              <div style="font-size:12px;color:var(--text-2);margin-top:2px">Organization details and mission capacity</div>
             </div>
           </div>
 
-          <div style="padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-            <div class="ky-eyebrow" style="margin-bottom:8px">CREATE NEW WORKSPACE PROJECT</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-              <div>
-                <label style="display:block;font-size:11px;color:var(--text-2);margin-bottom:4px;font-family:var(--font-mono)">PROJECT NAME</label>
-                <input id="ky-set-proj-name" type="text" placeholder="e.g. Payment Gateway Service" style="width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12.5px" />
-              </div>
-              <div>
-                <label style="display:block;font-size:11px;color:var(--text-2);margin-bottom:4px;font-family:var(--font-mono)">REPOSITORY URL (OPTIONAL)</label>
-                <input id="ky-set-proj-repo" type="text" placeholder="https://github.com/org/repo" style="width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12.5px;font-family:var(--font-mono)" />
-              </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div style="padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
+              <div class="ky-eyebrow">ORGANIZATION</div>
+              <div style="font-weight:600;font-size:14px;margin-top:4px">${esc(org.name || 'Personal Workspace')}</div>
+              <div style="font-size:11.5px;color:var(--text-3);margin-top:2px">Role: ${esc((org.role || 'OWNER').toUpperCase())}</div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end">
+            <div style="padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:space-between">
               <div>
-                <label style="display:block;font-size:11px;color:var(--text-2);margin-bottom:4px;font-family:var(--font-mono)">ARCHITECTURE DESCRIPTION</label>
-                <input id="ky-set-proj-desc" type="text" placeholder="Core stack, language, or target objectives…" style="width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12.5px" />
+                <div class="ky-eyebrow">MISSION CREDITS</div>
+                <div style="font-weight:700;font-size:18px;margin-top:2px;font-family:var(--font-mono)">${num(bal)} credits</div>
+                <div style="font-size:11.5px;color:var(--text-3)">~${Math.max(0, Math.floor(bal / 10))} autonomous missions</div>
               </div>
-              <button id="ky-set-proj-create" type="button" class="ky-btn ky-btn-primary ky-btn-sm">+ Create Project</button>
+              <a href="/pricing.html" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border)">Add Credits →</a>
             </div>
           </div>
         </div>
-      `;
-    } else if (activeTab === 'engine') {
-      bodyHtml = `
-        <div style="display:flex;flex-direction:column;gap:16px">
-          <div style="padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:space-between">
+
+        <!-- 4. Appearance -->
+        <div class="ky-card" style="margin-bottom:20px;padding:24px">
+          <div class="ky-card-head" style="margin-bottom:18px">
             <div>
-              <div class="ky-eyebrow">LLM ORCHESTRATION PROVIDER</div>
-              <div style="font-weight:600;font-size:14px;margin-top:4px;font-family:var(--font-mono)">${esc((prov.provider || 'gemini').toUpperCase())} — ${esc(prov.model || 'gemini-2.5-pro')}</div>
-              <div style="font-size:11.5px;color:var(--text-2);margin-top:2px">Powers Axiom (Orchestrator), Forge (Backend), Sentinel (QA), Aegis (Security), and Atlas (DB).</div>
+              <div class="ky-section-title" style="font-size:15px;font-weight:600">Appearance</div>
+              <div style="font-size:12px;color:var(--text-2);margin-top:2px">Choose your preferred visual theme</div>
             </div>
-            <span class="ky-badge ${prov.available !== false ? 'ky-badge-done' : 'ky-badge-warn'}">${prov.available !== false ? 'Operational' : 'Standby'}</span>
           </div>
 
-          <div style="padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-            <div class="ky-eyebrow" style="margin-bottom:8px">DEFAULT MISSION AUTONOMY MODE</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-              <button type="button" class="ky-set-execmode" data-mode="autopilot" style="text-align:left;padding:12px;border-radius:8px;background:var(--bg);border:1px solid ${curExecMode === 'autopilot' ? 'var(--text-1)' : 'var(--border)'};cursor:pointer">
-                <div style="font-weight:600;font-size:12.5px;display:flex;justify-content:space-between">
-                  <span>Full Autopilot</span>
-                  ${curExecMode === 'autopilot' ? '<span style="font-family:var(--font-mono);font-size:10px">ACTIVE</span>' : ''}
+          <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:12px">
+            ${[
+              ['noir', 'Dark (Noir)', 'Default high-contrast black'],
+              ['carbon', 'Carbon', 'Subtle dark charcoal'],
+              ['paper', 'Light (Paper)', 'Clean light theme'],
+            ].map(([val, label, desc]) => `
+              <button type="button" class="ky-theme-btn" data-theme-val="${val}" style="text-align:left;padding:12px 14px;border-radius:8px;background:var(--bg);border:1px solid ${curTheme === val ? 'var(--text-1)' : 'var(--border)'};cursor:pointer;transition:border-color .15s">
+                <div style="font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:space-between">
+                  <span>${label}</span>
+                  ${curTheme === val ? '<span style="font-size:10px;font-family:var(--font-mono);color:var(--accent)">ACTIVE</span>' : ''}
                 </div>
-                <div style="font-size:11px;color:var(--text-2);margin-top:4px">Agents plan, write code in sandbox, execute pytest verification, and deliver automatically.</div>
-              </button>
-              <button type="button" class="ky-set-execmode" data-mode="approval_required" style="text-align:left;padding:12px;border-radius:8px;background:var(--bg);border:1px solid ${curExecMode === 'approval_required' ? 'var(--text-1)' : 'var(--border)'};cursor:pointer">
-                <div style="font-weight:600;font-size:12.5px;display:flex;justify-content:space-between">
-                  <span>Approval Gate</span>
-                  ${curExecMode === 'approval_required' ? '<span style="font-family:var(--font-mono);font-size:10px">ACTIVE</span>' : ''}
-                </div>
-                <div style="font-size:11px;color:var(--text-2);margin-top:4px">Axiom generates the DAG architecture plan and waits for your sign-off before coding.</div>
-              </button>
-            </div>
-          </div>
-
-          <div style="padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-            <div class="ky-eyebrow" style="margin-bottom:6px">SANDBOX ISOLATION ARCHITECTURE</div>
-            <div style="font-family:var(--font-mono);font-size:12px;color:var(--text-1)">Method 1: E2B Firecracker MicroVM + Ephemeral Cleanroom Worktree</div>
-            <div style="font-size:11.5px;color:var(--text-2);margin-top:4px">All generated code is AST-verified and tested inside an isolated Linux sandbox before you inspect diffs or apply changes.</div>
-          </div>
-        </div>
-      `;
-    } else if (activeTab === 'flywheel') {
-      const totalTraj = tr.total_trajectories ?? 0;
-      const totalTok = tr.estimated_tokens ?? 0;
-      const readyPct = tr.readiness_percent ?? 0;
-      bodyHtml = `
-        <div style="display:flex;flex-direction:column;gap:16px">
-          <div style="padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-            <div class="ky-eyebrow">GOLDEN FINE-TUNING DATASET FLYWHEEL</div>
-            <div style="font-size:12px;color:var(--text-2);margin-top:4px">Automatically harvests verified, secret-scrubbed multi-agent coding trajectories (ShareGPT & ChatML JSONL) for custom LLM fine-tuning.</div>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px">
-              <div style="padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
-                <div class="ky-eyebrow">TRAJECTORIES</div>
-                <div style="font-family:var(--font-mono);font-size:16px;font-weight:700;margin-top:2px">${num(totalTraj)}</div>
-              </div>
-              <div style="padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
-                <div class="ky-eyebrow">HARVESTED TOKENS</div>
-                <div style="font-family:var(--font-mono);font-size:16px;font-weight:700;margin-top:2px">${compact(totalTok)}</div>
-              </div>
-              <div style="padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px">
-                <div class="ky-eyebrow">DATASET READINESS</div>
-                <div style="font-family:var(--font-mono);font-size:16px;font-weight:700;margin-top:2px">${readyPct}%</div>
-              </div>
-            </div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">
-              <button id="ky-set-harvest" type="button" class="ky-btn ky-btn-primary ky-btn-sm">Harvest Completed Missions</button>
-              <a href="/api/v1/training/download?format=chatml" class="ky-btn ky-btn-ghost ky-btn-sm" style="border:1px solid var(--border)">Download ChatML (.jsonl)</a>
-              <a href="/api/v1/training/download?format=sharegpt" class="ky-btn ky-btn-ghost ky-btn-sm" style="border:1px solid var(--border)">Download ShareGPT (.jsonl)</a>
-            </div>
-          </div>
-        </div>
-      `;
-    } else if (activeTab === 'appearance') {
-      bodyHtml = `
-        <div style="display:flex;flex-direction:column;gap:14px">
-          <div style="padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-            <div class="ky-eyebrow" style="margin-bottom:8px">COLOR THEME</div>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-              ${[
-                ['noir', 'Noir (#050505)'],
-                ['carbon', 'Carbon Slate'],
-                ['paper', 'Paper (Light)'],
-              ].map(([val, label]) => `
-                <button type="button" class="ky-btn ${curTheme === val ? 'ky-btn-primary' : 'ky-btn-ghost'} ky-btn-sm" data-set-attr="data-theme" data-set-key="kobits.theme" data-set-val="${val}" style="border:1px solid var(--border)">${label}</button>
-              `).join('')}
-            </div>
-          </div>
-
-          <div style="padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-            <div class="ky-eyebrow" style="margin-bottom:8px">INTERFACE DENSITY</div>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-              ${[
-                ['compact', 'Compact'],
-                ['default', 'Default'],
-                ['spacious', 'Spacious'],
-              ].map(([val, label]) => `
-                <button type="button" class="ky-btn ${curDensity === val ? 'ky-btn-primary' : 'ky-btn-ghost'} ky-btn-sm" data-set-attr="data-density" data-set-key="kobits.density" data-set-val="${val}" style="border:1px solid var(--border)">${label}</button>
-              `).join('')}
-            </div>
-          </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div style="padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-              <div class="ky-eyebrow" style="margin-bottom:8px">CANVAS WIDTH</div>
-              <div style="display:flex;gap:6px">
-                ${[
-                  ['standard', 'Standard'],
-                  ['wide', 'Wide'],
-                  ['full', 'Full'],
-                ].map(([val, label]) => `
-                  <button type="button" class="ky-btn ${curWidth === val ? 'ky-btn-primary' : 'ky-btn-ghost'} ky-btn-xs" data-set-attr="data-width" data-set-key="kobits.width" data-set-val="${val}" style="flex:1;border:1px solid var(--border)">${label}</button>
-                `).join('')}
-              </div>
-            </div>
-            <div style="padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-              <div class="ky-eyebrow" style="margin-bottom:8px">BACKDROP TEXTURE</div>
-              <div style="display:flex;gap:6px">
-                ${[
-                  ['grid', 'Grid'],
-                  ['dots', 'Dots'],
-                  ['solid', 'Solid'],
-                ].map(([val, label]) => `
-                  <button type="button" class="ky-btn ${curBg === val ? 'ky-btn-primary' : 'ky-btn-ghost'} ky-btn-xs" data-set-attr="data-bg" data-set-key="kobits.bg" data-set-val="${val}" style="flex:1;border:1px solid var(--border)">${label}</button>
-                `).join('')}
-              </div>
-            </div>
-          </div>
-
-          <div style="padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:space-between">
-            <div>
-              <div class="ky-eyebrow">INTERACTIVE PRODUCT WALKTHROUGH</div>
-              <div style="font-size:12px;color:var(--text-2);margin-top:2px">Replay the 4-step Kobits engineering architecture and cleanroom sandbox tour.</div>
-            </div>
-            <button id="ky-set-launch-tour" type="button" class="ky-btn ky-btn-ghost ky-btn-sm" style="border:1px solid var(--border)">Launch Tour</button>
-          </div>
-        </div>
-      `;
-    }
-
-    host.innerHTML = `
-      <div class="ky-modal-backdrop" id="ky-settings-backdrop">
-        <div class="ky-modal" role="dialog" aria-modal="true" aria-label="Workspace Settings" style="max-width:780px;width:95vw">
-          <div class="ky-modal-head">
-            <div>
-              <div class="ky-eyebrow">WORKSPACE CONFIGURATION</div>
-              <h3 class="ky-modal-title">Settings & Control Center</h3>
-            </div>
-            <button type="button" class="ky-btn ky-btn-ghost ky-btn-xs" id="ky-settings-close">✕ Close</button>
-          </div>
-
-          <div style="display:flex;gap:6px;padding:10px 20px;border-bottom:1px solid var(--border);overflow-x:auto;background:var(--bg-elevated)">
-            ${tabs.map(t => `
-              <button type="button" class="ky-btn ${activeTab === t.id ? 'ky-btn-primary' : 'ky-btn-ghost'} ky-btn-xs ky-set-tab" data-tab="${t.id}" style="font-family:var(--font-mono)">
-                ${esc(t.label)}
+                <div style="font-size:11px;color:var(--text-3);margin-top:4px">${desc}</div>
               </button>
             `).join('')}
           </div>
+        </div>
 
-          <div class="ky-modal-body" style="padding:20px;max-height:68vh;overflow-y:auto">
-            ${bodyHtml}
-          </div>
-
-          <div class="ky-modal-foot" style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-top:1px solid var(--border);background:var(--bg-elevated)">
-            <button type="button" id="ky-settings-signout" class="ky-btn ky-btn-ghost ky-btn-sm" style="color:var(--err-fg);border:1px solid var(--err-border);display:inline-flex;align-items:center;gap:6px">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-              <span>Sign Out</span>
+        <!-- 5. Account Actions / Sign Out -->
+        <div class="ky-card" style="border-color:rgba(239, 68, 68, 0.25);padding:24px">
+          <div class="ky-card-head" style="margin-bottom:0">
+            <div>
+              <div class="ky-section-title" style="font-size:15px;font-weight:600">Account Session</div>
+              <div style="font-size:12px;color:var(--text-2);margin-top:2px">Sign out of your active session on this device</div>
+            </div>
+            <button id="ky-settings-signout" type="button" class="ky-btn ky-btn-ghost ky-btn-sm" style="border-color:rgba(239,68,68,0.4);color:#ef4444">
+              Sign Out
             </button>
-            <button type="button" id="ky-settings-done" class="ky-btn ky-btn-primary ky-btn-sm">Done</button>
           </div>
         </div>
       </div>
     `;
 
-    // Wire close & signout
-    const closeModal = () => { host.innerHTML = ''; };
-    document.getElementById('ky-settings-close')?.addEventListener('click', closeModal);
-    document.getElementById('ky-settings-done')?.addEventListener('click', closeModal);
-    document.getElementById('ky-settings-backdrop')?.addEventListener('click', (ev) => {
-      if (ev.target.id === 'ky-settings-backdrop') closeModal();
-    });
-    document.getElementById('ky-settings-signout')?.addEventListener('click', performLogout);
-
-    // Wire tab switching
-    host.querySelectorAll('.ky-set-tab').forEach(btn => {
-      btn.addEventListener('click', () => {
-        activeTab = btn.getAttribute('data-tab');
-        renderModalShell();
-      });
-    });
-
-    // Wire Account Save Profile
+    // Wire Save Profile
     document.getElementById('ky-set-save-profile')?.addEventListener('click', async (ev) => {
       const btn = ev.currentTarget;
       const fullName = document.getElementById('ky-set-fullname')?.value?.trim();
@@ -1864,15 +1686,21 @@ async function openSettingsModal(activeTab = 'account') {
         });
         if (_settingsCache.user) _settingsCache.user.full_name = fullName;
         notify('Profile updated.', 'info');
-        renderModalShell();
+        renderContent();
       } catch (e) {
         notify('Failed to update profile.', 'error');
       } finally {
         btn.disabled = false;
+        btn.textContent = 'Save Changes';
       }
     });
 
-    // Wire GitHub Connect
+    // Wire GitHub Connect / Update
+    document.getElementById('ky-set-gh-toggle-update')?.addEventListener('click', () => {
+      const form = document.getElementById('ky-set-gh-update-form');
+      if (form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    });
+
     document.getElementById('ky-set-gh-connect')?.addEventListener('click', async (ev) => {
       const btn = ev.currentTarget;
       const username = document.getElementById('ky-set-gh-user')?.value?.trim();
@@ -1884,7 +1712,7 @@ async function openSettingsModal(activeTab = 'account') {
         await post('/github/connect', { username, token });
         _settingsCache.github = { connected: true, username };
         notify(`Connected GitHub account @${username}`, 'info');
-        renderModalShell();
+        renderContent();
       } catch (e) {
         notify(e.message || 'GitHub connection failed.', 'error');
         btn.disabled = false;
@@ -1892,98 +1720,40 @@ async function openSettingsModal(activeTab = 'account') {
       }
     });
 
-    // Wire Create New Project
-    document.getElementById('ky-set-proj-create')?.addEventListener('click', async (ev) => {
-      const btn = ev.currentTarget;
-      const name = document.getElementById('ky-set-proj-name')?.value?.trim();
-      const repository_url = document.getElementById('ky-set-proj-repo')?.value?.trim() || null;
-      const description = document.getElementById('ky-set-proj-desc')?.value?.trim() || 'Autonomous Engineering Project';
-      if (!name) return notify('Please enter a project name.', 'error');
-      btn.disabled = true;
-      btn.textContent = 'Creating…';
-      try {
-        const created = await post('/projects', { name, description, repository_url });
-        if (created && created.id) {
-          state.projectId = created.id;
-          localStorage.setItem('kobits.projectId', created.id);
-        }
-        notify(`Project "${name}" created!`, 'info');
-        closeModal();
-        await fetchDashboard();
-      } catch (e) {
-        notify(e.message || 'Failed to create project.', 'error');
-        btn.disabled = false;
-        btn.textContent = '+ Create Project';
-      }
-    });
-
-    // Wire Execution Mode toggle
-    host.querySelectorAll('.ky-set-execmode').forEach(btn => {
+    // Wire Theme buttons
+    view.querySelectorAll('.ky-theme-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const mode = btn.getAttribute('data-mode');
-        localStorage.setItem('kobits.execMode', mode);
-        notify(`Default mission mode set to ${mode === 'autopilot' ? 'Full Autopilot' : 'Approval Gate'}.`, 'info');
-        renderModalShell();
+        const val = btn.getAttribute('data-theme-val');
+        document.documentElement.setAttribute('data-theme', val);
+        localStorage.setItem('kobits.theme', val);
+        renderContent();
       });
     });
 
-    // Wire Flywheel Harvest
-    document.getElementById('ky-set-harvest')?.addEventListener('click', async (ev) => {
-      const btn = ev.currentTarget;
-      btn.disabled = true;
-      btn.textContent = 'Harvesting…';
-      try {
-        await post('/training/harvest', {});
-        const stats = await get('/training/stats').catch(() => null);
-        if (stats) _settingsCache.training = stats;
-        notify('Completed missions harvested into golden training dataset.', 'info');
-        renderModalShell();
-      } catch (e) {
-        notify(e.message || 'Harvest failed.', 'error');
-        btn.disabled = false;
-        btn.textContent = 'Harvest Completed Missions';
-      }
-    });
-
-    // Wire Appearance attribute toggles
-    host.querySelectorAll('[data-set-attr]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const attr = btn.getAttribute('data-set-attr');
-        const key = btn.getAttribute('data-set-key');
-        const val = btn.getAttribute('data-set-val');
-        document.documentElement.setAttribute(attr, val);
-        localStorage.setItem(key, val);
-        renderModalShell();
-      });
-    });
-
-    // Wire Launch Tour
-    document.getElementById('ky-set-launch-tour')?.addEventListener('click', () => {
-      closeModal();
-      openOnboardingWalkthrough(1);
-    });
+    // Wire Sign Out
+    document.getElementById('ky-settings-signout')?.addEventListener('click', performLogout);
   };
 
-  // Render immediately with cached data, then refresh in parallel from backend
-  renderModalShell();
+  // Render immediately with cached data
+  renderContent();
 
+  // Refresh in background
   try {
-    const [u, bal, gh, prov, tr] = await Promise.all([
+    const [u, bal, gh] = await Promise.all([
       get('/auth/me').catch(() => _settingsCache.user),
       get('/billing/balance').catch(() => _settingsCache.balance),
       get('/github/status').catch(() => _settingsCache.github),
-      get('/provider/health').catch(() => _settingsCache.provider),
-      get('/training/stats').catch(() => _settingsCache.training),
     ]);
     if (u) _settingsCache.user = u;
     if (bal) _settingsCache.balance = bal;
     if (gh) _settingsCache.github = gh;
-    if (prov) _settingsCache.provider = prov;
-    if (tr) _settingsCache.training = tr;
-    if (document.getElementById('ky-settings-backdrop')) {
-      renderModalShell();
-    }
+    renderContent();
   } catch (_) {}
+}
+
+function openSettingsModal() {
+  location.hash = '#settings';
+  renderSettingsPage();
 }
 
 // ── Real-World SaaS Product Onboarding Walkthrough (Linear/Vercel Style) ────
@@ -2270,7 +2040,7 @@ function initLiveWebSocket() {
 
 // ── Bootstrap ───────────────────────────────────────────────────────────────
 
-const initialHash = location.hash.replace(/^#\/?/, '');
+const initialHash = (location.hash || '').replace(/^#\/?/, '');
 if (['overview', 'milestones', 'deliverables', 'team', 'reports'].includes(initialHash)) {
   state.tab = initialHash;
 }
@@ -2278,6 +2048,12 @@ if (['overview', 'milestones', 'deliverables', 'team', 'reports'].includes(initi
 initTopBar();
 fetchDashboard();
 initLiveWebSocket();
+
+if (initialHash === 'settings') {
+  renderSettingsPage();
+} else if (initialHash === 'new-project') {
+  renderNewProjectPage();
+}
 
 // Auto-trigger onboarding walkthrough on first visit or when ?onboarding=true is present
 try {
