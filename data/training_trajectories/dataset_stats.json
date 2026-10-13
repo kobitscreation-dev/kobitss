@@ -1,10 +1,10 @@
 {
-  "total_trajectories": 23,
-  "total_tokens_approx": 1112409,
+  "total_trajectories": 24,
+  "total_tokens_approx": 1129476,
   "max_trajectory_tokens": 143484,
-  "avg_tokens_per_trajectory": 48366,
+  "avg_tokens_per_trajectory": 47062,
   "target_trajectories_milestone": 1000,
-  "readiness_percentage_for_200k_sft": 2.3,
+  "readiness_percentage_for_200k_sft": 2.4,
   "sharegpt_path": "C:\\Users\\Arvind Kumar\\.gemini\\antigravity\\scratch\\kobits\\data\\training_trajectories\\golden_trajectories_sharegpt.jsonl",
   "chatml_path": "C:\\Users\\Arvind Kumar\\.gemini\\antigravity\\scratch\\kobits\\data\\training_trajectories\\golden_trajectories_chatml.jsonl"
 }

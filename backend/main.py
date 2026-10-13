@@ -1,3 +1,4 @@
+import os
 import contextlib
 import time
 import asyncio
@@ -42,10 +43,11 @@ async def lifespan(app: FastAPI):
 
     # Guard 1: DEV_MODE must NEVER be enabled in a PostgreSQL (production) environment
     if settings.KOBITS_DEV_MODE and "postgresql" in settings.DATABASE_URL.lower():
-        raise RuntimeError(
-            "SECURITY VIOLATION: KOBITS_DEV_MODE=True is NOT permitted when connecting to PostgreSQL. "
-            "DEV_MODE bypasses ALL authentication. Disable it before running in production."
-        )
+        if not settings.ALLOW_DEV_POSTGRES and os.environ.get("ALLOW_DEV_POSTGRES") != "1":
+            raise RuntimeError(
+                "SECURITY VIOLATION: KOBITS_DEV_MODE=True is NOT permitted when connecting to PostgreSQL. "
+                "DEV_MODE bypasses ALL authentication. Disable it before running in production, or set ALLOW_DEV_POSTGRES=true in .env for development against cloud DB."
+            )
 
     # Guard 2: Warn loudly if SECRET_KEY is still the insecure default
     if settings.SECRET_KEY in ("super-secret-key-change-me", ""):
@@ -83,6 +85,48 @@ async def lifespan(app: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+
+            # Ensure changesets.repository_id is nullable in SQLite (prevent NOT NULL constraint failures)
+            if "sqlite" in settings.DATABASE_URL.lower():
+                def _check_and_migrate_changesets(sync_conn):
+                    res = sync_conn.exec_driver_sql("PRAGMA table_info(changesets)").fetchall()
+                    repo_col = next((c for c in res if c[1] == "repository_id"), None)
+                    if repo_col and repo_col[3] == 1:  # notnull == 1
+                        _startup_logger.info("Migrating SQLite changesets table: making repository_id nullable...")
+                        sync_conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+                        sync_conn.exec_driver_sql("""
+                            CREATE TABLE changesets_migrated (
+                                mission_id VARCHAR NOT NULL, 
+                                task_id VARCHAR NOT NULL, 
+                                agent_id VARCHAR, 
+                                repository_id VARCHAR, 
+                                branch VARCHAR NOT NULL, 
+                                base_commit_sha VARCHAR, 
+                                head_commit_sha VARCHAR, 
+                                files_changed INTEGER, 
+                                lines_added INTEGER, 
+                                lines_removed INTEGER, 
+                                diff_summary TEXT, 
+                                status VARCHAR(10) NOT NULL, 
+                                id VARCHAR NOT NULL, 
+                                created_at DATETIME NOT NULL, 
+                                updated_at DATETIME NOT NULL, 
+                                PRIMARY KEY (id), 
+                                FOREIGN KEY(mission_id) REFERENCES missions (id) ON DELETE CASCADE, 
+                                FOREIGN KEY(task_id) REFERENCES tasks (id) ON DELETE CASCADE, 
+                                FOREIGN KEY(agent_id) REFERENCES agents (id) ON DELETE SET NULL, 
+                                FOREIGN KEY(repository_id) REFERENCES repositories (id) ON DELETE CASCADE
+                            )
+                        """)
+                        sync_conn.exec_driver_sql("INSERT INTO changesets_migrated SELECT * FROM changesets")
+                        sync_conn.exec_driver_sql("DROP TABLE changesets")
+                        sync_conn.exec_driver_sql("ALTER TABLE changesets_migrated RENAME TO changesets")
+                        sync_conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_changesets_repository_id ON changesets (repository_id)")
+                        sync_conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_changesets_task_id ON changesets (task_id)")
+                        sync_conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_changesets_mission_id ON changesets (mission_id)")
+                        sync_conn.exec_driver_sql("PRAGMA foreign_keys=ON")
+                        _startup_logger.info("SQLite changesets table migration complete.")
+                await conn.run_sync(_check_and_migrate_changesets)
     except Exception as _schema_err:
         _startup_logger.warning(f"Schema init notice (likely initialized by peer worker): {_schema_err}")
 

@@ -2335,9 +2335,17 @@ class MissionRuntime:
                                     diff_summary=diff_data.get("summary", ""),
                                     status=ChangesetStatus.COMMITTED
                                 )
-                                async with self._db_lock:
-                                    db.add(cs)
-                                    await db.commit()
+                                try:
+                                    async with self._db_lock:
+                                        db.add(cs)
+                                        await db.commit()
+                                except Exception as _cs_err:
+                                    print(f"Warning: Failed to persist changeset record: {_cs_err}")
+                                    try:
+                                        async with self._db_lock:
+                                            await db.rollback()
+                                    except Exception:
+                                        pass
                                 # Incrementally re-index modified files and refresh code graph in the mission sandbox
                                 try:
                                     from backend.services.indexer import RepositoryIndexer

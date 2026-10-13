@@ -34,7 +34,7 @@ class RepositoryIndexer:
 
     IGNORE_DIRS = {
         ".git", "__pycache__", "node_modules", "venv", ".venv",
-        "dist", "build", ".kobits_sandboxes", "_worktrees", ".pytest_cache",
+        "dist", "build", ".kobits_sandboxes", "sandboxes", "_worktrees", ".pytest_cache",
         ".mypy_cache", ".next", ".nuxt", "coverage", "target", "vendor",
         "bower_components", "bundle", ".tox", ".serverless", "bin", "obj",
         ".idea", ".vscode", "tmp", "temp", "pods", "Pods", ".cache",

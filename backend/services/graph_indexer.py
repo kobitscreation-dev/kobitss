@@ -9,7 +9,7 @@ from backend.services.indexer import _JS_TS_DECL_RE, _GO_DECL_RE, _RUST_DECL_RE
 
 _IGNORE_DIRS = {
     ".git", "__pycache__", "node_modules", "venv", ".venv",
-    "dist", "build", ".kobits_sandboxes", "_worktrees", ".pytest_cache",
+    "dist", "build", ".kobits_sandboxes", "sandboxes", "_worktrees", ".pytest_cache",
     ".mypy_cache", ".next", ".nuxt", "coverage", "target", "vendor",
     "bower_components", "bundle", ".tox", ".serverless", "bin", "obj",
     ".idea", ".vscode", "tmp", "temp", "pods", "Pods", ".cache",

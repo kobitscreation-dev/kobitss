@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     BEDROCK_MODEL: str = "anthropic.claude-3-opus-20240229-v1:0"
     REAL_AI_TEST: bool = False
     KOBITS_DEV_MODE: bool = False
+    ALLOW_DEV_POSTGRES: bool = False
 
     # OAuth Provider Configuration
     GOOGLE_CLIENT_ID: Optional[str] = None

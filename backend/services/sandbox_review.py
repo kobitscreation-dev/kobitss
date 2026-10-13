@@ -192,8 +192,11 @@ async def persist_mission_deliverable(
             diff_summary=summary_json,
             status=ChangesetStatus.COMMITTED,
         )
-        db.add(cs)
-        await db.flush()
+        try:
+            db.add(cs)
+            await db.flush()
+        except Exception as _cs_err:
+            print(f"Warning: persist_mission_deliverable failed to flush Changeset: {_cs_err}")
 
     pr_info = None
     existing_pr = (

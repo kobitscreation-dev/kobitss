@@ -161,7 +161,9 @@ class AdaptivePlanner:
             "frontend": [
                 "frontend", "ui", "ux", "page", "view", "modal", "button", "css",
                 "html", "react", "dashboard", "portal", "component", "layout",
-                "sidebar", "navbar", "theme", "dark mode",
+                "sidebar", "navbar", "theme", "dark mode", "keyboard", "keypad",
+                "widget", "screen", "form", "input", "canvas", "slider", "dropdown",
+                "dialog", "website", "landing", "site", "webpage", "web app",
             ],
             "database": [
                 "database", "db", "sql", "sqlite", "postgres", "migration", "table",
