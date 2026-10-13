@@ -577,14 +577,12 @@ async def create_mission(
 
     # Verify Repository (if provided)
     base_commit_sha = None
-    active_branch = request.branch or "main"
+    active_branch = request.branch if (request.branch and request.branch.startswith("kobits/")) else None
     if request.repository_id:
         repo = await db.get(Repository, request.repository_id)
         if not repo or repo.project_id != resolved_pid:
             raise HTTPException(status_code=400, detail="Repository not attached to this project")
         base_commit_sha = getattr(repo, "current_commit_sha", None)
-        if not request.branch:
-            active_branch = getattr(repo, "selected_branch", "main") or "main"
 
     if request.requires_approval is not None:
         req_approval = bool(request.requires_approval)

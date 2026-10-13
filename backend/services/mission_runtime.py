@@ -552,12 +552,17 @@ class MissionRuntime:
                     return None
                     
             from backend.services.sandbox_manager import SandboxManager
-            if mission.active_branch:
+            if mission.active_branch and mission.active_branch.startswith("kobits/mission/"):
                 sess = SandboxManager.get_session_by_branch(mission.active_branch)
                 if sess:
                     return sess
 
-            branch_name = f"kobits/mission/{self.mission_id[:8]}"
+            mid = mission.id if mission else self.mission_id
+            branch_name = (
+                mission.active_branch
+                if (mission.active_branch and mission.active_branch.startswith("kobits/mission/"))
+                else f"kobits/mission/{mid[:8]}"
+            )
             project_root = os.environ.get("KOBITS_TARGET_WORKSPACE") or os.getcwd()
             created = False
             
@@ -2135,14 +2140,18 @@ class MissionRuntime:
             upstream_artifacts = self._build_bounded_upstream_context(dep_runs)
             
             # Setup sandbox branch if not set (for IMPLEMENTATION tasks)
-            if not mission.active_branch:
-                await self.initialize_sandbox(db, mission)
-
             from backend.services.sandbox_manager import SandboxManager
-            sb_sess = SandboxManager.get_session_by_branch(mission.active_branch)
+            sb_sess = (
+                SandboxManager.get_session_by_branch(mission.active_branch)
+                if (mission.active_branch and mission.active_branch.startswith("kobits/mission/"))
+                else None
+            )
+            if not sb_sess:
+                sb_sess = await self.initialize_sandbox(db, mission)
+
             if not sb_sess:
                 run.status = AgentRunStatus.FAILED
-                run.error = f"CRITICAL RECOVERY ERROR: Sandbox for active branch '{mission.active_branch}' not found. Aborting execution to prevent unisolated host modification."
+                run.error = f"CRITICAL RECOVERY ERROR: Sandbox for mission '{mission.id}' could not be initialized. Aborting execution."
                 run.completed_at = datetime.now(timezone.utc)
                 task.status = TaskStatus.FAILED
                 async with self._db_lock:

@@ -194,7 +194,7 @@ async function fetchDashboard(silent = false) {
       if (!silent) renderNewProjectPage();
       return;
     }
-    renderDashboard();
+    renderDashboard(silent);
   } catch (err) {
     const errMsg = String(err?.message || err || '');
     const isAuthErr = err?.status === 401 ||
@@ -303,7 +303,7 @@ function updateTopBarGitHubStatus(gh) {
 
 // ── Main Kyros View Renderer ────────────────────────────────────────────────
 
-function renderDashboard() {
+function renderDashboard(silent = false) {
   const view = document.getElementById('view') || document.getElementById('main-content');
   if (!view) return;
   const d = state.dashboard;
@@ -346,6 +346,72 @@ function renderDashboard() {
     ...m,
     sprintNumber: totalMissions - idx,
   }));
+
+  // Capture user drafts, focus, and selection range before DOM updates
+  const existingPrompt = document.getElementById('ky-mission-prompt');
+  if (existingPrompt && existingPrompt.value) {
+    state.draftPrompt = existingPrompt.value;
+  }
+  const isPromptFocused = existingPrompt ? (document.activeElement === existingPrompt) : false;
+  const promptSelStart = existingPrompt ? existingPrompt.selectionStart : null;
+  const promptSelEnd = existingPrompt ? existingPrompt.selectionEnd : null;
+
+  const existingBranch = document.getElementById('ky-mission-branch');
+  if (existingBranch) state.draftBranch = existingBranch.value;
+
+  const existingMode = document.getElementById('ky-mission-mode');
+  if (existingMode) state.draftMode = existingMode.value;
+
+  const existingSteer = document.getElementById('ky-steer-input');
+  const isSteerFocused = existingSteer ? (document.activeElement === existingSteer) : false;
+  const savedSteer = existingSteer ? existingSteer.value : '';
+
+  // SMART NON-DESTRUCTIVE REFRESH for background 8s polls:
+  // If already rendered on Overview, update ONLY telemetry without touching the prompt input!
+  const sprintContainer = document.getElementById('ky-current-sprint-container');
+  if (silent && sprintContainer && state.tab === 'overview') {
+    const totalTasks = Number(d.progress?.total_tasks || 0);
+    const completedTasks = Number(d.progress?.completed_tasks || 0);
+    const remainingTasks = Math.max(0, totalTasks - completedTasks);
+    const spend = d.spend || {};
+    const deliveredCount = milestones.filter(
+      (m) => m.status === 'COMPLETED' || (m.files_changed && m.files_changed > 0)
+    ).length;
+    const totalMilestones = milestones.length || (d.missions?.total ?? 0);
+
+    const selectedMission = milestones.find((m) => m.mission_id === state.selectedMissionId)
+      || (d.current ? milestones.find((m) => m.mission_id === d.current.mission_id) || d.current : null)
+      || milestones[0]
+      || null;
+
+    const sprintTasks = selectedMission?.tasks || [];
+    const sprintDone = selectedMission?.tasks_done ?? sprintTasks.filter((t) => t.status === 'COMPLETED').length;
+    const sprintTotal = selectedMission?.tasks_total ?? sprintTasks.length;
+    const sprintNum = selectedMission?.sprintNumber || milestones.length || 1;
+    const isRunning = selectedMission && RUNNING.has(selectedMission.status);
+    const recentDeliverables = milestones.slice(0, 6);
+
+    // 1. Update header progress
+    const pctEl = document.querySelector('.ky-proj-pct');
+    if (pctEl) pctEl.textContent = d.progress?.percent != null ? `${pct}%` : DASH;
+    const barEl = document.querySelector('.ky-master-bar span');
+    if (barEl) barEl.style.width = `${pct}%`;
+
+    // 2. Update KPI Grid
+    const kpiGrid = document.querySelector('.ky-kpi-grid');
+    if (kpiGrid) kpiGrid.innerHTML = renderKpiGridHtml(pct, deliveredCount, totalMilestones, spend, remainingTasks, d);
+
+    // 3. Update Current Sprint Card
+    sprintContainer.innerHTML = renderCurrentSprintHtml(selectedMission, sprintNum, milestones, sprintTasks, sprintDone, sprintTotal, isRunning);
+
+    // 4. Update Recent Deliverables
+    const delivsContainer = document.getElementById('ky-recent-deliverables-container');
+    if (delivsContainer) delivsContainer.innerHTML = renderRecentDeliverablesHtml(recentDeliverables, milestones);
+
+    // Re-wire sprint actions without re-binding or touching the prompt textarea
+    wireSprintEvents();
+    return;
+  }
 
   view.innerHTML = `
     <!-- Kyros Project Header & Master Progress Bar -->
@@ -396,6 +462,30 @@ function renderDashboard() {
       ${renderActiveTab(d, milestones)}
     </div>
   `;
+
+  // Restore prompt text, selection, and focus state if user had input
+  const newPrompt = document.getElementById('ky-mission-prompt');
+  if (newPrompt) {
+    if (state.draftPrompt) newPrompt.value = state.draftPrompt;
+    if (isPromptFocused) {
+      newPrompt.focus();
+      if (promptSelStart !== null && promptSelEnd !== null) {
+        try { newPrompt.setSelectionRange(promptSelStart, promptSelEnd); } catch {}
+      }
+    }
+  }
+
+  const newBranch = document.getElementById('ky-mission-branch');
+  if (newBranch && state.draftBranch) newBranch.value = state.draftBranch;
+
+  const newMode = document.getElementById('ky-mission-mode');
+  if (newMode && state.draftMode) newMode.value = state.draftMode;
+
+  const newSteer = document.getElementById('ky-steer-input');
+  if (newSteer && savedSteer) {
+    newSteer.value = savedSteer;
+    if (isSteerFocused) newSteer.focus();
+  }
 
   wireTabEvents();
 }
@@ -514,25 +604,44 @@ function renderOverviewTab(d, milestones) {
 
     <!-- 4 Kyros KPI Stat Cards (COMPLETE | DELIVERABLES | SPENT | REMAINING) -->
     <div class="ky-kpi-grid">
-      <div class="ky-kpi-card">
-        <div class="ky-kpi-label">COMPLETE</div>
-        <div class="ky-kpi-val">${pct != null ? `${pct}%` : DASH}</div>
-      </div>
-      <div class="ky-kpi-card">
-        <div class="ky-kpi-label">DELIVERABLES</div>
-        <div class="ky-kpi-val">${num(deliveredCount)}/${num(totalMilestones)}</div>
-      </div>
-      <div class="ky-kpi-card">
-        <div class="ky-kpi-label">SPENT</div>
-        <div class="ky-kpi-val">${fmtUsd(spend.usd)}</div>
-      </div>
-      <div class="ky-kpi-card">
-        <div class="ky-kpi-label">REMAINING</div>
-        <div class="ky-kpi-val">${remainingTasks > 0 ? `${num(remainingTasks)} tasks` : duration(d.avg_duration_seconds)}</div>
-      </div>
+      ${renderKpiGridHtml(pct, deliveredCount, totalMilestones, spend, remainingTasks, d)}
     </div>
 
     <!-- Full-Width CURRENT SPRINT Card (Exact Kyros Overview Layout) -->
+    <div id="ky-current-sprint-container">
+      ${renderCurrentSprintHtml(selectedMission, sprintNum, milestones, sprintTasks, sprintDone, sprintTotal, isRunning)}
+    </div>
+
+    <!-- RECENT DELIVERABLES Section (Exact Kyros Overview Bottom Section) -->
+    <div id="ky-recent-deliverables-container" style="margin-top:26px">
+      ${renderRecentDeliverablesHtml(recentDeliverables, milestones)}
+    </div>
+  `;
+}
+
+function renderKpiGridHtml(pct, deliveredCount, totalMilestones, spend, remainingTasks, d) {
+  return `
+    <div class="ky-kpi-card">
+      <div class="ky-kpi-label">COMPLETE</div>
+      <div class="ky-kpi-val">${pct != null ? `${pct}%` : DASH}</div>
+    </div>
+    <div class="ky-kpi-card">
+      <div class="ky-kpi-label">DELIVERABLES</div>
+      <div class="ky-kpi-val">${num(deliveredCount)}/${num(totalMilestones)}</div>
+    </div>
+    <div class="ky-kpi-card">
+      <div class="ky-kpi-label">SPENT</div>
+      <div class="ky-kpi-val">${fmtUsd(spend?.usd)}</div>
+    </div>
+    <div class="ky-kpi-card">
+      <div class="ky-kpi-label">REMAINING</div>
+      <div class="ky-kpi-val">${remainingTasks > 0 ? `${num(remainingTasks)} tasks` : duration(d?.avg_duration_seconds)}</div>
+    </div>
+  `;
+}
+
+function renderCurrentSprintHtml(selectedMission, sprintNum, milestones, sprintTasks, sprintDone, sprintTotal, isRunning) {
+  return `
     <div class="ky-card">
       <div class="ky-card-head" style="margin-bottom:14px;align-items:flex-start">
         <div style="min-width:0">
@@ -590,19 +699,20 @@ function renderOverviewTab(d, milestones) {
         </div>
       ` : `<div style="color:var(--text-3);padding:20px 0">Use the prompt box above or CLI to launch a mission and track sprint tasks.</div>`}
     </div>
+  `;
+}
 
-    <!-- RECENT DELIVERABLES Section (Exact Kyros Overview Bottom Section) -->
-    <div style="margin-top:26px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <div class="ky-eyebrow">RECENT DELIVERABLES</div>
-        <button type="button" class="ky-btn ky-btn-ghost ky-btn-xs" data-goto-tab="deliverables">View All (${milestones.length}) →</button>
-      </div>
-      ${recentDeliverables.length ? `
-        <div class="ky-deliv-grid">
-          ${recentDeliverables.map(renderDeliverableCard).join('')}
-        </div>
-      ` : `<div class="ky-card" style="color:var(--text-3)">No deliverables recorded yet.</div>`}
+function renderRecentDeliverablesHtml(recentDeliverables, milestones) {
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="ky-eyebrow">RECENT DELIVERABLES</div>
+      <button type="button" class="ky-btn ky-btn-ghost ky-btn-xs" data-goto-tab="deliverables">View All (${milestones.length}) →</button>
     </div>
+    ${recentDeliverables.length ? `
+      <div class="ky-deliv-grid">
+        ${recentDeliverables.map(renderDeliverableCard).join('')}
+      </div>
+    ` : `<div class="ky-card" style="color:var(--text-3)">No deliverables recorded yet.</div>`}
   `;
 }
 
@@ -877,63 +987,12 @@ function renderReportsTab(d, milestones) {
 
 // ── Event Wiring ────────────────────────────────────────────────────────────
 
-function wireTabEvents() {
-  document.querySelectorAll('.ky-tab[data-tab]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      state.tab = btn.dataset.tab;
-      location.hash = `#${state.tab}`;
-      renderDashboard();
-    });
-  });
-
-  document.querySelectorAll('[data-goto-tab]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      state.tab = btn.dataset.gotoTab;
-      location.hash = `#${state.tab}`;
-      renderDashboard();
-    });
-  });
-
-  const settingsTab = document.getElementById('ky-tab-settings-nav');
-  if (settingsTab) {
-    settingsTab.addEventListener('click', () => {
-      location.hash = '#settings';
-      renderSettingsPage();
-    });
-  }
-
+function wireSprintEvents() {
   const sprintSel = document.getElementById('ky-sprint-select');
   if (sprintSel) {
     sprintSel.addEventListener('change', () => {
       state.selectedMissionId = sprintSel.value;
       renderDashboard();
-    });
-  }
-
-  document.querySelectorAll('#ky-deliv-filters button[data-df]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      state.delivFilter = btn.dataset.df;
-      renderDashboard();
-    });
-  });
-
-  document.querySelectorAll('#ky-team-filters button[data-tf]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      state.teamFilter = btn.dataset.tf;
-      renderDashboard();
-    });
-  });
-
-  const teamSearch = document.getElementById('ky-team-search');
-  if (teamSearch) {
-    teamSearch.addEventListener('input', () => {
-      state.teamQuery = teamSearch.value;
-      renderDashboard();
-      const input = document.getElementById('ky-team-search');
-      if (input) {
-        input.focus();
-        input.setSelectionRange(input.value.length, input.value.length);
-      }
     });
   }
 
@@ -973,6 +1032,91 @@ function wireTabEvents() {
     });
   });
 
+  // Mid-Flight Steering
+  const steerInput = document.getElementById('ky-steer-input');
+  const steerBtn = document.getElementById('ky-steer-btn');
+  if (steerBtn && steerInput) {
+    const doSteer = async () => {
+      const text = steerInput.value.trim();
+      const mid = steerBtn.dataset.steerId;
+      if (!text || !mid) return;
+      steerBtn.disabled = true;
+      try {
+        await post(`/missions/${encodeURIComponent(mid)}/steer`, { instruction: text });
+        notify('💬 Steering instruction injected into agent context!');
+        steerInput.value = '';
+        await fetchDashboard(true);
+      } catch (err) {
+        notify(`Steer failed: ${err.message}`, 'error');
+      } finally {
+        steerBtn.disabled = false;
+      }
+    };
+    steerBtn.addEventListener('click', doSteer);
+    steerInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        doSteer();
+      }
+    });
+  }
+}
+
+function wireTabEvents() {
+  document.querySelectorAll('.ky-tab[data-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.tab = btn.dataset.tab;
+      location.hash = `#${state.tab}`;
+      renderDashboard();
+    });
+  });
+
+  document.querySelectorAll('[data-goto-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.tab = btn.dataset.gotoTab;
+      location.hash = `#${state.tab}`;
+      renderDashboard();
+    });
+  });
+
+  const settingsTab = document.getElementById('ky-tab-settings-nav');
+  if (settingsTab) {
+    settingsTab.addEventListener('click', () => {
+      location.hash = '#settings';
+      renderSettingsPage();
+    });
+  }
+
+  document.querySelectorAll('#ky-deliv-filters button[data-df]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.delivFilter = btn.dataset.df;
+      renderDashboard();
+    });
+  });
+
+  document.querySelectorAll('#ky-team-filters button[data-tf]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.teamFilter = btn.dataset.tf;
+      renderDashboard();
+    });
+  });
+
+  const teamSearch = document.getElementById('ky-team-search');
+  if (teamSearch) {
+    teamSearch.addEventListener('input', () => {
+      state.teamQuery = teamSearch.value;
+      renderDashboard();
+      const input = document.getElementById('ky-team-search');
+      if (input) {
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+    });
+  }
+
+  // Wire dynamic sprint cards, inspector, and steering
+  wireSprintEvents();
+
   // New Project triggers inside the dashboard header
   document.querySelectorAll('[data-open-new-project]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
@@ -985,6 +1129,10 @@ function wireTabEvents() {
   const promptInput = document.getElementById('ky-mission-prompt');
   const launchBtn = document.getElementById('ky-mission-submit');
   if (launchBtn && promptInput) {
+    promptInput.addEventListener('input', (e) => {
+      state.draftPrompt = e.target.value;
+    });
+
     const doLaunch = async () => {
       const text = promptInput.value.trim();
       if (!text) {
@@ -1014,6 +1162,7 @@ function wireTabEvents() {
         }
         notify('🚀 Mission launched into cleanroom sandbox!');
         promptInput.value = '';
+        state.draftPrompt = '';
         state.selectedMissionId = res.mission_id || res.id;
         await fetchDashboard(true);
       } catch (err) {
@@ -1031,35 +1180,6 @@ function wireTabEvents() {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey || !e.shiftKey)) {
         e.preventDefault();
         doLaunch();
-      }
-    });
-  }
-
-  // Mid-Flight Steering
-  const steerInput = document.getElementById('ky-steer-input');
-  const steerBtn = document.getElementById('ky-steer-btn');
-  if (steerBtn && steerInput) {
-    const doSteer = async () => {
-      const text = steerInput.value.trim();
-      const mid = steerBtn.dataset.steerId;
-      if (!text || !mid) return;
-      steerBtn.disabled = true;
-      try {
-        await post(`/missions/${encodeURIComponent(mid)}/steer`, { instruction: text });
-        notify('💬 Steering instruction injected into agent context!');
-        steerInput.value = '';
-        await fetchDashboard(true);
-      } catch (err) {
-        notify(`Steer failed: ${err.message}`, 'error');
-      } finally {
-        steerBtn.disabled = false;
-      }
-    };
-    steerBtn.addEventListener('click', doSteer);
-    steerInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        doSteer();
       }
     });
   }
