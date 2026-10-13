@@ -23,7 +23,7 @@ class LedgerTransaction(Base):
     currency: Mapped[str] = mapped_column(String, default="credits")
     reference_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True) # e.g. stripe session ID or mission ID
     status: Mapped[str] = mapped_column(String, default="completed")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     metadata_json: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     idempotency_key: Mapped[Optional[str]] = mapped_column(String, nullable=True, unique=True, index=True)
 
