@@ -1688,4 +1688,32 @@ button, select, input, textarea { font: inherit; color: inherit; }
   margin: 0 0 12px 0;
 }
 
+/* ── Settings View Navigation ──────────────────────────────── */
+.settings-nav-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-3, #71717a);
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px 6px 0 0;
+}
+.settings-nav-btn:hover {
+  color: var(--text-1, #ffffff);
+  background: rgba(255, 255, 255, 0.03);
+}
+.settings-nav-btn.active {
+  color: var(--text-1, #ffffff);
+  font-weight: 600;
+  border-bottom-color: var(--primary, #ffffff);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+
 
