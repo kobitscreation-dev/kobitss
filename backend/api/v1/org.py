@@ -18,7 +18,7 @@ from backend.models.organization import User, OrganizationMember
 from backend.models.project import Activity, Project, Task, TaskStatus
 from backend.models.mission import Mission, MissionStatus
 from backend.models.agent import Agent, AgentRun, ApprovalRequest, ApprovalStatus as RunApprovalStatus
-from backend.models.github import PullRequest, Changeset
+from backend.models.github import PullRequest, Changeset, GitHubConnection, GitHubConnectionStatus
 from backend.api.deps import get_current_active_user
 
 router = APIRouter()
@@ -492,4 +492,17 @@ async def get_dashboard(
             for e in activity
         ],
     })
+
+    # GitHub account connection status for the active user/org
+    gh_conn_stmt = select(GitHubConnection).where(
+        GitHubConnection.organization_id == org_id,
+        GitHubConnection.user_id == current_user.id,
+        GitHubConnection.status == GitHubConnectionStatus.CONNECTED,
+    )
+    gh_conn = (await db.execute(gh_conn_stmt)).scalars().first()
+    base["github"] = {
+        "connected": bool(gh_conn),
+        "username": gh_conn.github_username if gh_conn else None,
+    }
+
     return base

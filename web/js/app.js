@@ -239,18 +239,37 @@ async function fetchDashboard(silent = false) {
 
 function populateProjectSelect(data) {
   const sel = document.getElementById('ky-project-select');
-  if (!sel) return;
-  const projects = data?.projects || [];
-  const activeId = data?.project?.id || '';
-  if (projects.length > 0) {
-    sel.innerHTML = projects.map((p) =>
-      `<option value="${esc(p.id)}" ${p.id === activeId ? 'selected' : ''}>${esc(p.name)}</option>`
-    ).join('') + `<option value="__new__">+ Create New Project…</option>`;
+  if (sel) {
+    const projects = data?.projects || [];
+    const activeId = data?.project?.id || '';
+    if (projects.length > 0) {
+      sel.innerHTML = projects.map((p) =>
+        `<option value="${esc(p.id)}" ${p.id === activeId ? 'selected' : ''}>${esc(p.name)}</option>`
+      ).join('') + `<option value="__new__">+ Create New Project…</option>`;
+    } else {
+      sel.innerHTML = `
+        <option value="default" selected>Default Workspace (Ready)</option>
+        <option value="__new__">+ Create New Project…</option>
+      `;
+    }
+  }
+  updateTopBarGitHubStatus(data?.github || _settingsCache.github);
+}
+
+function updateTopBarGitHubStatus(gh) {
+  const ghLabel = document.getElementById('ky-topbar-gh-label');
+  const ghBtn = document.getElementById('ky-topbar-github');
+  if (!ghLabel || !ghBtn) return;
+  if (gh && gh.connected && gh.username) {
+    ghLabel.textContent = `@${gh.username}`;
+    ghBtn.style.color = 'var(--text-1)';
+    ghBtn.style.borderColor = 'var(--text-1)';
+    ghBtn.title = `Connected to GitHub as @${gh.username} (Click to manage)`;
   } else {
-    sel.innerHTML = `
-      <option value="default" selected>Default Workspace (Ready)</option>
-      <option value="__new__">+ Create New Project…</option>
-    `;
+    ghLabel.textContent = 'Connect GitHub';
+    ghBtn.style.color = 'var(--text-2)';
+    ghBtn.style.borderColor = 'var(--border)';
+    ghBtn.title = 'Click to connect your GitHub Personal Access Token in Settings';
   }
 }
 
@@ -382,8 +401,40 @@ function renderOverviewTab(d, milestones) {
   const recentDeliverables = milestones.slice(0, 6);
 
   const isRunning = selectedMission && RUNNING.has(selectedMission.status);
+  const gh = d.github || _settingsCache.github || {};
+  const ghConnected = Boolean(gh.connected && gh.username);
 
   return `
+    <!-- GitHub Integration Status Card -->
+    ${!ghConnected ? `
+      <div class="ky-card" style="padding:14px 18px;margin-bottom:18px;background:var(--surface-2);border-color:var(--border-strong);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:34px;height:34px;border-radius:6px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/></svg>
+          </div>
+          <div>
+            <div style="font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:8px">
+              <span>Connect Your GitHub Account</span>
+              <span class="ky-badge" style="font-size:10px">Setup Required</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-2);margin-top:2px">Connect a Personal Access Token (PAT) so autonomous agents can clone repositories, run sandboxes, and create Pull Requests.</div>
+          </div>
+        </div>
+        <a href="#settings" class="ky-btn ky-btn-primary ky-btn-xs" style="text-decoration:none;white-space:nowrap;display:inline-flex;align-items:center;gap:6px">
+          <span>Connect GitHub in Settings →</span>
+        </a>
+      </div>
+    ` : `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:7px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;font-size:11.5px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/></svg>
+          <span style="color:var(--text-2)">GitHub Connected:</span>
+          <span style="font-weight:600;color:var(--text-1)">@${esc(gh.username)}</span>
+        </div>
+        <a href="#settings" style="color:var(--text-3);text-decoration:underline">Manage Token in Settings</a>
+      </div>
+    `}
+
     <!-- Kyros Mission Launch Console (Interactive Input) -->
     <div class="ky-prompt-console">
       <div class="ky-prompt-header">
@@ -1399,6 +1450,9 @@ function renderNewProjectPage() {
   const host = document.getElementById('ky-modal-host');
   if (host) host.innerHTML = '';
 
+  const gh = _settingsCache.github || (typeof localStorage !== 'undefined' && localStorage.getItem('kobits.gh_user') ? { connected: true, username: localStorage.getItem('kobits.gh_user') } : {});
+  const ghConnected = Boolean(gh && gh.connected && gh.username);
+
   view.innerHTML = `
     <div class="ky-newproject-container" style="max-width:680px;margin:0 auto;padding:12px 0 60px">
       <!-- Back Navigation & Header -->
@@ -1439,6 +1493,21 @@ function renderNewProjectPage() {
             </label>
             <input id="ky-np-repo" type="text" placeholder="https://github.com/organization/repository" style="width:100%;padding:10px 13px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--font-mono);color:var(--text-1);outline:none" />
             <div style="font-size:12px;color:var(--text-3);margin-top:5px">Connect an existing GitHub repo, or leave blank to start a new workspace.</div>
+
+            <!-- GitHub Account Status / PAT Helper -->
+            <div style="margin-top:10px;padding:10px 13px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+              <div style="display:flex;align-items:center;gap:8px">
+                <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/></svg>
+                ${ghConnected ? `
+                  <span style="color:var(--text-2)">GitHub: <strong style="color:var(--text-1)">@${esc(gh.username)}</strong> connected for automated branch creation</span>
+                ` : `
+                  <span style="color:var(--text-2)">GitHub account not connected yet.</span>
+                `}
+              </div>
+              <a href="#settings" class="ky-btn ky-btn-ghost ky-btn-xs" style="text-decoration:none;border:1px solid var(--border)">
+                ${ghConnected ? 'Settings' : 'Connect PAT in Settings →'}
+              </a>
+            </div>
           </div>
 
           <!-- Default Branch -->

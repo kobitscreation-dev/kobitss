@@ -437,14 +437,25 @@ index 0000000..9b62a4f
       };
     }
 
-    // 9. Interactive actions (Approve, Apply, Retry, Cancel, Start mission)
+    // 9. GitHub connection
+    if (path === '/github/status') {
+      const savedGh = typeof localStorage !== 'undefined' ? localStorage.getItem('kobits.gh_user') : null;
+      return savedGh ? { connected: true, username: savedGh } : { connected: false };
+    }
+    if (path === '/github/connect' && method === 'POST') {
+      const u = body?.username || 'octocat';
+      if (typeof localStorage !== 'undefined') localStorage.setItem('kobits.gh_user', u);
+      return { status: "success", message: `Connected to GitHub as @${u}` };
+    }
+
+    // 10. Interactive actions (Approve, Apply, Retry, Cancel, Start mission)
     if (method === 'POST') {
       if (path.includes('/missions/projects/') && path.includes('/missions')) {
         const newId = "demo-msn-" + Math.random().toString(36).substring(2, 7);
         return { mission_id: newId, status: "PLANNING" };
       }
       return { success: true, message: "Operation completed." };
-  }
+    }
 
   return null;
 }
