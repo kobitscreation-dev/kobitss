@@ -30,6 +30,8 @@ from backend.models.memory import *
 from backend.models.audit_log import AuditLog
 from backend.models.password_reset import PasswordResetToken
 from backend.models.waitlist import WaitlistLead
+from backend.models.durable_job import DurableJob, JobStatus
+
 
 from backend.api.v1 import auth, projects, agents, github, missions, memory, tools
 
@@ -246,8 +248,15 @@ async def lifespan(app: FastAPI):
             )
             res = await db.execute(stmt)
             for m in res.scalars().all():
-                print(f"Resuming active mission {m.id}")
-                asyncio.create_task(MissionRuntime(m.id, m.organization_id, m.created_by).execute())
+                print(f"Resuming active mission {m.id} via durable queue")
+                from backend.services.durable_queue import DurableQueue
+                await DurableQueue.enqueue(
+                    task_type="EXECUTE_MISSION",
+                    payload={"mission_id": m.id, "org_id": m.organization_id, "user_id": m.created_by},
+                    queue_name="missions",
+                    priority=20,
+                    job_id=f"resume_mission_{m.id}",
+                )
         except Exception as _resume_err:
             await db.rollback()
             _startup_logger.warning(f"Mission recovery warning: {_resume_err}")
@@ -259,7 +268,26 @@ async def lifespan(app: FastAPI):
     except Exception as _tool_err:
         _startup_logger.warning(f"Custom tools load warning: {_tool_err}")
 
+    # Start PostgreSQL Durable Worker Pool
+    from backend.services.durable_queue import DurableQueue, get_worker_pool
+    worker_pool = None
+    try:
+        await DurableQueue.init_schema()
+        worker_pool = get_worker_pool()
+        await worker_pool.start()
+        _startup_logger.info("PostgreSQL Durable Worker Pool (FOR UPDATE SKIP LOCKED) successfully started.")
+    except Exception as _wq_err:
+        _startup_logger.error(f"Failed to start Durable Worker Pool: {_wq_err}")
+
     yield
+
+    # Cleanly drain and stop worker pool on server shutdown
+    if worker_pool:
+        try:
+            await worker_pool.stop(drain_timeout=15.0)
+        except Exception as _stop_err:
+            _startup_logger.warning(f"Worker pool shutdown notice: {_stop_err}")
+
     await engine.dispose()
 
 

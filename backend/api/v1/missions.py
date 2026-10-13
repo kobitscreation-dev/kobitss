@@ -651,9 +651,14 @@ async def create_mission(
             job_id=f"job_mission_{mission.id}",
         )
         if os.environ.get("KOBITS_NO_AUTO_EXECUTE") != "1":
-            from backend.services.mission_runtime import MissionRuntime
-            import asyncio
-            asyncio.create_task(MissionRuntime(mission.id, membership.organization_id, current_user.id).execute())
+            from backend.services.durable_queue import DurableQueue
+            await DurableQueue.enqueue(
+                task_type="EXECUTE_MISSION",
+                payload={"mission_id": mission.id, "org_id": membership.organization_id, "user_id": current_user.id},
+                queue_name="missions",
+                priority=10,
+                job_id=f"mission_{mission.id}",
+            )
 
     return {
         "status": mission.status.value,
@@ -919,9 +924,14 @@ async def approve_mission(
         pass
 
     if os.environ.get("KOBITS_NO_AUTO_EXECUTE") != "1":
-        from backend.services.mission_runtime import MissionRuntime
-        import asyncio
-        asyncio.create_task(MissionRuntime(mission.id, membership.organization_id, current_user.id).execute())
+        from backend.services.durable_queue import DurableQueue
+        await DurableQueue.enqueue(
+            task_type="EXECUTE_MISSION",
+            payload={"mission_id": mission.id, "org_id": membership.organization_id, "user_id": current_user.id},
+            queue_name="missions",
+            priority=20,
+            job_id=f"mission_{mission.id}",
+        )
     return {
         "status": "APPROVED",
         "mission_id": mission.id,
@@ -1110,9 +1120,14 @@ async def retry_mission(
         pass
 
     if os.environ.get("KOBITS_NO_AUTO_EXECUTE") != "1":
-        from backend.services.mission_runtime import MissionRuntime
-        import asyncio
-        asyncio.create_task(MissionRuntime(mission.id, mission.organization_id, current_user.id).execute())
+        from backend.services.durable_queue import DurableQueue
+        await DurableQueue.enqueue(
+            task_type="EXECUTE_MISSION",
+            payload={"mission_id": mission.id, "org_id": mission.organization_id, "user_id": current_user.id},
+            queue_name="missions",
+            priority=15,
+            job_id=f"mission_{mission.id}",
+        )
 
     return {
         "status": "RETRYING",
@@ -1512,9 +1527,14 @@ async def resume_mission(
     await db.commit()
 
     if os.environ.get("KOBITS_NO_AUTO_EXECUTE") != "1":
-        from backend.services.mission_runtime import MissionRuntime
-        import asyncio
-        asyncio.create_task(MissionRuntime(mission.id, mission.organization_id, current_user.id).execute())
+        from backend.services.durable_queue import DurableQueue
+        await DurableQueue.enqueue(
+            task_type="EXECUTE_MISSION",
+            payload={"mission_id": mission.id, "org_id": mission.organization_id, "user_id": current_user.id},
+            queue_name="missions",
+            priority=15,
+            job_id=f"mission_{mission.id}",
+        )
 
     return {"status": "success", "mission_id": mission.id}
 
