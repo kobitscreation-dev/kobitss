@@ -475,11 +475,81 @@ app.include_router(training.router, prefix="/api/v1/training", tags=["Model Fine
 
 class WaitlistRequest(BaseModel):
     email: str
+    full_name: Optional[str] = None
+    company: Optional[str] = None
+    use_case: Optional[str] = None
+    github_handle: Optional[str] = None
 
 
 @app.post("/api/apply")
+@app.post("/api/v1/waitlist/apply")
 async def apply_waitlist(req: WaitlistRequest):
-    return {"message": "Success"}
+    from backend.models.waitlist import WaitlistLead
+    from backend.core.database import AsyncSessionLocal
+    from sqlalchemy import select
+    from fastapi import HTTPException
+    
+    clean_email = (req.email or "").strip().lower()
+    if not clean_email or "@" not in clean_email or "." not in clean_email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="Please enter a valid email address.")
+
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(WaitlistLead).where(WaitlistLead.email == clean_email))
+        existing = res.scalar_one_or_none()
+        if existing:
+            if req.full_name:
+                existing.full_name = req.full_name
+            if req.company:
+                existing.company = req.company
+            if req.use_case:
+                existing.use_case = req.use_case
+            if req.github_handle:
+                existing.github_handle = req.github_handle
+            await db.commit()
+            return {
+                "status": "success",
+                "message": "Your application was already received! We have updated your details and will notify you soon."
+            }
+
+        lead = WaitlistLead(
+            email=clean_email,
+            full_name=req.full_name,
+            company=req.company,
+            use_case=req.use_case,
+            github_handle=req.github_handle,
+            status="PENDING"
+        )
+        db.add(lead)
+        await db.commit()
+        return {
+            "status": "success",
+            "message": "You're on the early access list! We review applications daily and will send an invitation to your email."
+        }
+
+
+@app.get("/api/v1/waitlist/leads")
+async def list_waitlist_leads():
+    """Retrieve all waitlist early access submissions."""
+    from backend.models.waitlist import WaitlistLead
+    from backend.core.database import AsyncSessionLocal
+    from sqlalchemy import select
+    
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(WaitlistLead).order_by(WaitlistLead.created_at.desc()))
+        leads = res.scalars().all()
+        return [
+            {
+                "id": l.id,
+                "email": l.email,
+                "full_name": l.full_name,
+                "company": l.company,
+                "use_case": l.use_case,
+                "github_handle": l.github_handle,
+                "status": l.status,
+                "created_at": l.created_at.isoformat() if l.created_at else None
+            }
+            for l in leads
+        ]
 
 
 @app.get("/api/health")

@@ -353,7 +353,7 @@
             </div>
             <div class="flex items-center gap-4">
                 <a href="/portal.html#login" class="text-zinc-400 hover:text-white text-xs transition-colors font-mono uppercase">Sign in</a>
-                <a href="/portal.html#login" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-medium hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)] hover:scale-[1.02]">Start building</a>
+                <button type="button" data-open-early-access="1" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-medium hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)] hover:scale-[1.02] cursor-pointer">Apply for Early Access</button>
             </div>
         </div>
     </nav>
@@ -375,9 +375,9 @@
                     Kobits takes business intent in plain English, decomposes the engineering plan, spins up isolated execution sandboxes, and verifies every commit with real test suites before landing.
                 </p>
                 <div class="flex flex-wrap items-center gap-5 mb-10">
-                    <a href="/portal.html#login" class="inline-flex items-center gap-2 bg-white text-black px-6 py-2.5 rounded-full text-xs font-semibold hover:bg-zinc-200 transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:scale-[1.02]">
-                        Start a mission <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
-                    </a>
+                    <button type="button" data-open-early-access="1" class="inline-flex items-center gap-2 bg-white text-black px-6 py-2.5 rounded-full text-xs font-semibold hover:bg-zinc-200 transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:scale-[1.02] cursor-pointer">
+                        Apply for Early Access <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                    </button>
                     <a href="/engineering.html" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-mono text-zinc-400 hover:text-white border border-zinc-800 hover:border-zinc-700 bg-zinc-950/60 transition-colors">
                         Read Engineering Spec →
                     </a>
@@ -1737,6 +1737,145 @@
         }
       } catch (_) {}
     })();
+
+    // Early Access Application Modal Logic
+    (function initEarlyAccessModal() {
+      const modal = document.getElementById('modal-early-access');
+      const form = document.getElementById('form-early-access');
+      const successView = document.getElementById('ea-success');
+      const closeBtn = document.getElementById('close-early-access');
+      const doneBtn = document.getElementById('btn-done-early-access');
+      const submitBtn = document.getElementById('btn-submit-early-access');
+
+      function openModal() {
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        if (form) form.classList.remove('hidden');
+        if (successView) successView.classList.add('hidden');
+        const emailInput = document.getElementById('ea-email');
+        if (emailInput) setTimeout(() => emailInput.focus(), 80);
+      }
+
+      function closeModal() {
+        if (!modal) return;
+        modal.classList.add('hidden');
+      }
+
+      document.querySelectorAll('[data-open-early-access]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          openModal();
+        });
+      });
+
+      closeBtn?.addEventListener('click', closeModal);
+      doneBtn?.addEventListener('click', closeModal);
+      modal?.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+      });
+
+      if (window.location.search.includes('open_apply=1') || window.location.hash === '#early-access') {
+        setTimeout(openModal, 200);
+      }
+
+      form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('ea-email')?.value?.trim();
+        const fullName = document.getElementById('ea-name')?.value?.trim();
+        const company = document.getElementById('ea-company')?.value?.trim();
+        const useCase = document.getElementById('ea-usecase')?.value?.trim();
+
+        if (!email) return;
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Submitting…';
+        }
+
+        try {
+          const res = await fetch('/api/v1/waitlist/apply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: email,
+              full_name: fullName,
+              company: company,
+              use_case: useCase
+            })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) {
+            form.classList.add('hidden');
+            successView.classList.remove('hidden');
+            if (window.lucide) lucide.createIcons();
+          } else {
+            alert(data.detail || data.message || 'Submission failed. Please try again.');
+          }
+        } catch (err) {
+          alert('Failed to connect to server. Please try again.');
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Submit Application';
+          }
+        }
+      });
+    })();
     </script>
+
+    <!-- EARLY ACCESS APPLICATION MODAL -->
+    <div id="modal-early-access" class="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-label="Apply for Early Access">
+        <div class="bg-[#0c0c0e] border border-zinc-800 rounded-2xl max-w-md w-full p-6 md:p-8 relative shadow-2xl">
+            <button id="close-early-access" type="button" class="absolute top-4 right-4 text-zinc-400 hover:text-white transition-colors p-1 cursor-pointer" aria-label="Close modal">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <div class="mb-6">
+                <div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full border border-zinc-800 bg-zinc-900 text-[11px] font-mono text-zinc-400 mb-3">
+                    <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+                    <span>PRIVATE ACCESS BATCH</span>
+                </div>
+                <h3 class="text-xl font-semibold text-white">Apply for Early Access</h3>
+                <p class="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                    Kobits provides cleanroom sandboxes and autonomous verification for engineering teams. Tell us about your stack to join the rollout.
+                </p>
+            </div>
+
+            <form id="form-early-access" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-mono text-zinc-400 mb-1.5">WORK EMAIL *</label>
+                    <input type="email" id="ea-email" required placeholder="alex@company.com" class="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors font-mono">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-mono text-zinc-400 mb-1.5">FULL NAME</label>
+                        <input type="text" id="ea-name" placeholder="Alex Chen" class="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-mono text-zinc-400 mb-1.5">COMPANY / TEAM</label>
+                        <input type="text" id="ea-company" placeholder="Acme Inc." class="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-mono text-zinc-400 mb-1.5">WHAT WOULD YOU LIKE KOBITS TO BUILD?</label>
+                    <textarea id="ea-usecase" rows="2" placeholder="e.g. Microservice backend refactoring, automated pytest suites, Rust consensus..." class="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors"></textarea>
+                </div>
+                <button type="submit" id="btn-submit-early-access" class="w-full py-2.5 bg-white text-black font-semibold text-xs rounded-lg hover:bg-zinc-200 transition-colors shadow-[0_0_15px_rgba(255,255,255,0.15)] flex items-center justify-center gap-2 cursor-pointer">
+                    <span>Submit Application</span>
+                </button>
+            </form>
+
+            <div id="ea-success" class="hidden text-center py-6">
+                <div class="w-12 h-12 rounded-full bg-white/10 text-white flex items-center justify-center mx-auto mb-3">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <h4 class="text-base font-semibold text-white">Application Received!</h4>
+                <p class="text-xs text-zinc-400 mt-2 leading-relaxed">
+                    You're on the early access list. We review submissions daily and will send an invitation email to get you started.
+                </p>
+                <button type="button" id="btn-done-early-access" class="mt-5 px-5 py-2 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-xs font-mono text-white rounded-lg transition-colors cursor-pointer">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
