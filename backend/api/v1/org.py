@@ -15,7 +15,7 @@ from sqlalchemy import select, func
 
 from backend.core.database import get_db
 from backend.models.organization import User, OrganizationMember
-from backend.models.project import Activity, Project, Task, TaskStatus
+from backend.models.project import Activity, Project, ProjectStatus, Task, TaskStatus
 from backend.models.mission import Mission, MissionStatus
 from backend.models.agent import Agent, AgentRun, ApprovalRequest, ApprovalStatus as RunApprovalStatus
 from backend.models.github import PullRequest, Changeset, GitHubConnection, GitHubConnectionStatus
@@ -74,11 +74,9 @@ def _scan_sandbox_index() -> Dict[str, Dict[str, Any]]:
 
 
 async def _get_org(db: AsyncSession, user_id: str) -> OrganizationMember:
-    """Return the user's primary org membership."""
-    result = await db.execute(
-        select(OrganizationMember).where(OrganizationMember.user_id == user_id)
-    )
-    return result.scalars().first()
+    """Return the user's primary org membership, auto-provisioning if missing."""
+    from backend.services.auth_service import get_user_default_org
+    return await get_user_default_org(db, user_id)
 
 
 @router.get("/activity")
@@ -144,20 +142,33 @@ async def get_dashboard(
     Where no source data exists the value is null (never a placeholder number).
     """
     membership = await _get_org(db, current_user.id)
-    if not membership:
-        raise HTTPException(status_code=403, detail="No organisation membership")
     org_id = membership.organization_id
 
     projects = (await db.execute(
         select(Project).where(Project.organization_id == org_id).order_by(Project.updated_at.desc())
     )).scalars().all()
 
+    if not projects:
+        import uuid
+        default_proj = Project(
+            id=str(uuid.uuid4()),
+            name="Primary Engineering Workspace",
+            description="Autonomous multi-agent software engineering workspace.",
+            status=ProjectStatus.READY,
+            progress=0,
+            health_score=100,
+            organization_id=org_id,
+            created_by=current_user.id,
+        )
+        db.add(default_proj)
+        await db.commit()
+        await db.refresh(default_proj)
+        projects = [default_proj]
+
     base: Dict[str, Any] = {
         "projects": [{"id": p.id, "name": p.name, "status": _enum(p.status)} for p in projects],
         "project": None,
     }
-    if not projects:
-        return base
 
     project = next((p for p in projects if p.id == project_id), None) if project_id else projects[0]
     if project is None:

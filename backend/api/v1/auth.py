@@ -294,6 +294,9 @@ async def login(
     access_token = _issue_user_token(user)
     _set_session_cookie(response, access_token)
 
+    from backend.services.auth_service import get_user_default_org
+    await get_user_default_org(db, user.id)
+
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -315,6 +318,8 @@ async def restore_session(request: Request, response: Response, db: AsyncSession
         raise HTTPException(status_code=401, detail="No session token provided")
 
     user = await get_current_user(token=raw_token, db=db)
+    from backend.services.auth_service import get_user_default_org
+    await get_user_default_org(db, user.id)
     fresh_token = _issue_user_token(user)
     _set_session_cookie(response, fresh_token)
     return {"status": "ok", "access_token": fresh_token, "user_id": user.id}

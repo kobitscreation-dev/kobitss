@@ -34,6 +34,9 @@ async def get_current_user(token: str = None, db: AsyncSession = Depends(get_db)
                 db.add(member)
                 await db.commit()
                 await db.refresh(user)
+            else:
+                from backend.services.auth_service import get_user_default_org
+                await get_user_default_org(db, user.id)
             return user
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

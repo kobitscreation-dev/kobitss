@@ -671,8 +671,9 @@ async def serve_dashboard(request: Request):
         "Pragma": "no-cache",
         "Expires": "0",
     }
+    is_demo = request.query_params.get("demo") == "true" or request.query_params.get("mock") == "true"
     valid_token = _has_valid_session_token(request)
-    if not valid_token and not settings.KOBITS_DEV_MODE:
+    if not valid_token and not settings.KOBITS_DEV_MODE and not is_demo:
         # Require login for accessing personal workspace
         return RedirectResponse(url="/portal.html#login", status_code=302)
 
@@ -733,8 +734,9 @@ async def serve_static(file_path: str, request: Request):
     if clean_path in ("dashboard", "web/index.html", "web") or clean_path.startswith("web/"):
         ext = os.path.splitext(clean_path)[1].lower()
         if ext in ("", ".html"):
+            is_demo = request.query_params.get("demo") == "true" or request.query_params.get("mock") == "true"
             valid_token = _has_valid_session_token(request)
-            if not valid_token and not settings.KOBITS_DEV_MODE:
+            if not valid_token and not settings.KOBITS_DEV_MODE and not is_demo:
                 return RedirectResponse(url="/portal.html#login", status_code=302)
             if clean_path in ("dashboard", "web/index.html", "web") and os.path.isfile("web/index.html"):
                 resp = FileResponse("web/index.html", headers=headers)

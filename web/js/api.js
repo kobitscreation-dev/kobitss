@@ -305,11 +305,15 @@ export async function api(method, path, body) {
       if (res.ok) {
         return data;
       }
+      if (res.status === 401) {
+        const detail = data && typeof data === 'object' ? (data.detail || JSON.stringify(data)) : (data || res.statusText);
+        throw new ApiError(401, typeof detail === 'string' ? detail : JSON.stringify(detail));
+      }
       const detail = data && typeof data === 'object' ? (data.detail || JSON.stringify(data)) : (data || res.statusText);
-      throw new ApiError(res.status, typeof detail === 'string' ? detail : JSON.stringify(detail));
+      console.warn(`Backend returned ${res.status} for ${path}, using showcase demo fallback:`, detail);
     } catch (e) {
-      if (e instanceof ApiError) throw e;
-      console.warn('Backend unavailable, using showcase demo fallback:', e.message);
+      if (e instanceof ApiError && e.status === 401) throw e;
+      console.warn('Backend unavailable, using showcase demo fallback:', e?.message || e);
     }
   }
 

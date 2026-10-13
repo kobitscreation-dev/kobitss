@@ -23,12 +23,8 @@ from backend.services.sandbox_manager import SandboxManager
 router = APIRouter(tags=["github"])
 
 async def get_user_default_org(db: AsyncSession, user_id: str) -> OrganizationMember:
-    stmt = select(OrganizationMember).where(OrganizationMember.user_id == user_id)
-    result = await db.execute(stmt)
-    membership = result.scalars().first()
-    if not membership:
-        raise HTTPException(status_code=403, detail="User not part of an organization")
-    return membership
+    from backend.services.auth_service import get_user_default_org as _get_default_org
+    return await _get_default_org(db, user_id)
 
 class ConnectRequest(BaseModel):
     token: str

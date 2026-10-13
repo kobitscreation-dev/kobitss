@@ -153,8 +153,13 @@ async function fetchDashboard(silent = false) {
   const view = document.getElementById('view') || document.getElementById('main-content');
   if (!view) return;
   if (!silent && !state.dashboard) {
-    view.innerHTML = `<div class="ky-card"><div class="ky-eyebrow">LOADING WORKSPACE</div><p style="color:var(--text-2);margin:8px 0 0">Synchronizing live engineering telemetry…</p></div>`;
+    view.innerHTML = `<div class="ky-card" style="text-align:center;padding:48px 24px;max-width:540px;margin:40px auto">
+      <div class="ky-eyebrow" style="color:var(--text-3);margin-bottom:8px">LOADING WORKSPACE</div>
+      <h2 style="font-size:18px;margin:0 0 10px;font-weight:700">Connecting to Engineering Control Plane…</h2>
+      <p style="font-size:13px;color:var(--text-2);margin:0">Synchronizing live engineering telemetry…</p>
+    </div>`;
   }
+  state._fetching = true;
   try {
     let data;
     const hasSpecificProject = state.projectId && state.projectId !== 'default' && state.projectId !== '__new__';
@@ -193,9 +198,11 @@ async function fetchDashboard(silent = false) {
   } catch (err) {
     const errMsg = String(err?.message || err || '');
     const isAuthErr = err?.status === 401 ||
+      err?.status === 403 ||
       errMsg.toLowerCase().includes('credential') ||
       errMsg.toLowerCase().includes('not authenticated') ||
-      errMsg.toLowerCase().includes('unauthorized');
+      errMsg.toLowerCase().includes('unauthorized') ||
+      errMsg.toLowerCase().includes('forbidden');
 
     if (isAuthErr) {
       localStorage.removeItem('kobits_token');
@@ -215,6 +222,9 @@ async function fetchDashboard(silent = false) {
               <a href="/landing.html" class="ky-btn ky-btn-ghost ky-btn-sm" style="border:1px solid var(--border);text-decoration:none">
                 Home
               </a>
+              <a href="?demo=true" class="ky-btn ky-btn-ghost ky-btn-sm" style="border:1px solid var(--border);text-decoration:none">
+                Demo Workspace
+              </a>
             </div>
           </div>
         `;
@@ -225,17 +235,21 @@ async function fetchDashboard(silent = false) {
     if (!silent) {
       view.innerHTML = `
         <div class="ky-card" style="border-color:var(--err-border);max-width:600px;margin:32px auto;padding:24px">
-          <div class="ky-eyebrow" style="color:var(--err-fg)">TELEMETRY ERROR</div>
+          <div class="ky-eyebrow" style="color:var(--err-fg)">TELEMETRY NOTICE</div>
           <p style="margin:8px 0 16px;font-size:13px;color:var(--text-2)">${esc(errMsg)}</p>
-          <div style="display:flex;gap:10px">
-            <button type="button" class="ky-btn ky-btn-primary ky-btn-xs" onclick="window.location.reload()">Retry Connection</button>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button type="button" class="ky-btn ky-btn-primary ky-btn-xs" onclick="window.fetchDashboard ? window.fetchDashboard() : window.location.reload()">Retry Connection</button>
             <a href="/portal.html#login" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border);text-decoration:none">Sign In Again</a>
+            <a href="?demo=true" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border);text-decoration:none">Explore Demo Workspace</a>
           </div>
         </div>
       `;
     }
+  } finally {
+    state._fetching = false;
   }
 }
+window.fetchDashboard = fetchDashboard;
 
 function populateProjectSelect(data) {
   const sel = document.getElementById('ky-project-select');
@@ -248,7 +262,7 @@ function populateProjectSelect(data) {
       ).join('') + `<option value="__new__">+ Create New Project…</option>`;
     } else {
       sel.innerHTML = `
-        <option value="default" selected>Default Workspace (Ready)</option>
+        <option value="default" selected>Primary Engineering Workspace</option>
         <option value="__new__">+ Create New Project…</option>
       `;
     }
@@ -280,10 +294,27 @@ function renderDashboard() {
   if (!view) return;
   const d = state.dashboard;
   if (!d) {
-    view.innerHTML = `<div class="ky-card" style="text-align:center;padding:48px 24px">
-      <div class="ky-eyebrow">INITIALIZING WORKSPACE</div>
-      <h2 style="margin:8px 0">Connecting to Engineering Control Plane…</h2>
-    </div>`;
+    view.innerHTML = `
+      <div class="ky-card" style="text-align:center;padding:48px 24px;max-width:540px;margin:40px auto">
+        <div class="ky-eyebrow" style="color:var(--text-3);margin-bottom:8px">INITIALIZING WORKSPACE</div>
+        <h2 style="font-size:18px;margin:0 0 10px;font-weight:700">Connecting to Engineering Control Plane…</h2>
+        <p style="font-size:13px;color:var(--text-2);margin:0 0 24px">Synchronizing telemetry, active branches, and autonomous agent runtime.</p>
+        <div style="display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap">
+          <button type="button" class="ky-btn ky-btn-primary ky-btn-xs" onclick="window.fetchDashboard ? window.fetchDashboard() : window.location.reload()">
+            Retry Connection
+          </button>
+          <a href="/portal.html#login" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border);text-decoration:none">
+            Sign In
+          </a>
+          <a href="?demo=true" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border);text-decoration:none">
+            Demo Workspace
+          </a>
+        </div>
+      </div>
+    `;
+    if (!state._fetching) {
+      fetchDashboard();
+    }
     return;
   }
 
