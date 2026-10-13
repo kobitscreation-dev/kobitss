@@ -316,6 +316,16 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
         content={"detail": "A secure database constraint or internal database error occurred."}
     )
 
+@app.exception_handler(404)
+async def not_found_exception_handler(request: Request, exc):
+    import os
+    if request.url.path.startswith("/api/"):
+        detail = getattr(exc, "detail", "Not found")
+        return JSONResponse(status_code=404, content={"detail": detail})
+    if os.path.isfile("404.html"):
+        return FileResponse("404.html", status_code=404)
+    return JSONResponse(status_code=404, content={"detail": "Page not found"})
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled Exception on {request.method} {request.url.path}: {exc}")
@@ -747,15 +757,17 @@ async def serve_static(file_path: str, request: Request):
     # Check root workspace file
     if os.path.isfile(clean_path):
         return FileResponse(clean_path, headers=headers)
+        
+    # Check if clean URL matches an HTML page (e.g., /pricing -> pricing.html)
+    if os.path.isfile(clean_path + ".html"):
+        return FileResponse(clean_path + ".html", headers=headers)
     
     # Never return HTML for code/asset file extensions
     ext = os.path.splitext(clean_path)[1].lower()
     if ext in (".js", ".mjs", ".css", ".json", ".svg", ".png", ".jpg", ".jpeg", ".ico", ".woff", ".woff2", ".ttf"):
         raise HTTPException(status_code=404, detail=f"Static asset '{clean_path}' not found")
         
-    # SPA fallback for page navigation
-    if os.path.isfile("web/index.html"):
-        return FileResponse("web/index.html", headers=headers)
-    if os.path.isfile("portal.html"):
-        return FileResponse("portal.html", headers=headers)
+    # 404 fallback
+    if os.path.isfile("404.html"):
+        return FileResponse("404.html", status_code=404)
     raise HTTPException(status_code=404, detail="Page not found")

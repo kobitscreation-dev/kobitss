@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kobits - AI Engineering Platform</title>
+    <title>Kobits — Memory & Knowledge Architecture</title>
+    <meta name="description" content="Explore Kobits persistent project memory and cross-session knowledge architecture: architectural rules, codebase conventions, and historical decision context.">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="alternate icon" href="/favicon.ico">
     
     <!-- Fonts: Inter and JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,10 +27,10 @@
                     },
                     colors: {
                         kb: {
-                            bg: '#09090b',
-                            surface: '#121214',
-                            border: '#27272a',
-                            accent: '#3b82f6',
+                            bg: '#050505',
+                            surface: '#0f0f11',
+                            border: '#222226',
+                            accent: '#ffffff',
                         }
                     },
                     letterSpacing: {
@@ -122,26 +127,46 @@
 <body class="selection:bg-blue-500/30">
 
     <!-- NAVIGATION -->
-    <nav class="fixed top-0 left-0 w-full h-14 bg-kb-bg/80 backdrop-blur-md hairline-b z-50 flex items-center justify-between px-6">
+    <nav class="fixed top-0 left-0 w-full h-14 bg-[#050505]/90 backdrop-blur-md hairline-b z-50 flex items-center justify-between px-6">
         <div class="flex items-center">
-            <a href="/index.html" class="font-medium tracking-tight text-white flex items-center gap-2">
-                <div class="w-5 h-5 bg-white rounded-sm"></div>
-                KOBITS
+            <a href="/" class="font-medium tracking-tight text-white flex items-center gap-2.5 group">
+                <div class="w-7 h-7 flex items-center justify-center text-white transition-transform group-hover:scale-110">
+                    <svg class="w-6 h-6" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+                        <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+                        <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <span class="font-bold tracking-tight text-sm text-white">KOBITS</span>
             </a>
         </div>
-        <div class="flex items-center gap-6 text-sm">
-            <div class="hidden lg:flex items-center gap-6 text-zinc-400 border-r border-zinc-800 pr-6">
+        <div class="flex items-center gap-3 text-sm">
+            <div class="hidden lg:flex items-center gap-6 text-zinc-400 border-r border-zinc-800 pr-6 text-xs font-mono uppercase tracking-wider">
                 <a href="/product.html" class="hover:text-white transition-colors">Product</a>
-                <a href="/how-it-works.html" class="hover:text-white transition-colors">How It Works</a>
                 <a href="/engineering.html" class="hover:text-white transition-colors">Engineering</a>
+                <a href="/how-it-works.html" class="hover:text-white transition-colors">How It Works</a>
                 <a href="/security.html" class="hover:text-white transition-colors">Security</a>
-                <a href="/memory.html" class="text-white font-medium transition-colors">Memory</a>
+                <a href="/pricing.html" class="hover:text-white transition-colors">Pricing</a>
             </div>
-            <div class="flex items-center gap-4">
-                <a href="/landing.html?open_apply=1" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-medium hover:bg-zinc-200 transition-colors">Apply for Early Access</a>
+            <div class="flex items-center gap-3">
+                <a href="/landing.html?open_apply=1" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-medium hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)] hover:scale-[1.02]">Apply for Early Access</a>
+                <button type="button" id="ky-memory-menu-toggle" class="lg:hidden text-zinc-400 hover:text-white p-1 rounded-md focus:outline-none" aria-label="Toggle navigation menu">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
             </div>
         </div>
     </nav>
+
+    <!-- MOBILE NAVIGATION DRAWER -->
+    <div id="ky-memory-menu" class="fixed top-14 left-0 w-full bg-zinc-950/95 border-b border-zinc-800 backdrop-blur-xl z-40 px-6 py-6 hidden flex-col gap-4 font-mono text-xs uppercase tracking-wider transition-all lg:hidden">
+        <a href="/product.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Product</a>
+        <a href="/engineering.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Engineering</a>
+        <a href="/how-it-works.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">How It Works</a>
+        <a href="/security.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Security</a>
+        <a href="/pricing.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Pricing</a>
+        <a href="/portal.html#login" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Sign In</a>
+        <a href="mailto:kobitscreation@gmail.com" class="text-zinc-400 hover:text-white py-2 lowercase font-sans">kobitscreation@gmail.com</a>
+    </div>
 <!-- SECTION 07: MEMORY -->
     <section id="memory" class="py-32 hairline-t">
         <div class="max-w-[1400px] mx-auto px-6 text-center">
@@ -213,13 +238,40 @@
     </section>
 
     <!-- FOOTER -->
-    <footer class="py-12 hairline-t text-center text-zinc-600 text-[10px] font-mono tracking-widest bg-kb-bg">
-        KOBITS AI ENGINEERING
+    <footer class="py-12 hairline-t text-center text-zinc-600 text-[10px] font-mono tracking-widest bg-[#050505] flex flex-col sm:flex-row items-center justify-between px-8 max-w-[1400px] mx-auto gap-4">
+        <a href="/" class="flex items-center gap-2.5 text-zinc-400 hover:text-white transition-colors">
+            <div class="w-4 h-4 text-zinc-400">
+                <svg viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+                    <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+                    <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <span>KOBITS AI ENGINEERING</span>
+        </a>
+        <div class="flex flex-wrap items-center justify-center gap-6 text-zinc-500">
+            <a href="/product.html" class="hover:text-zinc-300 transition-colors">PRODUCT</a>
+            <a href="/engineering.html" class="hover:text-zinc-300 transition-colors">ENGINEERING</a>
+            <a href="/how-it-works.html" class="hover:text-zinc-300 transition-colors">HOW IT WORKS</a>
+            <a href="/security.html" class="hover:text-zinc-300 transition-colors">SECURITY</a>
+            <a href="/pricing.html" class="hover:text-zinc-300 transition-colors">PRICING</a>
+            <a href="mailto:kobitscreation@gmail.com" class="hover:text-white transition-colors lowercase font-sans">kobitscreation@gmail.com</a>
+        </div>
+        <div>
+            <span>© 2026 KOBITS</span>
+        </div>
     </footer>
 
     <script>
-        // Initialize Lucide icons
         lucide.createIcons();
+        const toggleBtn = document.getElementById('ky-memory-menu-toggle');
+        const mobileMenu = document.getElementById('ky-memory-menu');
+        if (toggleBtn && mobileMenu) {
+            toggleBtn.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+                mobileMenu.classList.toggle('flex');
+            });
+        }
     </script>
 </body>
 </html>

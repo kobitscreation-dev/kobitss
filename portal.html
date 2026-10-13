@@ -7,6 +7,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Kobits — AI Engineering Workspace</title>
+  <meta name="description" content="Kobits Engineering Workspace: manage autonomous engineering missions, inspect cleanroom microVM task execution, review test evidence, and configure repository integrations.">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="alternate icon" href="/favicon.ico">
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -669,11 +674,15 @@
 
       <!-- Logo -->
       <div style="text-align:center;margin-bottom:32px">
-        <div style="display:inline-flex;align-items:center;gap:8px;margin-bottom:6px">
-          <div style="width:6px;height:24px;background:var(--kb-accent);border-radius:2px"></div>
-          <span style="font-family:var(--kb-font-mono);font-size:15px;font-weight:700;letter-spacing:0.08em">KOBITS</span>
-        </div>
-        <p class="kb-meta">AI engineering for your software</p>
+        <a href="/" style="display:inline-flex;align-items:center;gap:10px;margin-bottom:6px;text-decoration:none;color:#fff" title="Kobits Home">
+          <svg style="width:28px;height:28px" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+            <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+            <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+          </svg>
+          <span style="font-family:var(--kb-font-mono);font-size:16px;font-weight:700;letter-spacing:0.08em">KOBITS</span>
+        </a>
+        <p class="kb-meta">Autonomous multi-agent software engineering</p>
       </div>
 
       <!-- Error state -->
@@ -783,6 +792,11 @@
           <i data-lucide="arrow-right" style="width:12px;height:12px"></i>
         </button>
       </div>
+      <div style="margin-top:14px;text-align:center">
+        <a href="mailto:kobitscreation@gmail.com" class="kb-meta" style="color:var(--kb-text-3);text-decoration:none;font-size:11px">
+          Need support? kobitscreation@gmail.com
+        </a>
+      </div>
     </div>
   </div>
 
@@ -801,10 +815,16 @@
         
         <!-- Sidebar Header (User Profile & Actions) -->
         <div class="h-14 flex items-center justify-between px-4 shrink-0">
-            <div class="flex items-center gap-2 text-zinc-100 font-medium tracking-tight">
-                <div class="w-5 h-5 bg-white rounded-sm"></div>
-                KOBITS
-            </div>
+            <a href="/" class="flex items-center gap-2 text-zinc-100 font-medium tracking-tight hover:text-white transition-colors" title="Kobits Home">
+                <div class="w-5 h-5 flex items-center justify-center text-white">
+                    <svg class="w-5 h-5" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+                        <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+                        <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <span>KOBITS</span>
+            </a>
             <button class="md:hidden text-zinc-400 hover:text-zinc-200" id="kb-sidebar-close">
                 <i data-lucide="x" class="w-4 h-4"></i>
             </button>

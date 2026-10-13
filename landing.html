@@ -3,8 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kobits — AI Engineering Platform</title>
+    <title>Kobits — Autonomous Multi-Agent Software Engineering</title>
+    <meta name="description" content="Kobits is an autonomous multi-agent software engineering platform. Specialized AI agents plan, build, test, and security-verify code in cleanroom microVM sandboxes before merge.">
     
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 38 38' fill='none'%3E%3Crect width='38' height='38' rx='8' fill='%23050505'/%3E%3Cpath d='M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4' stroke='%23ffffff' stroke-width='3.8' stroke-linecap='round'/%3E%3Cpath d='M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2' stroke='%23ffffff' stroke-width='3.5' stroke-linecap='round'/%3E%3Cpath d='M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8' stroke='%23ffffff' stroke-width='3.7' stroke-linecap='round'/%3E%3C/svg%3E">
+
     <!-- Fonts: Inter and JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -343,7 +348,7 @@
                 <span class="font-bold tracking-tight text-sm text-white">KOBITS</span>
             </a>
         </div>
-        <div class="flex items-center gap-6 text-sm">
+        <div class="flex items-center gap-3 text-sm">
             <div class="hidden lg:flex items-center gap-6 text-zinc-400 border-r border-zinc-800 pr-6 text-xs font-mono uppercase tracking-wider">
                 <a href="/product.html" class="hover:text-white transition-colors">Product</a>
                 <a href="/engineering.html" class="hover:text-white transition-colors">Engineering</a>
@@ -351,11 +356,25 @@
                 <a href="/security.html" class="hover:text-white transition-colors">Security</a>
                 <a href="/pricing.html" class="hover:text-white transition-colors">Pricing</a>
             </div>
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-3">
                 <button type="button" data-open-early-access="1" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-medium hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)] hover:scale-[1.02] cursor-pointer">Apply for Early Access</button>
+                <button type="button" id="ky-mobile-menu-toggle" class="lg:hidden text-zinc-400 hover:text-white p-1 rounded-md focus:outline-none" aria-label="Toggle navigation menu">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
             </div>
         </div>
     </nav>
+
+    <!-- MOBILE NAVIGATION DRAWER -->
+    <div id="ky-mobile-menu" class="fixed top-14 left-0 w-full bg-zinc-950/95 border-b border-zinc-800 backdrop-blur-xl z-40 px-6 py-6 hidden flex-col gap-4 font-mono text-xs uppercase tracking-wider transition-all lg:hidden">
+        <a href="/product.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Product</a>
+        <a href="/engineering.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Engineering</a>
+        <a href="/how-it-works.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">How It Works</a>
+        <a href="/security.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Security</a>
+        <a href="/pricing.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Pricing</a>
+        <a href="/portal.html#login" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Sign In</a>
+        <a href="mailto:kobitscreation@gmail.com" class="text-zinc-400 hover:text-white py-2 lowercase font-sans">kobitscreation@gmail.com</a>
+    </div>
 
     <!-- HERO SECTION: DESIGNER SPLIT LAYOUT -->
     <section class="pt-36 pb-20 px-6 max-w-[1400px] mx-auto relative">
@@ -1156,10 +1175,10 @@
     </section>
 
     <!-- FOOTER -->
-    <footer class="py-12 hairline-t text-center text-zinc-600 text-[10px] font-mono tracking-widest bg-kb-bg flex flex-col sm:flex-row items-center justify-between px-8 max-w-[1400px] mx-auto gap-4">
-        <div class="flex items-center gap-2.5">
+    <footer class="py-12 hairline-t text-center text-zinc-500 text-[10px] font-mono tracking-widest bg-kb-bg flex flex-col sm:flex-row items-center justify-between px-8 max-w-[1400px] mx-auto gap-4">
+        <a href="/" class="flex items-center gap-2.5 text-zinc-400 hover:text-white transition-colors">
             <!-- Exact Dashboard Logo in Footer -->
-            <div class="w-4 h-4 text-zinc-500">
+            <div class="w-4 h-4 text-zinc-400">
                 <svg viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
                     <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
@@ -1167,20 +1186,29 @@
                 </svg>
             </div>
             <span>KOBITS AI ENGINEERING</span>
-        </div>
-        <div class="flex items-center gap-6 text-zinc-500">
+        </a>
+        <div class="flex flex-wrap items-center justify-center gap-6 text-zinc-500">
             <a href="/product.html" class="hover:text-zinc-300 transition-colors">PRODUCT</a>
-            <a href="/how-it-works.html" class="hover:text-zinc-300 transition-colors">HOW IT WORKS</a>
             <a href="/engineering.html" class="hover:text-zinc-300 transition-colors">ENGINEERING</a>
+            <a href="/how-it-works.html" class="hover:text-zinc-300 transition-colors">HOW IT WORKS</a>
             <a href="/security.html" class="hover:text-zinc-300 transition-colors">SECURITY</a>
-            <a href="/memory.html" class="hover:text-zinc-300 transition-colors">MEMORY</a>
+            <a href="/pricing.html" class="hover:text-zinc-300 transition-colors">PRICING</a>
+            <a href="mailto:kobitscreation@gmail.com" class="text-zinc-400 hover:text-white underline transition-colors">CONTACT</a>
         </div>
-        <div>
-            <span>© 2026 KOBITS</span>
+        <div class="flex flex-col sm:flex-row items-center gap-2 text-zinc-500">
+            <span>&copy; 2026 KOBITS. All rights reserved.</span>
+            <span class="hidden sm:inline">•</span>
+            <a href="mailto:kobitscreation@gmail.com" class="hover:text-zinc-300 transition-colors font-sans text-xs">kobitscreation@gmail.com</a>
         </div>
     </footer>
 
     <script>
+        // Mobile Navigation Toggle
+        document.getElementById('ky-mobile-menu-toggle')?.addEventListener('click', () => {
+            const menu = document.getElementById('ky-mobile-menu');
+            if (menu) menu.classList.toggle('hidden');
+        });
+
         // Initialize Lucide icons
         lucide.createIcons();
 
@@ -1807,10 +1835,18 @@
             successView.classList.remove('hidden');
             if (window.lucide) lucide.createIcons();
           } else {
-            alert(data.detail || data.message || 'Submission failed. Please try again.');
+            const errEl = document.getElementById('ea-error');
+            if (errEl) {
+              errEl.textContent = data.detail || data.message || 'Submission failed. Please check your email and try again.';
+              errEl.classList.remove('hidden');
+            }
           }
         } catch (err) {
-          alert('Failed to connect to server. Please try again.');
+          const errEl = document.getElementById('ea-error');
+          if (errEl) {
+            errEl.textContent = 'Failed to connect to server. Please try again.';
+            errEl.classList.remove('hidden');
+          }
         } finally {
           if (submitBtn) {
             submitBtn.disabled = false;
@@ -1838,6 +1874,8 @@
                 </p>
             </div>
 
+            <div id="ea-error" class="hidden p-3 rounded-lg bg-red-950/60 border border-red-800 text-xs text-red-200 mb-3 font-mono"></div>
+
             <form id="form-early-access" class="space-y-4">
                 <div>
                     <label class="block text-xs font-mono text-zinc-400 mb-1.5">WORK EMAIL *</label>
@@ -1860,6 +1898,9 @@
                 <button type="submit" id="btn-submit-early-access" class="w-full py-2.5 bg-white text-black font-semibold text-xs rounded-lg hover:bg-zinc-200 transition-colors shadow-[0_0_15px_rgba(255,255,255,0.15)] flex items-center justify-center gap-2 cursor-pointer">
                     <span>Submit Application</span>
                 </button>
+                <div class="text-[11px] text-zinc-500 pt-2 text-center font-mono">
+                    Direct inquiries: <a href="mailto:kobitscreation@gmail.com" class="text-zinc-400 hover:text-white underline font-sans">kobitscreation@gmail.com</a>
+                </div>
             </form>
 
             <div id="ea-success" class="hidden text-center py-6">
@@ -1870,6 +1911,9 @@
                 <p class="text-xs text-zinc-400 mt-2 leading-relaxed">
                     You're on the early access list. We review submissions daily and will send an invitation email to get you started.
                 </p>
+                <div class="text-[11px] text-zinc-500 mt-3 font-mono">
+                    Questions? Reach us at <a href="mailto:kobitscreation@gmail.com" class="text-zinc-300 underline font-sans">kobitscreation@gmail.com</a>
+                </div>
                 <button type="button" id="btn-done-early-access" class="mt-5 px-5 py-2 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-xs font-mono text-white rounded-lg transition-colors cursor-pointer">
                     Close
                 </button>

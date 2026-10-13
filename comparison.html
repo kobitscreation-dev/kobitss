@@ -1,172 +1,220 @@
 <!DOCTYPE html>
-<html lang="en" class="dark scroll-smooth">
+<html lang="en" class="scroll-smooth">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>vs. Others — Kobits</title>
+  <title>Kobits — Autonomous Engineering Comparison</title>
+  <meta name="description" content="Compare Kobits autonomous software engineering against traditional software development agencies, in-house hiring, and basic single-file AI copilots.">
   
-  <style>
-    html.lenis, html.lenis body { height: auto; }
-    .lenis.lenis-smooth { scroll-behavior: auto !important; }
-    .lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
-    .lenis.lenis-stopped { overflow: hidden; }
-    .lenis.lenis-scrolling iframe { pointer-events: none; }
-  </style>
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="alternate icon" href="/favicon.ico">
 
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
-      darkMode: 'class',
       theme: {
         extend: {
-          colors: {
-            brand: {
-              bg: '#000000',
-              card: '#0A0A0A',
-              border: '#1A1A1A',
-              primary: '#B4FF00',
-              primaryHover: '#CCFF00',
-              textMuted: '#888888',
-              text: '#FFFFFF'
-            }
-          },
           fontFamily: {
             sans: ['Inter', 'sans-serif'],
-            headline: ['Space Grotesk', 'sans-serif'],
             mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            kb: {
+              bg: '#050505',
+              surface: '#0f0f11',
+              border: '#222226',
+              accent: '#ffffff',
+            }
           }
         }
       }
     }
   </script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  
+  <script src="https://unpkg.com/lucide@latest"></script>
+
   <style>
-    body { 
-      font-family: 'Inter', sans-serif; 
-      background-color: #000000;
-      color: #FFFFFF;
-      overflow-x: hidden; 
+    body {
+      background-color: #050505;
+      color: #fafafa;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+      -webkit-font-smoothing: antialiased;
     }
-    h1, h2, h3, h4, .font-headline {
-      font-family: 'Space Grotesk', sans-serif;
+    .hairline-b { border-bottom: 1px solid #222226; }
+    .hairline-t { border-top: 1px solid #222226; }
+    .card-wire {
+      background: #0f0f11;
+      border: 1px solid #222226;
+      position: relative;
+      transition: all 0.25s ease;
     }
-    .glow-primary {
-      box-shadow: 0 0 30px rgba(180, 255, 0, 0.15);
-    }
-    .glow-primary:hover {
-      box-shadow: 0 0 40px rgba(180, 255, 0, 0.3);
+    .card-wire:hover {
+      border-color: #38383f;
+      box-shadow: 0 0 25px rgba(255, 255, 255, 0.03);
+      transform: translateY(-2px);
     }
   </style>
-  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body class="antialiased flex flex-col min-h-screen selection:bg-brand-primary selection:text-black">
+<body class="selection:bg-white/20">
 
-<header class="fixed top-0 w-full z-50 border-b border-brand-border bg-black/80 backdrop-blur-md h-14">
-  <div class="w-full max-w-7xl mx-auto px-6 flex items-center justify-between h-full">
-    <a href="/" class="flex items-center gap-2">
-      <div class="w-5 h-5 flex items-center justify-center bg-brand-primary rounded-sm">
-        <span class="text-black font-bold text-sm leading-none font-headline">K</span>
+  <!-- NAVIGATION -->
+  <nav class="fixed top-0 left-0 w-full h-14 bg-[#050505]/90 backdrop-blur-md hairline-b z-50 flex items-center justify-between px-6">
+    <div class="flex items-center">
+      <a href="/" class="font-medium tracking-tight text-white flex items-center gap-2.5 group">
+        <div class="w-7 h-7 flex items-center justify-center text-white transition-transform group-hover:scale-110">
+          <svg class="w-6 h-6" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+            <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+            <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="font-bold tracking-tight text-sm text-white">KOBITS</span>
+      </a>
+    </div>
+    <div class="flex items-center gap-3 text-sm">
+      <div class="hidden lg:flex items-center gap-6 text-zinc-400 border-r border-zinc-800 pr-6 text-xs font-mono uppercase tracking-wider">
+        <a href="/product.html" class="hover:text-white transition-colors">Product</a>
+        <a href="/engineering.html" class="hover:text-white transition-colors">Engineering</a>
+        <a href="/how-it-works.html" class="hover:text-white transition-colors">How It Works</a>
+        <a href="/security.html" class="hover:text-white transition-colors">Security</a>
+        <a href="/pricing.html" class="hover:text-white transition-colors">Pricing</a>
       </div>
-      <span class="text-sm font-bold tracking-wide text-white font-headline">KOBITS</span>
+      <div class="flex items-center gap-3">
+        <a href="/landing.html?open_apply=1" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-medium hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)] hover:scale-[1.02]">Apply for Early Access</a>
+        <button type="button" id="ky-comparison-menu-toggle" class="lg:hidden text-zinc-400 hover:text-white p-1 rounded-md focus:outline-none" aria-label="Toggle navigation menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MOBILE NAVIGATION DRAWER -->
+  <div id="ky-comparison-menu" class="fixed top-14 left-0 w-full bg-zinc-950/95 border-b border-zinc-800 backdrop-blur-xl z-40 px-6 py-6 hidden flex-col gap-4 font-mono text-xs uppercase tracking-wider transition-all lg:hidden">
+    <a href="/product.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Product</a>
+    <a href="/engineering.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Engineering</a>
+    <a href="/how-it-works.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">How It Works</a>
+    <a href="/security.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Security</a>
+    <a href="/pricing.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Pricing</a>
+    <a href="/portal.html#login" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Sign In</a>
+    <a href="mailto:kobitscreation@gmail.com" class="text-zinc-400 hover:text-white py-2 lowercase font-sans">kobitscreation@gmail.com</a>
+  </div>
+
+  <!-- HEADER -->
+  <header class="pt-40 pb-16 px-6 max-w-[1200px] mx-auto text-center relative">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-800 bg-zinc-950 text-xs font-mono text-zinc-400 mb-6">
+      <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+      <span>BENCHMARK // ARCHITECTURAL COMPARISON</span>
+    </div>
+    <h1 class="text-4xl md:text-6xl font-medium tracking-tight text-white mb-6">
+      How Kobits Compares<br>
+      <span class="text-zinc-500">to Traditional Alternatives</span>
+    </h1>
+    <p class="text-zinc-400 text-base max-w-xl mx-auto leading-relaxed">
+      Compare Kobits autonomous multi-agent engineering against external dev agencies, internal headcount scaling, and interactive IDE chat copilots.
+    </p>
+  </header>
+
+  <!-- COMPARISON TABLE -->
+  <section class="pb-28 px-6 max-w-[1000px] mx-auto">
+    <div class="card-wire rounded-xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b border-zinc-800 bg-zinc-900/60 font-mono text-zinc-400 uppercase tracking-wider">
+              <th class="py-4 px-6">Capability</th>
+              <th class="py-4 px-6 text-white font-bold bg-white/5">Kobits</th>
+              <th class="py-4 px-6">Dev Agencies</th>
+              <th class="py-4 px-6">AI Copilots</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-zinc-800/60 font-mono">
+            <tr class="hover:bg-white/[0.02] transition-colors">
+              <td class="py-4 px-6 text-white font-medium font-sans">Time to Start</td>
+              <td class="py-4 px-6 text-white bg-white/5 font-bold">Minutes (instant repo connect)</td>
+              <td class="py-4 px-6 text-zinc-400">2–6 weeks sourcing &amp; kickoff</td>
+              <td class="py-4 px-6 text-zinc-400">Minutes</td>
+            </tr>
+            <tr class="hover:bg-white/[0.02] transition-colors">
+              <td class="py-4 px-6 text-white font-medium font-sans">Autonomous Cleanroom Isolation</td>
+              <td class="py-4 px-6 text-white bg-white/5 font-bold flex items-center gap-2">
+                <i data-lucide="check" class="w-4 h-4 text-white"></i> Ephemeral MicroVMs
+              </td>
+              <td class="py-4 px-6 text-zinc-400">Manual staging setup</td>
+              <td class="py-4 px-6 text-zinc-500 flex items-center gap-1.5">
+                <i data-lucide="x" class="w-4 h-4 text-zinc-600"></i> No sandboxing (pollutes local tree)
+              </td>
+            </tr>
+            <tr class="hover:bg-white/[0.02] transition-colors">
+              <td class="py-4 px-6 text-white font-medium font-sans">Hard Test-Driven Verification</td>
+              <td class="py-4 px-6 text-white bg-white/5 font-bold">100% Pytest + AST Pass Gate</td>
+              <td class="py-4 px-6 text-zinc-400">Manual QA sprint</td>
+              <td class="py-4 px-6 text-zinc-500">None (probabilistic guessing)</td>
+            </tr>
+            <tr class="hover:bg-white/[0.02] transition-colors">
+              <td class="py-4 px-6 text-white font-medium font-sans">Security Auditing</td>
+              <td class="py-4 px-6 text-white bg-white/5 font-bold">Included (Aegis Agent)</td>
+              <td class="py-4 px-6 text-zinc-400">Separate audit engagement</td>
+              <td class="py-4 px-6 text-zinc-500">Basic linting only</td>
+            </tr>
+            <tr class="hover:bg-white/[0.02] transition-colors">
+              <td class="py-4 px-6 text-white font-medium font-sans">Cross-Session Memory</td>
+              <td class="py-4 px-6 text-white bg-white/5 font-bold">Persistent SQLite + Vector Index</td>
+              <td class="py-4 px-6 text-zinc-400">Confluence docs (lost in churn)</td>
+              <td class="py-4 px-6 text-zinc-500">None (resets every session)</td>
+            </tr>
+            <tr class="hover:bg-white/[0.02] transition-colors">
+              <td class="py-4 px-6 text-white font-medium font-sans">Cost Structure</td>
+              <td class="py-4 px-6 text-white bg-white/5 font-bold">Usage Credits ($29 / $99)</td>
+              <td class="py-4 px-6 text-zinc-400">$10,000+ monthly retainer</td>
+              <td class="py-4 px-6 text-zinc-400">$20 / seat / month (developer required)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="py-12 hairline-t text-center text-zinc-600 text-[10px] font-mono tracking-widest bg-[#050505] flex flex-col sm:flex-row items-center justify-between px-8 max-w-[1400px] mx-auto gap-4">
+    <a href="/" class="flex items-center gap-2.5 text-zinc-400 hover:text-white transition-colors">
+      <div class="w-4 h-4 text-zinc-400">
+        <svg viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+          <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span>KOBITS AI ENGINEERING</span>
     </a>
-    <div class="hidden md:flex items-center gap-1">
-      <nav class="flex items-center gap-1 text-sm font-medium">
-        <a href="/" class="px-3 py-1.5 rounded-md text-brand-textMuted hover:text-white hover:bg-white/5 transition">Overview</a>
-        <a href="/features" class="px-3 py-1.5 rounded-md text-brand-textMuted hover:text-white hover:bg-white/5 transition">Features</a>
-        <a href="/comparison" class="px-3 py-1.5 rounded-md bg-white/5 text-white transition">vs. Others</a>
-        <a href="/#pricing" class="px-3 py-1.5 rounded-md text-brand-textMuted hover:text-white hover:bg-white/5 transition">Pricing</a>
-      </nav>
-      <div class="ml-3 pl-3 border-l border-brand-border flex items-center gap-4">
-        <a href="/#get-started" class="inline-flex items-center justify-center rounded-lg bg-brand-primary text-black font-bold px-4 py-1.5 text-sm hover:bg-brand-primaryHover transition glow-primary gap-1.5">
-          Apply for Early Access <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
-        </a>
-      </div>
+    <div class="flex flex-wrap items-center justify-center gap-6 text-zinc-500">
+      <a href="/product.html" class="hover:text-zinc-300 transition-colors">PRODUCT</a>
+      <a href="/engineering.html" class="hover:text-zinc-300 transition-colors">ENGINEERING</a>
+      <a href="/how-it-works.html" class="hover:text-zinc-300 transition-colors">HOW IT WORKS</a>
+      <a href="/security.html" class="hover:text-zinc-300 transition-colors">SECURITY</a>
+      <a href="/pricing.html" class="hover:text-zinc-300 transition-colors">PRICING</a>
+      <a href="mailto:kobitscreation@gmail.com" class="hover:text-white transition-colors lowercase font-sans">kobitscreation@gmail.com</a>
     </div>
-  </div>
-</header>
-
-<main class="flex-1 w-full relative pt-32 pb-24">
-  <div class="max-w-7xl mx-auto px-6 text-center mb-16">
-    <p class="mb-3 text-xs font-mono uppercase tracking-[0.2em] text-brand-primary">// COMPARISON</p>
-    <h1 class="text-4xl sm:text-5xl font-bold tracking-tight font-headline mb-6">How Kobits compares</h1>
-    <p class="text-brand-textMuted max-w-2xl mx-auto text-lg">Compare Kobits against traditional agencies, in-house hires, and standard AI copilots.</p>
-  </div>
-
-  <div class="max-w-5xl mx-auto px-6">
-    <div class="overflow-x-auto">
-      <table class="w-full text-left border-collapse">
-        <thead>
-          <tr class="border-b border-brand-border">
-            <th class="py-4 px-6 font-headline font-bold text-xl">Capability</th>
-            <th class="py-4 px-6 font-headline font-bold text-xl text-brand-primary bg-brand-primary/5 rounded-t-xl">Kobits</th>
-            <th class="py-4 px-6 font-headline font-bold text-xl text-gray-400">Dev Agencies</th>
-            <th class="py-4 px-6 font-headline font-bold text-xl text-gray-400">AI Copilots</th>
-          </tr>
-        </thead>
-        <tbody class="text-sm">
-          <tr class="border-b border-brand-border hover:bg-white/5 transition">
-            <td class="py-4 px-6 text-white font-medium">Time to start</td>
-            <td class="py-4 px-6 text-brand-primary bg-brand-primary/5 font-bold">Minutes</td>
-            <td class="py-4 px-6 text-gray-400">2-4 Weeks</td>
-            <td class="py-4 px-6 text-gray-400">Minutes</td>
-          </tr>
-          <tr class="border-b border-brand-border hover:bg-white/5 transition">
-            <td class="py-4 px-6 text-white font-medium">Autonomous Execution</td>
-            <td class="py-4 px-6 text-brand-primary bg-brand-primary/5 font-bold"><i data-lucide="check" class="w-5 h-5"></i></td>
-            <td class="py-4 px-6 text-gray-400"><i data-lucide="check" class="w-5 h-5"></i></td>
-            <td class="py-4 px-6 text-red-500"><i data-lucide="x" class="w-5 h-5"></i></td>
-          </tr>
-          <tr class="border-b border-brand-border hover:bg-white/5 transition">
-            <td class="py-4 px-6 text-white font-medium">Built-in Code Reviews</td>
-            <td class="py-4 px-6 text-brand-primary bg-brand-primary/5 font-bold"><i data-lucide="check" class="w-5 h-5"></i></td>
-            <td class="py-4 px-6 text-gray-400">Varies</td>
-            <td class="py-4 px-6 text-red-500"><i data-lucide="x" class="w-5 h-5"></i></td>
-          </tr>
-          <tr class="border-b border-brand-border hover:bg-white/5 transition">
-            <td class="py-4 px-6 text-white font-medium">Security Auditing</td>
-            <td class="py-4 px-6 text-brand-primary bg-brand-primary/5 font-bold">Included (Aegis Agent)</td>
-            <td class="py-4 px-6 text-gray-400">Extra Cost</td>
-            <td class="py-4 px-6 text-gray-400">Basic Linting</td>
-          </tr>
-          <tr class="border-b border-brand-border hover:bg-white/5 transition">
-            <td class="py-4 px-6 text-white font-medium">Cost Structure</td>
-            <td class="py-4 px-6 text-brand-primary bg-brand-primary/5 font-bold">Flat Monthly Subscription</td>
-            <td class="py-4 px-6 text-gray-400">Hourly / Per Project</td>
-            <td class="py-4 px-6 text-gray-400">Per User</td>
-          </tr>
-        </tbody>
-      </table>
+    <div>
+      <span>© 2026 KOBITS</span>
     </div>
-  </div>
-</main>
+  </footer>
 
-<footer class="border-t border-brand-border bg-brand-bg pt-16 pb-8">
-  <div class="max-w-7xl mx-auto px-6 text-center md:text-left">
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-12 mb-16">
-      <div class="col-span-2 md:col-span-1">
-        <a href="/" class="flex items-center gap-2 mb-4">
-          <div class="w-5 h-5 flex items-center justify-center bg-brand-primary rounded-sm">
-            <span class="text-black font-bold text-sm leading-none font-headline">K</span>
-          </div>
-          <span class="text-sm font-bold tracking-wide text-white font-headline">KOBITS</span>
-        </a>
-      </div>
-      <div>
-        <h4 class="font-bold text-sm mb-4 text-white font-headline">Product</h4>
-        <ul class="space-y-3 text-brand-textMuted text-sm">
-          <li><a href="/" class="hover:text-white transition">Overview</a></li>
-          <li><a href="/features" class="hover:text-white transition">Features</a></li>
-          <li><a href="/comparison" class="hover:text-white transition">vs. Others</a></li>
-        </ul>
-      </div>
-    </div>
-    <div class="border-t border-brand-border pt-6 text-xs text-brand-textMuted">
-      <p>&copy; 2026 Kobits Inc. All rights reserved.</p>
-    </div>
-  </div>
-</footer>
-
-<script>lucide.createIcons();</script>
+  <script>
+    lucide.createIcons();
+    const toggleBtn = document.getElementById('ky-comparison-menu-toggle');
+    const mobileMenu = document.getElementById('ky-comparison-menu');
+    if (toggleBtn && mobileMenu) {
+      toggleBtn.addEventListener('click', () => {
+        mobileMenu.classList.toggle('hidden');
+        mobileMenu.classList.toggle('flex');
+      });
+    }
+  </script>
 </body>
 </html>
