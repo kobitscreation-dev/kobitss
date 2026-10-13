@@ -597,6 +597,41 @@ def test_gap3_realtime_websocket_dashboard_streaming(client):
         assert "Emit structured JSON logs" in event["instruction"]
 
 
+def test_live_terminal_websocket_streaming_and_interaction(client):
+    miss_id = "m_exec_33334444"
+    with client.websocket_connect(f"/ws/terminal/{miss_id}") as ws:
+        greeting = ws.receive_json()
+        assert greeting["type"] == "system"
+        assert miss_id in greeting["message"]
+
+        # 1. Ping
+        ws.send_text(json.dumps({"type": "ping"}))
+        pong = ws.receive_json()
+        assert pong["type"] == "pong"
+
+        # 2. Clear command
+        ws.send_text("clear")
+        clr = ws.receive_json()
+        assert clr["type"] == "clear"
+
+        # 3. Live event streaming: steering injection broadcasts to this terminal
+        r = client.post(
+            "/api/v1/missions/m_exec_3/steer",
+            json={"instruction": "Live stream compiler warnings to terminal"},
+        )
+        assert r.status_code == 200
+        event = ws.receive_json()
+        assert event["type"] == "steering_queued"
+        assert "Live stream compiler warnings to terminal" in event["instruction"]
+
+    # 4. Dual route /api/v1/ws/terminal/{id}
+    with client.websocket_connect(f"/api/v1/ws/terminal/{miss_id}") as ws_v1:
+        greeting_v1 = ws_v1.receive_json()
+        assert greeting_v1["type"] == "system"
+        assert miss_id in greeting_v1["message"]
+
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 11. Gap 5: HMAC Webhook Signature Verification & Two-Way Outbound Callbacks
 # ─────────────────────────────────────────────────────────────────────────────

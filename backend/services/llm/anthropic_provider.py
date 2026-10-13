@@ -1,3 +1,4 @@
+import os
 import json
 import time
 import asyncio
@@ -197,7 +198,6 @@ class AnthropicProvider(LLMProvider):
                                     parsed_data["_usage"]["compaction_history"] = compaction_history
                             return parsed_data
                         except json.JSONDecodeError:
-                            import os
                             if os.environ.get("KOBITS_VERBOSE") == "1":
                                 print(f"DEBUG: Failed to parse JSON from: {repr(cleaned[:300])}")
                             raise

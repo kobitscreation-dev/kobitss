@@ -345,7 +345,9 @@ async def handle_terminal_execute(command: str = "", timeout: int = 60, context:
             from backend.services.sandbox_manager import SandboxManager
             sess = SandboxManager.get_session(context["sandbox_session_id"])
             if sess:
-                return SandboxManager.run_command(context["sandbox_session_id"], cmd, timeout=timeout)
+                res = SandboxManager.run_command(context["sandbox_session_id"], cmd, timeout=timeout)
+                await _broadcast_terminal(context, cmd, res)
+                return res
 
         target_dir = None
         if context and context.get("sandbox_dir") and os.path.isdir(context["sandbox_dir"]):
@@ -356,14 +358,37 @@ async def handle_terminal_execute(command: str = "", timeout: int = 60, context:
             target_dir = os.getcwd()
 
         from backend.services.environment_bootstrapper import EnvironmentBootstrapper
-        return EnvironmentBootstrapper.execute_isolated(
+        res = EnvironmentBootstrapper.execute_isolated(
             session_id=(context or {}).get("sandbox_session_id") or "default",
             sandbox_dir=target_dir,
             command=cmd,
             timeout=timeout,
         )
+        await _broadcast_terminal(context, cmd, res)
+        return res
     except Exception as e:
-        return {"error": str(e), "exit_code": 1, "stdout": "", "stderr": str(e)}
+        err_res = {"error": str(e), "exit_code": 1, "stdout": "", "stderr": str(e)}
+        await _broadcast_terminal(context, cmd, err_res)
+        return err_res
+
+async def _broadcast_terminal(context: dict, command: str, res: dict):
+    if context and context.get("mission_id"):
+        try:
+            from backend.services.websocket_manager import manager
+            out = res.get("stdout") or ""
+            err = res.get("stderr") or res.get("error") or ""
+            exit_code = res.get("exit_code", 0)
+            await manager.broadcast(context["mission_id"], {
+                "type": "terminal_output",
+                "mission_id": context["mission_id"],
+                "command": command,
+                "stdout": out,
+                "stderr": err,
+                "exit_code": exit_code,
+                "message": f"$ {command}\n" + (out if out else err)
+            })
+        except Exception:
+            pass
 
 async def handle_tests_run(test_command: str = "", context: dict = None, **kwargs) -> dict:
     """Runs a test command inside the isolated sandbox."""
@@ -503,7 +528,9 @@ async def handle_git_run(command: str, context: dict = None) -> dict:
         from backend.services.sandbox_manager import _run_git
         cmd_args = command.split(" ")[1:]
         out = _run_git(context["sandbox_dir"], *cmd_args)
-        return {"stdout": out, "exit_code": 0}
+        res = {"stdout": out, "exit_code": 0}
+        await _broadcast_terminal(context, command, res)
+        return res
     return await handle_terminal_execute(command, context=context)
 
 async def handle_browser_navigate(url: str) -> dict:

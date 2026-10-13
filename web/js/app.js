@@ -152,7 +152,9 @@ function renderPhaseStrip(phase, status) {
 async function fetchDashboard(silent = false) {
   const view = document.getElementById('view') || document.getElementById('main-content');
   if (!view) return;
-  if (!silent && !state.dashboard) {
+  const initialCurH = (location.hash || '').replace(/^#\/?/, '');
+  const isMissionRoute = initialCurH.startsWith('missions') || initialCurH.startsWith('mission');
+  if (!silent && !state.dashboard && !isMissionRoute && initialCurH !== 'settings' && initialCurH !== 'new-project') {
     view.innerHTML = `<div class="ky-card" style="text-align:center;padding:48px 24px;max-width:540px;margin:40px auto">
       <div class="ky-eyebrow" style="color:var(--text-3);margin-bottom:8px">LOADING WORKSPACE</div>
       <h2 style="font-size:18px;margin:0 0 10px;font-weight:700">Connecting to Engineering Control Plane…</h2>
@@ -192,6 +194,9 @@ async function fetchDashboard(silent = false) {
     }
     if (curH === 'new-project') {
       if (!silent) renderNewProjectPage();
+      return;
+    }
+    if (curH.startsWith('missions') || curH.startsWith('mission')) {
       return;
     }
     renderDashboard(silent);
@@ -1333,7 +1338,10 @@ async function openMissionInspector(missionId, autoFocusApply = false) {
             ${prInfo ? `<a href="${esc(prInfo.url)}" target="_blank" rel="noopener" class="ky-badge ky-badge-ok" style="text-decoration:none">PR #${num(prInfo.number)} · ${esc(prInfo.status || 'OPEN')} ↗</a>` : ''}
             ${diffData.sandbox_dir ? `<span class="ky-task-agent">${esc(diffData.sandbox_dir)}</span>` : ''}
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <a href="#/missions/${esc(missionId)}" class="ky-btn ky-btn-xs" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px" title="Open Mission Live Terminal" onclick="document.getElementById('ky-modal-host').innerHTML=''">
+              <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#22c55e"></span>
+              <span>Live Terminal &rarr;</span>
+            </a>
             ${canApprove ? `
               <button type="button" class="ky-btn ky-btn-primary ky-btn-xs" id="ky-act-approve">Approve Plan</button>
               <button type="button" class="ky-btn ky-btn-xs" id="ky-act-reject" style="color:var(--err-fg)">Reject</button>
@@ -1610,6 +1618,18 @@ function initTopBar() {
     }
     if (h === 'new-project') {
       renderNewProjectPage();
+      return;
+    }
+    if (h.startsWith('missions/') || h.startsWith('mission/')) {
+      const parts = h.split('/');
+      const mId = parts[1];
+      if (mId) {
+        import('./views/mission.js').then(mod => mod.render(mId));
+        return;
+      }
+    }
+    if (h === 'missions') {
+      import('./views/missions.js').then(mod => mod.render());
       return;
     }
     if (['overview', 'milestones', 'deliverables', 'team', 'reports'].includes(h)) {
@@ -2737,6 +2757,14 @@ if (initialHash === 'settings') {
   renderSettingsPage();
 } else if (initialHash === 'new-project') {
   renderNewProjectPage();
+} else if (initialHash.startsWith('missions/') || initialHash.startsWith('mission/')) {
+  const parts = initialHash.split('/');
+  const mId = parts[1];
+  if (mId) {
+    import('./views/mission.js').then(mod => mod.render(mId));
+  }
+} else if (initialHash === 'missions') {
+  import('./views/missions.js').then(mod => mod.render());
 }
 
 // Auto-trigger onboarding walkthrough on first visit or when ?onboarding=true is present

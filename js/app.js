@@ -151,7 +151,9 @@ function renderPhaseStrip(phase, status) {
 async function fetchDashboard(silent = false) {
   const view = document.getElementById('view') || document.getElementById('main-content');
   if (!view) return;
-  if (!silent && !state.dashboard) {
+  const initialCurH = (location.hash || '').replace(/^#\/?/, '');
+  const isMissionRoute = initialCurH.startsWith('missions') || initialCurH.startsWith('mission');
+  if (!silent && !state.dashboard && !isMissionRoute) {
     view.innerHTML = `<div class="ky-card"><div class="ky-eyebrow">LOADING WORKSPACE</div><p style="color:var(--text-2);margin:8px 0 0">Synchronizing live engineering telemetry…</p></div>`;
   }
   try {
@@ -163,6 +165,10 @@ async function fetchDashboard(silent = false) {
       localStorage.setItem('kobits.projectId', state.projectId);
     }
     populateProjectSelect(data);
+    const curH = (location.hash || '').replace(/^#\/?/, '');
+    if (curH.startsWith('missions') || curH.startsWith('mission')) {
+      return;
+    }
     renderDashboard();
   } catch (err) {
     if (!silent) {
@@ -889,7 +895,11 @@ async function openMissionInspector(missionId, autoFocusApply = false) {
             ${prInfo ? `<a href="${esc(prInfo.url)}" target="_blank" rel="noopener" class="ky-badge ky-badge-ok" style="text-decoration:none">PR #${num(prInfo.number)} · ${esc(prInfo.status || 'OPEN')} ↗</a>` : ''}
             ${diffData.sandbox_dir ? `<span class="ky-task-agent">${esc(diffData.sandbox_dir)}</span>` : ''}
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <a href="#/missions/${esc(missionId)}" class="ky-btn ky-btn-xs" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px" title="Open Mission Live Terminal" onclick="document.getElementById('ky-modal-host').innerHTML=''">
+              <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#22c55e"></span>
+              <span>Live Terminal &rarr;</span>
+            </a>
             ${canApprove ? `
               <button type="button" class="ky-btn ky-btn-primary ky-btn-xs" id="ky-act-approve">Approve Plan</button>
               <button type="button" class="ky-btn ky-btn-xs" id="ky-act-reject" style="color:var(--err-fg)">Reject</button>
@@ -1110,6 +1120,18 @@ function initTopBar() {
 
   window.addEventListener('hashchange', () => {
     const h = location.hash.replace(/^#\/?/, '');
+    if (h.startsWith('missions/') || h.startsWith('mission/')) {
+      const parts = h.split('/');
+      const mId = parts[1];
+      if (mId) {
+        import('./views/mission.js').then(mod => mod.render(mId));
+        return;
+      }
+    }
+    if (h === 'missions') {
+      import('./views/missions.js').then(mod => mod.render());
+      return;
+    }
     if (['overview', 'milestones', 'deliverables', 'team', 'reports'].includes(h)) {
       state.tab = h;
       renderDashboard();
@@ -1179,6 +1201,17 @@ if (['overview', 'milestones', 'deliverables', 'team', 'reports'].includes(initi
 initTopBar();
 fetchDashboard();
 initLiveWebSocket();
+
+if (initialHash.startsWith('missions/') || initialHash.startsWith('mission/')) {
+  const parts = initialHash.split('/');
+  const mId = parts[1];
+  if (mId) {
+    import('./views/mission.js').then(mod => mod.render(mId));
+  }
+} else if (initialHash === 'missions') {
+  import('./views/missions.js').then(mod => mod.render());
+}
+
 setInterval(() => {
   fetchDashboard(true);
 }, 8000);

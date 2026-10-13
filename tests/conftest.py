@@ -19,6 +19,7 @@ from backend.models.debate_log import DebateLog
 from backend.models.communication import AgentMessage, AgentArtifact, AgentDecision, AgentLesson
 from backend.models.intelligence import TaskContract, ProcessMemory, ProcessOutcomeRecord, IntelligenceTrace, MemoryUsefulness, HumanFeedback, ContextEfficiencyRecord
 from backend.models.memory import AgentMemory, MissionMemory
+from backend.models.audit_log import AuditLog
 
 @pytest_asyncio.fixture(autouse=True, scope="function")
 async def setup_db():

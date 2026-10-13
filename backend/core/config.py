@@ -1,13 +1,46 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
 from typing import Optional
+import logging
+import warnings
+
+logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Kobits API"
     DATABASE_URL: str = "sqlite+aiosqlite:///./kobits.db"
-    # Secret key for JWT. In production, this MUST be secure and loaded from env.
+    # Secret key for JWT. In production, this MUST be ≥32 cryptographically random bytes.
+    # Generate with: python -c "import secrets; print(secrets.token_hex(32))"
     SECRET_KEY: str = "super-secret-key-change-me"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validate_secret_key_strength(cls, v: str) -> str:
+        """
+        Enforce ≥32-byte SECRET_KEY in PostgreSQL (production) environments.
+        Emit a security warning for shorter keys in SQLite/dev environments.
+        """
+        import os
+        key_bytes = len(v.encode("utf-8"))
+        db_url = os.environ.get("DATABASE_URL", "")
+        is_production = "postgresql" in db_url.lower() or "postgres" in db_url.lower()
+
+        if key_bytes < 32:
+            if is_production:
+                raise ValueError(
+                    f"SECRET_KEY must be ≥32 bytes in production (got {key_bytes} bytes). "
+                    "Generate a secure key with: python -c \"import secrets; print(secrets.token_hex(32))\""
+                )
+            else:
+                warnings.warn(
+                    f"SecurityWarning: SECRET_KEY is only {key_bytes} bytes "
+                    f"(RFC 7518 §3.2 recommends ≥32 bytes for HS256). "
+                    "Set a stronger key via the SECRET_KEY environment variable before deploying to production.",
+                    stacklevel=2,
+                )
+        return v
     
     # LLM Provider Configuration
     LLM_PROVIDER: str = "mock"
