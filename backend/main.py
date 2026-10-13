@@ -816,14 +816,8 @@ async def serve_static(file_path: str, request: Request):
         if os.path.isfile("index.html"):
             return FileResponse("index.html", headers=headers)
 
-    # If portal is requested, auto-redirect to dashboard if user already has an active session
+    # If portal is requested, serve portal.html directly (allows user to sign in or register without loop)
     if clean_path in ("portal.html", "portal"):
-        if (
-            not request.query_params.get("logout")
-            and not request.query_params.get("auth_error")
-            and _has_valid_session_token(request)
-        ):
-            return RedirectResponse(url="/web/index.html#overview", status_code=302)
         if os.path.isfile("portal.html"):
             return FileResponse("portal.html", headers=headers)
 

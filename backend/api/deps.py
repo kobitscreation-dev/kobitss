@@ -63,8 +63,8 @@ async def get_current_user(token: str = None, db: AsyncSession = Depends(get_db)
         result_by_email = await db.execute(select(User).filter(User.email == payload.get("email")))
         user = result_by_email.scalar_one_or_none()
 
-    if user is None and payload.get("rehydratable") and payload.get("email"):
-        # Ephemeral container rehydration: restore verified user & workspace across Cloud Run scale-to-zero restarts
+    if user is None and payload.get("email"):
+        # Ephemeral container rehydration: restore verified user & workspace across restarts
         from backend.models.organization import Organization, OrganizationMember, OrgRole
         import uuid
         email = payload["email"]

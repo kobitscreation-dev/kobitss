@@ -966,6 +966,11 @@
         if (params.get('auth_error')) {
           return;
         }
+        // Do not auto-redirect if user explicitly navigated to login, register, or signup
+        const curHash = window.location.hash || '';
+        if (curHash === '#login' || curHash === '#register' || curHash === '#signup') {
+          return;
+        }
         const savedToken = localStorage.getItem('kobits_token');
         const headers = savedToken ? { 'Authorization': 'Bearer ' + savedToken } : {};
         // Restore HttpOnly cookie and verify session in one call
@@ -1164,19 +1169,16 @@
             window.location.href = '/web/index.html#overview';
           }
         } else {
-          // If running on static host (e.g. Hostinger Basic without live Python API), allow test entry
-          if (res.status === 404 || res.status === 405) {
-            window.location.href = '/web/index.html#overview';
-            return;
-          }
           if (errBox && errText) {
             errText.textContent = data.detail || 'Authentication failed. Please check credentials.';
             errBox.classList.remove('hidden');
           }
         }
       } catch (e) {
-        // Fallback for static hosting / demo mode
-        window.location.href = '/web/index.html#overview';
+        if (errBox && errText) {
+          errText.textContent = e?.message || 'Connection failed. Please check network and try again.';
+          errBox.classList.remove('hidden');
+        }
       } finally {
         if (btn) btn.textContent = isSignUp ? 'Create Account' : 'Sign In';
       }

@@ -206,28 +206,42 @@ async function fetchDashboard(silent = false) {
 
     if (isAuthErr) {
       localStorage.removeItem('kobits_token');
+      localStorage.removeItem('kobits_user');
       if (!silent) {
         view.innerHTML = `
-          <div class="ky-card" style="max-width:520px;margin:50px auto;padding:36px 28px;text-align:center;border-color:var(--border-strong)">
+          <div class="ky-card" style="max-width:540px;margin:50px auto;padding:36px 28px;text-align:center;border-color:var(--border-strong)">
             <div class="ky-eyebrow" style="color:var(--text-3);margin-bottom:8px">WORKSPACE AUTHENTICATION</div>
             <h2 style="font-size:18px;font-weight:700;margin:0 0 8px;letter-spacing:-0.01em">Session Expired or Not Logged In</h2>
             <p style="font-size:13px;color:var(--text-2);line-height:1.6;margin:0 0 24px">
-              Your session has ended or credentials could not be validated. Please log in to connect to your Kobits workspace.
+              Your session has ended or credentials could not be validated. Please log in or register to connect to your Kobits workspace.
             </p>
-            <div style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap">
-              <a href="/portal.html#login" class="ky-btn ky-btn-primary ky-btn-sm" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">
+            <div style="display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap">
+              <a id="ky-btn-expired-signin" href="/portal.html?logout=1#login" class="ky-btn ky-btn-primary ky-btn-sm" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">
                 <span>Sign In to Kobits</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
               </a>
-              <a href="/landing.html" class="ky-btn ky-btn-ghost ky-btn-sm" style="border:1px solid var(--border);text-decoration:none">
-                Home
+              <a href="/portal.html?logout=1#register" class="ky-btn ky-btn-ghost ky-btn-sm" style="border:1px solid var(--border);text-decoration:none">
+                Register Free
               </a>
               <a href="?demo=true" class="ky-btn ky-btn-ghost ky-btn-sm" style="border:1px solid var(--border);text-decoration:none">
                 Demo Workspace
               </a>
+              <a href="/landing.html" class="ky-btn ky-btn-ghost ky-btn-sm" style="border:1px solid var(--border);text-decoration:none">
+                Home
+              </a>
             </div>
           </div>
         `;
+
+        document.getElementById('ky-btn-expired-signin')?.addEventListener('click', async (e) => {
+          e.preventDefault();
+          try {
+            await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
+          } catch (_) {}
+          localStorage.removeItem('kobits_token');
+          localStorage.removeItem('kobits_user');
+          window.location.href = '/portal.html?logout=1#login';
+        });
       }
       return;
     }
@@ -239,7 +253,7 @@ async function fetchDashboard(silent = false) {
           <p style="margin:8px 0 16px;font-size:13px;color:var(--text-2)">${esc(errMsg)}</p>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <button type="button" class="ky-btn ky-btn-primary ky-btn-xs" onclick="window.fetchDashboard ? window.fetchDashboard() : window.location.reload()">Retry Connection</button>
-            <a href="/portal.html#login" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border);text-decoration:none">Sign In Again</a>
+            <a href="/portal.html?logout=1#login" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border);text-decoration:none">Sign In Again</a>
             <a href="?demo=true" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border);text-decoration:none">Explore Demo Workspace</a>
           </div>
         </div>
