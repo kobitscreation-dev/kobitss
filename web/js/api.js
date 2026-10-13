@@ -447,6 +447,10 @@ index 0000000..9b62a4f
       if (typeof localStorage !== 'undefined') localStorage.setItem('kobits.gh_user', u);
       return { status: "success", message: `Connected to GitHub as @${u}` };
     }
+    if (path === '/github/disconnect' && method === 'POST') {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem('kobits.gh_user');
+      return { status: "success", message: "Disconnected GitHub account" };
+    }
 
     // 10. Interactive actions (Approve, Apply, Retry, Cancel, Start mission)
     if (method === 'POST') {

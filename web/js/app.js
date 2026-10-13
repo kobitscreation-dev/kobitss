@@ -420,9 +420,10 @@ function renderOverviewTab(d, milestones) {
             <div style="font-size:12px;color:var(--text-2);margin-top:2px">Connect a Personal Access Token (PAT) so autonomous agents can clone repositories, run sandboxes, and create Pull Requests.</div>
           </div>
         </div>
-        <a href="#settings" class="ky-btn ky-btn-primary ky-btn-xs" style="text-decoration:none;white-space:nowrap;display:inline-flex;align-items:center;gap:6px">
-          <span>Connect GitHub in Settings →</span>
-        </a>
+        <button type="button" class="ky-btn ky-btn-primary ky-btn-xs" onclick="window.openGitHubModal?.()" style="white-space:nowrap;display:inline-flex;align-items:center;gap:6px">
+          <svg width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/></svg>
+          <span>Connect GitHub Account →</span>
+        </button>
       </div>
     ` : `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:7px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;font-size:11.5px">
@@ -431,7 +432,9 @@ function renderOverviewTab(d, milestones) {
           <span style="color:var(--text-2)">GitHub Connected:</span>
           <span style="font-weight:600;color:var(--text-1)">@${esc(gh.username)}</span>
         </div>
-        <a href="#settings" style="color:var(--text-3);text-decoration:underline">Manage Token in Settings</a>
+        <button type="button" onclick="window.openGitHubModal?.()" class="ky-btn ky-btn-ghost ky-btn-xs" style="color:var(--text-2);border:1px solid var(--border)">
+          Manage Token
+        </button>
       </div>
     `}
 
@@ -1418,6 +1421,12 @@ function initTopBar() {
     openSettingsModal('account');
   });
 
+  const ghBtn = document.getElementById('ky-topbar-github');
+  ghBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openGitHubModal();
+  });
+
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       document.getElementById('ky-modal-host').innerHTML = '';
@@ -1426,6 +1435,10 @@ function initTopBar() {
 
   window.addEventListener('hashchange', () => {
     const h = (location.hash || '').replace(/^#\/?/, '');
+    if (h === 'github') {
+      openGitHubModal();
+      return;
+    }
     if (h === 'settings') {
       renderSettingsPage();
       return;
@@ -1503,10 +1516,9 @@ function renderNewProjectPage() {
                 ` : `
                   <span style="color:var(--text-2)">GitHub account not connected yet.</span>
                 `}
-              </div>
-              <a href="#settings" class="ky-btn ky-btn-ghost ky-btn-xs" style="text-decoration:none;border:1px solid var(--border)">
-                ${ghConnected ? 'Settings' : 'Connect PAT in Settings →'}
-              </a>
+              <button type="button" onclick="window.openGitHubModal?.()" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border)">
+                ${ghConnected ? 'Manage Token' : 'Connect PAT →'}
+              </button>
             </div>
           </div>
 
@@ -1665,7 +1677,7 @@ async function renderSettingsPage() {
         </div>
 
         <!-- 2. GitHub Connection -->
-        <div class="ky-card" style="margin-bottom:20px;padding:24px">
+        <div class="ky-card" id="ky-card-github" style="margin-bottom:20px;padding:24px">
           <div class="ky-card-head" style="margin-bottom:18px">
             <div>
               <div class="ky-section-title" style="font-size:15px;font-weight:600">GitHub Integration</div>
@@ -1871,6 +1883,151 @@ function openSettingsModal() {
   location.hash = '#settings';
   renderSettingsPage();
 }
+
+async function openGitHubModal() {
+  const host = document.getElementById('ky-modal-host');
+  if (!host) return;
+
+  let gh = _settingsCache.github;
+  if (!gh || gh.connected === undefined) {
+    try {
+      gh = await get('/github/status');
+      _settingsCache.github = gh;
+    } catch (_) {
+      const savedUser = typeof localStorage !== 'undefined' ? localStorage.getItem('kobits.gh_user') : null;
+      gh = savedUser ? { connected: true, username: savedUser } : { connected: false };
+      _settingsCache.github = gh;
+    }
+  }
+
+  const isConnected = Boolean(gh && gh.connected && gh.username);
+
+  host.innerHTML = `
+    <div class="ky-modal-overlay" id="ky-modal-bg">
+      <div class="ky-modal" style="max-width:540px" role="dialog" aria-modal="true">
+        <div class="ky-modal-head" style="align-items:flex-start">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:38px;height:38px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/></svg>
+            </div>
+            <div>
+              <div class="ky-eyebrow">GIT HOST PROVIDER</div>
+              <h3 style="margin:2px 0 0;font-size:18px">GitHub Integration</h3>
+            </div>
+          </div>
+          <button type="button" class="ky-icon-btn" id="ky-modal-close" aria-label="Close">✕</button>
+        </div>
+
+        <div class="ky-modal-body">
+          <p style="margin:0 0 16px;color:var(--text-2);font-size:13px;line-height:1.5">
+            Connect your GitHub account with a Personal Access Token (PAT). This enables Kobits autonomous agents to clone repositories, execute cleanroom sandbox builds, and publish Pull Requests.
+          </p>
+
+          ${isConnected ? `
+            <div style="padding:14px 16px;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:8px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span class="ky-badge ky-badge-done" style="font-size:11px">Connected</span>
+                  <strong style="font-size:14px;color:var(--text-1)">@${esc(gh.username)}</strong>
+                </div>
+                <div style="font-size:12px;color:var(--text-3);margin-top:4px">Access token active with repository permissions.</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <button id="ky-modal-gh-toggle" type="button" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border)">
+                  Update Token
+                </button>
+                <button id="ky-modal-gh-disconnect" type="button" class="ky-btn ky-btn-ghost ky-btn-xs" style="color:var(--err-fg, #ef4444);border:1px solid var(--border)">
+                  Disconnect
+                </button>
+              </div>
+            </div>
+          ` : ''}
+
+          <div id="ky-modal-gh-form" style="${isConnected ? 'display:none;' : ''}">
+            <div style="margin-bottom:14px">
+              <label for="ky-m-gh-user" style="display:block;font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:5px;font-family:var(--font-mono)">
+                GITHUB USERNAME <span style="color:var(--err-fg, #ef4444)">*</span>
+              </label>
+              <input id="ky-m-gh-user" type="text" value="${esc(gh.username || '')}" placeholder="e.g. your-github-username" style="width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text-1);outline:none" />
+            </div>
+
+            <div style="margin-bottom:14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;flex-wrap:wrap;gap:4px">
+                <label for="ky-m-gh-token" style="font-size:12px;font-weight:600;color:var(--text-2);font-family:var(--font-mono)">
+                  PERSONAL ACCESS TOKEN (PAT) <span style="color:var(--err-fg, #ef4444)">*</span>
+                </label>
+                <a href="https://github.com/settings/tokens/new?scopes=repo" target="_blank" rel="noopener noreferrer" style="font-size:11.5px;color:var(--text-1);text-decoration:underline">
+                  Generate token with repo scope ↗
+                </a>
+              </div>
+              <input id="ky-m-gh-token" type="password" placeholder="ghp_••••••••••••••••••••" style="width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text-1);outline:none;font-family:var(--font-mono)" />
+              <div style="font-size:11.5px;color:var(--text-3);margin-top:5px">
+                Requires standard <code>repo</code> scope to clone and create Pull Requests.
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
+              <button id="ky-modal-gh-cancel" type="button" class="ky-btn ky-btn-ghost ky-btn-sm">Cancel</button>
+              <button id="ky-modal-gh-submit" type="button" class="ky-btn ky-btn-primary ky-btn-sm" style="padding:8px 18px">
+                ${isConnected ? 'Save New Token' : 'Connect GitHub'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Attach event handlers
+  document.getElementById('ky-modal-bg')?.addEventListener('click', (e) => {
+    if (e.target.id === 'ky-modal-bg') host.innerHTML = '';
+  });
+  document.getElementById('ky-modal-close')?.addEventListener('click', () => { host.innerHTML = ''; });
+  document.getElementById('ky-modal-gh-cancel')?.addEventListener('click', () => { host.innerHTML = ''; });
+
+  document.getElementById('ky-modal-gh-toggle')?.addEventListener('click', () => {
+    const f = document.getElementById('ky-modal-gh-form');
+    if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  });
+
+  document.getElementById('ky-modal-gh-disconnect')?.addEventListener('click', async () => {
+    try {
+      await post('/github/disconnect', {});
+    } catch (_) {}
+    if (typeof localStorage !== 'undefined') localStorage.removeItem('kobits.gh_user');
+    _settingsCache.github = { connected: false };
+    updateTopBarGitHubStatus({ connected: false });
+    notify('GitHub account disconnected.', 'info');
+    openGitHubModal();
+    if (location.hash === '#overview' || !location.hash) fetchDashboard(true);
+  });
+
+  const submitBtn = document.getElementById('ky-modal-gh-submit');
+  submitBtn?.addEventListener('click', async () => {
+    const username = document.getElementById('ky-m-gh-user')?.value?.trim();
+    const token = document.getElementById('ky-m-gh-token')?.value?.trim();
+    if (!username || !token) {
+      notify('Enter both GitHub username and Personal Access Token.', 'error');
+      return;
+    }
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Connecting…';
+    try {
+      await post('/github/connect', { username, token });
+      _settingsCache.github = { connected: true, username };
+      if (typeof localStorage !== 'undefined') localStorage.setItem('kobits.gh_user', username);
+      updateTopBarGitHubStatus({ connected: true, username });
+      notify(`Connected to GitHub as @${username}!`, 'info');
+      host.innerHTML = '';
+      if (location.hash === '#overview' || !location.hash) fetchDashboard(true);
+    } catch (e) {
+      notify(e.message || 'GitHub connection failed.', 'error');
+      submitBtn.disabled = false;
+      submitBtn.textContent = isConnected ? 'Save New Token' : 'Connect GitHub';
+    }
+  });
+}
+window.openGitHubModal = openGitHubModal;
 
 // ── Real-World SaaS Product Onboarding Walkthrough (Linear/Vercel Style) ────
 

@@ -85,6 +85,24 @@ async def get_github_connection_status(
         return {"connected": True, "username": conn.github_username}
     return {"connected": False}
 
+@router.post("/disconnect")
+async def disconnect_github(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    membership = await get_user_default_org(db, current_user.id)
+    stmt = select(GitHubConnection).where(
+        GitHubConnection.organization_id == membership.organization_id,
+        GitHubConnection.user_id == current_user.id
+    )
+    result = await db.execute(stmt)
+    conn = result.scalars().first()
+    if conn:
+        conn.status = GitHubConnectionStatus.DISCONNECTED
+        conn.metadata_json = None
+        await db.commit()
+    return {"status": "success", "message": "GitHub disconnected successfully"}
+
 @router.get("/repositories")
 async def list_github_repositories(
     db: AsyncSession = Depends(get_db),
