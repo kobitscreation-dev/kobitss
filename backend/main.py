@@ -677,6 +677,9 @@ app.include_router(preview.router, prefix="/api/v1/preview", tags=["Live Ephemer
 from backend.api.v1 import telemetry
 app.include_router(telemetry.router, prefix="/api/v1/telemetry", tags=["Observability & Telemetry"])
 
+from backend.api.v1 import waitlist
+app.include_router(waitlist.router, prefix="/api/v1", tags=["Waitlist"])
+
 
 
 # ══════════════════════════════════════════
