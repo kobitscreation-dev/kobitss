@@ -26,6 +26,7 @@ router = APIRouter()
 # ══════════════════════════════════════════
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def create_project(
     project_in: ProjectCreate,
     current_user: User = Depends(get_current_active_user),
@@ -60,6 +61,7 @@ async def create_project(
 
 
 @router.get("", response_model=List[ProjectResponse])
+@router.get("/", response_model=List[ProjectResponse], include_in_schema=False)
 async def list_projects(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),

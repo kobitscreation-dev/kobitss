@@ -41,25 +41,28 @@
     <!-- Top Kyros-style Navigation Bar -->
     <header class="ky-topbar">
       <div class="ky-topbar-inner">
-        <a class="ky-brand" href="#overview" aria-label="Kobits Home">
-          <span class="ky-logo-badge" aria-hidden="true">
-            <!-- Expressive Handwritten Calligraphic Brush-Stroke 'K' (Kyros Style) -->
-            <svg class="ky-logo-svg" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
-              <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
-              <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
-            </svg>
-          </span>
-          <span class="ky-brand-word">KOBITS</span>
-        </a>
-
-        <div class="ky-topbar-right">
+        <div style="display:flex;align-items:center;gap:12px">
+          <a class="ky-brand" href="#overview" aria-label="Kobits Home">
+            <span class="ky-logo-badge" aria-hidden="true">
+              <!-- Expressive Handwritten Calligraphic Brush-Stroke 'K' (Kyros Style) -->
+              <svg class="ky-logo-svg" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+                <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+                <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span class="ky-brand-word">KOBITS</span>
+          </a>
+          <span style="color:var(--border-strong);font-size:16px;user-select:none;font-weight:300">/</span>
           <div class="ky-project-pill" title="Active Workspace Project">
             <span class="ky-dot-live"></span>
             <select id="ky-project-select" aria-label="Select Project">
               <option value="">Loading project…</option>
             </select>
           </div>
+        </div>
+
+        <div class="ky-topbar-right">
           <button id="ky-topbar-new-project" type="button" class="ky-btn ky-btn-ghost ky-btn-xs" style="display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border)" title="Start a New Engineering Project">
             <span>+</span>
             <span>New Project</span>
@@ -93,6 +96,6 @@
   <!-- Toast Notifications -->
   <div class="ky-toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="/js/app.js?v=9"></script>
+  <script type="module" src="/js/app.js?v=10"></script>
 </body>
 </html>

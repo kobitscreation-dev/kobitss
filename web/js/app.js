@@ -286,6 +286,9 @@ function renderDashboard() {
       <button type="button" class="ky-tab ${state.tab === 'reports' ? 'active' : ''}" data-tab="reports">
         <span>Reports</span>
       </button>
+      <button type="button" class="ky-tab ${location.hash === '#settings' ? 'active' : ''}" id="ky-tab-settings-nav" title="Workspace & Account Settings">
+        <span>Settings</span>
+      </button>
     </nav>
 
     <!-- Tab Body -->
@@ -755,6 +758,14 @@ function wireTabEvents() {
       renderDashboard();
     });
   });
+
+  const settingsTab = document.getElementById('ky-tab-settings-nav');
+  if (settingsTab) {
+    settingsTab.addEventListener('click', () => {
+      location.hash = '#settings';
+      renderSettingsPage();
+    });
+  }
 
   const sprintSel = document.getElementById('ky-sprint-select');
   if (sprintSel) {
