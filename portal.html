@@ -1034,11 +1034,11 @@
         const errText = document.getElementById('auth-error-text');
         if (errBox && errText) {
           if (authErr === 'google_not_configured') {
-            errText.textContent = 'Google OAuth requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env. You can sign in immediately with Email & Password below.';
+            errText.textContent = 'Google Single Sign-On is reserved for configured enterprise tenants. Please sign in or register with Email & Password below.';
           } else if (authErr === 'github_not_configured') {
-            errText.textContent = 'GitHub OAuth requires GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env. You can sign in immediately with Email & Password below.';
+            errText.textContent = 'GitHub Single Sign-On requires OAuth credentials configured on the server. Please sign in or register with Email & Password below. Once inside, you can link your GitHub repositories in Settings using a Personal Access Token (PAT).';
           } else {
-            errText.textContent = 'External sign-in was cancelled or encountered an error. Please try again.';
+            errText.textContent = 'External sign-in was cancelled or encountered an error. Please try again or use Email & Password.';
           }
           errBox.classList.remove('hidden');
         }
