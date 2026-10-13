@@ -101,6 +101,11 @@ class Settings(BaseSettings):
     DOCKER_TLS_VERIFY: Optional[str] = None
     DOCKER_CERT_PATH: Optional[str] = None
 
+    # Production Observability & Error Tracing (Sentry / Datadog)
+    SENTRY_DSN: Optional[str] = None
+    SENTRY_ENVIRONMENT: str = "production"
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True, extra="ignore")
 
 settings = Settings()

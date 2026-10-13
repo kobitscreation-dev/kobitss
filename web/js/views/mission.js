@@ -634,11 +634,12 @@ async function loadDiff() {
 
 async function loadActivity() {
   const container = document.getElementById('mission-activity');
+  const overviewContainer = document.getElementById('mission-overview-activity');
   try {
     const act = await get(`/missions/${missionId}/activity`);
+    let contentHtml = '';
     if (act && act.length > 0) {
-      container.innerHTML = `
-        <div class="card-head"><h3>Activity</h3></div>
+      contentHtml = `
         <div class="list">
           ${act.map(a => `
             <div class="list-row">
@@ -652,10 +653,17 @@ async function loadActivity() {
         </div>
       `;
     } else {
-      container.innerHTML = `<div class="card-head"><h3>Activity</h3></div><div class="card-body faint">No activity yet</div>`;
+      contentHtml = `<div class="faint" style="padding: 12px 16px;">No activity yet</div>`;
+    }
+    if (container) {
+      container.innerHTML = `<div class="card-head"><h3>Activity</h3></div><div class="card-body" style="padding:0;">${contentHtml}</div>`;
+    }
+    if (overviewContainer) {
+      overviewContainer.innerHTML = contentHtml;
     }
   } catch (e) {
-    container.innerHTML = `<div class="card-head"><h3>Activity</h3></div><div class="card-body">${errorBox(e)}</div>`;
+    if (container) container.innerHTML = `<div class="card-head"><h3>Activity</h3></div><div class="card-body">${errorBox(e)}</div>`;
+    if (overviewContainer) overviewContainer.innerHTML = errorBox(e);
   }
 }
 
@@ -665,6 +673,159 @@ function handleRouteCleanup() {
     cleanupTerminal();
     window.removeEventListener('hashchange', handleRouteCleanup);
   }
+}
+
+function renderPreview() {
+  const previewUrl = `/api/v1/preview/${encodeURIComponent(missionId)}/`;
+  return `
+    <div class="card" id="mission-preview-card" style="margin-bottom: 24px;">
+      <div class="card-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--border, #222226); padding: 10px 16px;">
+        <div style="display: flex; align-items: center; gap: 8px; flex: 1; max-width: 650px;">
+          <button class="btn btn-ghost btn-sm" id="btn-preview-refresh" title="Reload Preview" style="padding: 4px 8px; font-size: 13px;">&#8635;</button>
+          <div style="display: flex; align-items: center; background: #09090b; border: 1px solid var(--border, #27272a); border-radius: 6px; padding: 3px 10px; flex: 1;">
+            <span style="color: #38bdf8; font-size: 11px; margin-right: 6px; user-select: none;">&#128279;</span>
+            <input 
+              type="text" 
+              id="preview-address-bar" 
+              value="${previewUrl}" 
+              placeholder="/api/v1/preview/${missionId}/" 
+              style="flex: 1; background: transparent; border: none; outline: none; color: #f4f4f5; font-family: var(--font-mono, monospace); font-size: 12px;"
+            />
+            <button class="btn btn-ghost btn-sm" id="btn-preview-go" style="padding: 2px 8px; font-size: 11px; margin-left: 4px;">Go</button>
+          </div>
+        </div>
+        <div class="row" style="gap: 8px; align-items: center;">
+          <div class="btn-group" style="display: inline-flex; border: 1px solid var(--border, #27272a); border-radius: 6px; overflow: hidden;">
+            <button class="btn btn-ghost btn-sm active" id="btn-viewport-desktop" title="Desktop View (100%)" style="padding: 3px 10px; font-size: 11px; background: rgba(255,255,255,0.08);">Desktop</button>
+            <button class="btn btn-ghost btn-sm" id="btn-viewport-tablet" title="Tablet View (768px)" style="padding: 3px 10px; font-size: 11px;">Tablet</button>
+            <button class="btn btn-ghost btn-sm" id="btn-viewport-mobile" title="Mobile View (375px)" style="padding: 3px 10px; font-size: 11px;">Mobile</button>
+          </div>
+          <a 
+            href="${previewUrl}" 
+            target="_blank" 
+            class="btn btn-ghost btn-sm" 
+            id="btn-preview-newtab" 
+            title="Open Live Preview in New Window" 
+            style="padding: 4px 10px; font-size: 11px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;"
+          >
+            Open &nearr;
+          </a>
+        </div>
+      </div>
+      <div class="card-body" style="padding: 0; background: #000000; display: flex; justify-content: center; min-height: 540px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; overflow: hidden;">
+        <div id="preview-viewport-container" style="width: 100%; height: 580px; transition: width 0.25s ease; display: flex; justify-content: center; margin: 0 auto;">
+          <iframe 
+            id="preview-iframe" 
+            src="${previewUrl}" 
+            style="width: 100%; height: 100%; border: none; background: #ffffff;"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+          ></iframe>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function wirePreview() {
+  const iframe = document.getElementById('preview-iframe');
+  const container = document.getElementById('preview-viewport-container');
+  const addressInput = document.getElementById('preview-address-bar');
+  const btnRefresh = document.getElementById('btn-preview-refresh');
+  const btnGo = document.getElementById('btn-preview-go');
+  const btnNewtab = document.getElementById('btn-preview-newtab');
+  const btnDesktop = document.getElementById('btn-viewport-desktop');
+  const btnTablet = document.getElementById('btn-viewport-tablet');
+  const btnMobile = document.getElementById('btn-viewport-mobile');
+
+  function updateActiveViewport(activeBtn) {
+    [btnDesktop, btnTablet, btnMobile].forEach(btn => {
+      if (!btn) return;
+      btn.style.background = 'transparent';
+      btn.classList.remove('active');
+    });
+    if (activeBtn) {
+      activeBtn.style.background = 'rgba(255,255,255,0.08)';
+      activeBtn.classList.add('active');
+    }
+  }
+
+  btnDesktop?.addEventListener('click', () => {
+    if (container) {
+      container.style.width = '100%';
+      container.style.boxShadow = 'none';
+    }
+    updateActiveViewport(btnDesktop);
+  });
+
+  btnTablet?.addEventListener('click', () => {
+    if (container) {
+      container.style.width = '768px';
+      container.style.boxShadow = '0 0 30px rgba(0,0,0,0.6)';
+    }
+    updateActiveViewport(btnTablet);
+  });
+
+  btnMobile?.addEventListener('click', () => {
+    if (container) {
+      container.style.width = '375px';
+      container.style.boxShadow = '0 0 30px rgba(0,0,0,0.6)';
+    }
+    updateActiveViewport(btnMobile);
+  });
+
+  function navigatePreview() {
+    if (!addressInput || !iframe) return;
+    let url = addressInput.value.trim();
+    if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/')) {
+      url = `/api/v1/preview/${missionId}/${url}`;
+      addressInput.value = url;
+    }
+    iframe.src = url;
+    if (btnNewtab) btnNewtab.href = url;
+  }
+
+  btnGo?.addEventListener('click', navigatePreview);
+  addressInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      navigatePreview();
+    }
+  });
+
+  btnRefresh?.addEventListener('click', () => {
+    if (iframe) {
+      const cur = iframe.src;
+      iframe.src = 'about:blank';
+      setTimeout(() => { iframe.src = cur; }, 50);
+    }
+  });
+}
+
+function wireTabs() {
+  const tabButtons = document.querySelectorAll('.mission-tab-btn');
+  const tabPanes = document.querySelectorAll('.mission-tab-pane');
+
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetTab = btn.getAttribute('data-tab');
+      tabButtons.forEach(b => {
+        b.style.borderBottom = '2px solid transparent';
+        b.style.color = 'var(--text-3, #71717a)';
+        b.classList.remove('active');
+      });
+      btn.style.borderBottom = '2px solid var(--primary, #ffffff)';
+      btn.style.color = 'var(--text-1, #ffffff)';
+      btn.classList.add('active');
+
+      tabPanes.forEach(pane => {
+        if (pane.id === `tab-pane-${targetTab}`) {
+          pane.style.display = pane.getAttribute('data-display') || 'block';
+        } else {
+          pane.style.display = 'none';
+        }
+      });
+    });
+  });
 }
 
 export async function render(id) {
@@ -677,41 +838,70 @@ export async function render(id) {
     <div class="page fade-in">
       <div id="mission-header">${skeleton(3)}</div>
       
-      <div class="grid-2">
+      <!-- Tab Navigation Bar -->
+      <div class="tabs-nav" style="display: flex; gap: 4px; border-bottom: 1px solid var(--border, #222226); margin-bottom: 24px; overflow-x: auto;">
+        <button class="mission-tab-btn active" data-tab="overview" style="padding: 10px 18px; background: transparent; border: none; border-bottom: 2px solid var(--primary, #ffffff); color: var(--text-1, #ffffff); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;">Overview</button>
+        <button class="mission-tab-btn" data-tab="tasks" style="padding: 10px 18px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-3, #71717a); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;">Tasks</button>
+        <button class="mission-tab-btn" data-tab="terminal" style="padding: 10px 18px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-3, #71717a); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;">Live Terminal</button>
+        <button class="mission-tab-btn" data-tab="changes" style="padding: 10px 18px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-3, #71717a); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;">Changes</button>
+        <button class="mission-tab-btn" data-tab="preview" style="padding: 10px 18px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-3, #71717a); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;">Live Preview</button>
+      </div>
+
+      <!-- Tab 1: Overview -->
+      <div class="mission-tab-pane" id="tab-pane-overview" data-display="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
         <div class="stack">
           <div class="card">
             <div class="card-head"><h3>Objective</h3></div>
             <div class="card-body" id="mission-objective" style="white-space: pre-wrap;">${skeleton(2)}</div>
           </div>
-          
-          ${renderTerminal()}
-          
           <div class="card">
-            <div class="card-head"><h3>Tasks</h3></div>
-            <div class="list" id="mission-tasks">${skeleton(4)}</div>
+            <div class="card-head"><h3>Recent Activity</h3></div>
+            <div class="card-body" id="mission-overview-activity" style="padding: 0;">${skeleton(3)}</div>
           </div>
         </div>
-        
         <div class="stack">
           <div id="mission-details">
             <div class="card"><div class="card-head"><h3>Details</h3></div><div class="card-body">${skeleton(3)}</div></div>
           </div>
-          
-          <div class="card" id="mission-changes">
-            <div class="card-head"><h3>Changes</h3></div>
-            <div class="card-body">${skeleton(4)}</div>
-          </div>
-          
-          <div class="card" id="mission-activity">
-            <div class="card-head"><h3>Activity</h3></div>
-            <div class="card-body">${skeleton(3)}</div>
-          </div>
         </div>
+      </div>
+
+      <!-- Tab 2: Tasks -->
+      <div class="mission-tab-pane" id="tab-pane-tasks" data-display="block" style="display: none;">
+        <div class="card">
+          <div class="card-head"><h3>Tasks</h3></div>
+          <div class="list" id="mission-tasks">${skeleton(4)}</div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Live Terminal -->
+      <div class="mission-tab-pane" id="tab-pane-terminal" data-display="block" style="display: none;">
+        ${renderTerminal()}
+      </div>
+
+      <!-- Tab 4: Changes -->
+      <div class="mission-tab-pane" id="tab-pane-changes" data-display="block" style="display: none;">
+        <div class="card" id="mission-changes">
+          <div class="card-head"><h3>Changes</h3></div>
+          <div class="card-body">${skeleton(4)}</div>
+        </div>
+      </div>
+
+      <!-- Tab 5: Live Preview -->
+      <div class="mission-tab-pane" id="tab-pane-preview" data-display="block" style="display: none;">
+        ${renderPreview()}
+      </div>
+
+      <div class="card" id="mission-activity" style="display: none;">
+        <div class="card-head"><h3>Activity</h3></div>
+        <div class="card-body">${skeleton(3)}</div>
       </div>
     </div>
   `;
   
   wireTerminal();
+  wirePreview();
+  wireTabs();
   connectTerminalWs(missionId);
 
   window.addEventListener('hashchange', handleRouteCleanup);
@@ -722,3 +912,4 @@ export async function render(id) {
     loadActivity();
   }
 }
+

@@ -1954,6 +1954,28 @@ class SandboxManager:
             timeout=timeout,
         )
 
+        # Observability: Capture command timeouts
+        err_str = str(res.get("error") or "").lower()
+        stderr_str = str(res.get("stderr") or "").lower()
+        is_timeout = (
+            res.get("exit_code") == 124
+            or "timed out" in err_str
+            or "timeoutexpired" in err_str
+            or "timeoutexpired" in stderr_str
+            or "timed out" in stderr_str
+        )
+        if is_timeout:
+            try:
+                from backend.services.observability import capture_sandbox_timeout
+                capture_sandbox_timeout(
+                    error=res.get("error") or res.get("stderr") or f"Command timed out after {timeout}s",
+                    command=command,
+                    timeout=timeout,
+                    mission_id=session.session_id,
+                )
+            except Exception:
+                pass
+
         # Update session VM metadata and installed packages from virtual dpkg if any
         if res.get("vm_id"):
             session.vm_id = res["vm_id"]

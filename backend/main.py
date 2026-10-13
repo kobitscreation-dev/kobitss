@@ -43,6 +43,27 @@ async def lifespan(app: FastAPI):
     import logging as _logging
     _startup_logger = _logging.getLogger("kobits.startup")
 
+    # Guard 0: Initialize Sentry Observability SDK if configured
+    if getattr(settings, "SENTRY_DSN", None):
+        try:
+            import sentry_sdk
+            from sentry_sdk.integrations.fastapi import FastApiIntegration
+            from sentry_sdk.integrations.starlette import StarletteIntegration
+
+            sentry_sdk.init(
+                dsn=settings.SENTRY_DSN,
+                environment=settings.SENTRY_ENVIRONMENT,
+                traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+                integrations=[
+                    FastApiIntegration(),
+                    StarletteIntegration(),
+                ],
+                send_default_pii=False,
+            )
+            _startup_logger.info(f"Sentry SDK initialized successfully (env={settings.SENTRY_ENVIRONMENT})")
+        except Exception as _sentry_err:
+            _startup_logger.error(f"Failed to initialize Sentry: {_sentry_err}")
+
     # Guard 1: DEV_MODE must NEVER be enabled in a PostgreSQL (production) environment
     if settings.KOBITS_DEV_MODE and "postgresql" in settings.DATABASE_URL.lower():
         if not settings.ALLOW_DEV_POSTGRES and os.environ.get("ALLOW_DEV_POSTGRES") != "1":
@@ -649,6 +670,12 @@ app.include_router(profile.router, prefix="/api/v1/profile", tags=["User Profile
 
 from backend.api.v1 import training
 app.include_router(training.router, prefix="/api/v1/training", tags=["Model Fine-Tuning Flywheel"])
+
+from backend.api.v1 import preview
+app.include_router(preview.router, prefix="/api/v1/preview", tags=["Live Ephemeral Preview"])
+
+from backend.api.v1 import telemetry
+app.include_router(telemetry.router, prefix="/api/v1/telemetry", tags=["Observability & Telemetry"])
 
 
 

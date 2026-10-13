@@ -9,6 +9,7 @@ a worker thread.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -165,7 +166,15 @@ async def persist_mission_deliverable(
     ).scalars().first()
 
     summary_json = json.dumps(
-        [{"path": f["path"], "status": f["status"], "added": f.get("added", 0), "removed": f.get("removed", 0)} for f in files[:50]]
+        [
+            {
+                "path": f["path"] if isinstance(f, dict) else str(f),
+                "status": f.get("status", "modified") if isinstance(f, dict) else "modified",
+                "added": f.get("added", 0) if isinstance(f, dict) else 0,
+                "removed": f.get("removed", 0) if isinstance(f, dict) else 0,
+            }
+            for f in files[:50]
+        ]
     )
 
     if existing_cs:
@@ -203,17 +212,7 @@ async def persist_mission_deliverable(
         await db.execute(select(PullRequest).where(PullRequest.mission_id == mission.id))
     ).scalars().first()
 
-    if existing_pr:
-        pr_info = {
-            "id": existing_pr.id,
-            "number": existing_pr.number,
-            "title": existing_pr.title,
-            "url": existing_pr.url,
-            "status": existing_pr.status.value if hasattr(existing_pr.status, "value") else str(existing_pr.status),
-            "source_branch": existing_pr.source_branch,
-            "target_branch": existing_pr.target_branch,
-        }
-    elif push_and_open_pr and repo:
+    if push_and_open_pr and repo:
         # Resolve GitHub token from env or organization's GitHubConnection
         token = os.environ.get("GITHUB_TOKEN") or os.environ.get("KOBITS_GITHUB_TOKEN")
         if not token:
@@ -234,7 +233,8 @@ async def persist_mission_deliverable(
         # Push git branch from sandbox if a real remote exists
         sb_rel = diff_data.get("sandbox_dir")
         if sb_rel:
-            abs_sb = (ROOT_DIR / sb_rel).resolve()
+            sb_p = Path(sb_rel)
+            abs_sb = sb_p.resolve() if sb_p.is_absolute() else (ROOT_DIR / sb_rel).resolve()
             if (abs_sb / ".git").exists():
                 try:
                     await asyncio.to_thread(
@@ -247,6 +247,20 @@ async def persist_mission_deliverable(
                     )
                 except Exception:
                     pass
+
+    if existing_pr:
+        existing_pr.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        pr_info = {
+            "id": existing_pr.id,
+            "number": existing_pr.number,
+            "title": existing_pr.title,
+            "url": existing_pr.url,
+            "status": existing_pr.status.value if hasattr(existing_pr.status, "value") else str(existing_pr.status),
+            "source_branch": existing_pr.source_branch,
+            "target_branch": existing_pr.target_branch,
+        }
+    elif push_and_open_pr and repo:
 
         repo_full = repo.full_name or f"{repo.owner}/{repo.name}"
         target_branch = repo.default_branch or "main"

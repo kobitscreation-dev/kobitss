@@ -27,16 +27,17 @@ mock_user = User(id="test_user", email="test@test.com", full_name="Test", hashed
 async def override_get_current_user():
     return mock_user
 
-app.dependency_overrides[get_db] = override_get_db
-app.dependency_overrides[get_current_user] = override_get_current_user
-
 from backend.models.project import Project
 from backend.models.organization import Organization, OrganizationMember
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_db():
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
+
     async def init_db():
         async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
         async with TestingSessionLocal() as session:
             org = Organization(id="demo_org", name="Demo Org")
@@ -49,6 +50,8 @@ def setup_db():
             await session.commit()
     asyncio.run(init_db())
     yield
+    app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(get_current_user, None)
     async def close_db():
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)

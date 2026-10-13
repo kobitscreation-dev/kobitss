@@ -124,6 +124,7 @@ class AgentExecutor:
         return res
 
     async def execute_run(self, agent_run: AgentRun, agent_type: AgentType, input_data: dict, db=None) -> dict:
+        run_start_time = datetime.now()
         if self.provider_scenarios is None and self.provider is self._default_provider:
             self.provider = get_llm_provider()
             self._default_provider = self.provider
@@ -483,6 +484,24 @@ class AgentExecutor:
                     tool_executor=execute_tool
                 )
             except Exception as e:
+                is_parsing = isinstance(e, (json.JSONDecodeError, ValueError)) or any(k in str(e).lower() for k in ("json", "parse", "schema", "decode"))
+                if is_parsing:
+                    from backend.services.observability import capture_llm_parsing_failure
+                    capture_llm_parsing_failure(
+                        e,
+                        raw_response=str(e),
+                        mission_id=input_data.get("mission_id"),
+                        agent_role=agent_type.value,
+                        task_id=agent_run.task_id,
+                    )
+                else:
+                    from backend.services.observability import capture_agent_run_failure
+                    capture_agent_run_failure(
+                        e,
+                        mission_id=input_data.get("mission_id"),
+                        agent_role=agent_type.value,
+                        task_id=agent_run.task_id,
+                    )
                 if "AntiLoopException" in str(e):
                     result = {"status": "FAILED", "summary": f"Run aborted due to infinite loop: {str(e)}"}
                 else:
@@ -575,6 +594,14 @@ class AgentExecutor:
         
         # Ensure result is a dict for downstream processing
         if not is_valid_dict:
+            from backend.services.observability import capture_llm_parsing_failure
+            capture_llm_parsing_failure(
+                "Non-dictionary or invalid JSON LLM response",
+                raw_response=result,
+                mission_id=input_data.get("mission_id"),
+                agent_role=agent_type.value,
+                task_id=agent_run.task_id,
+            )
             result = {"status": "FAILED", "summary": "Invalid JSON response"}
             
         # --- Corrective retry for INDETERMINATE (missing status with evidence) ---
@@ -649,6 +676,14 @@ class AgentExecutor:
                         print(f'\n[LLM RAW RETRY] {json.dumps(result, indent=2)}\n')
                     parse_and_validate_tasks(result)
                 except ValueError as e:
+                    from backend.services.observability import capture_llm_parsing_failure
+                    capture_llm_parsing_failure(
+                        e,
+                        raw_response=result,
+                        mission_id=input_data.get("mission_id"),
+                        agent_role=agent_type.value,
+                        task_id=agent_run.task_id,
+                    )
                     # If it STILL fails, mark as failed so it doesn't enter the queue silently
                     classification = ResultClassification.FAILED
                     run_status = AgentRunStatus.FAILED
@@ -706,10 +741,23 @@ class AgentExecutor:
             "status_inferred": classification == ResultClassification.COMPLETED_WITH_INFERRED_STATUS,
             "corrective_retries": corrective_retries,
         }
-            
-        agent_run.output_text = scrub_secrets(json.dumps(result, indent=2))
-        agent_run.tool_calls_json = json.dumps(trace_logs)
-        
+        # Record run telemetry metrics
+        try:
+            from backend.services.observability import telemetry
+            run_latency = (datetime.now() - run_start_time).total_seconds() * 1000.0 if "run_start_time" in locals() else 0.0
+            telemetry.record_run(
+                mission_id=input_data.get("mission_id"),
+                agent_role=agent_type.value,
+                latency_ms=run_latency,
+                prompt_tokens=agent_run.tokens_input or 0,
+                completion_tokens=agent_run.tokens_output or 0,
+                cost=agent_run.estimated_cost or 0.0,
+                error_type="agent_run_failure" if run_status == AgentRunStatus.FAILED else None,
+                task_id=agent_run.task_id,
+            )
+        except Exception:
+            pass
+
         return result
 
 agent_executor = AgentExecutor()
