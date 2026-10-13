@@ -470,3 +470,4 @@ index 0000000..9b62a4f
 
 export const get = (p) => api('GET', p);
 export const post = (p, b = {}) => api('POST', p, b);
+export const del = (p) => api('DELETE', p);

@@ -28,6 +28,7 @@ from backend.models.intelligence import *
 from backend.models.memory import *
 from backend.models.audit_log import AuditLog
 from backend.models.password_reset import PasswordResetToken
+from backend.models.waitlist import WaitlistLead
 
 from backend.api.v1 import auth, projects, agents, github, missions, memory, tools
 
@@ -560,6 +561,102 @@ async def list_waitlist_leads():
             }
             for l in leads
         ]
+
+
+@app.post("/api/v1/waitlist/leads/{lead_id}/approve")
+async def approve_waitlist_lead(lead_id: str, request: Request):
+    """Approve a waitlist lead, provision their user account & organization with 50 credits, and return their invite URL."""
+    from backend.models.waitlist import WaitlistLead
+    from backend.api.v1.auth import _find_or_create_user_and_org
+    from backend.core.database import AsyncSessionLocal
+    from fastapi import HTTPException
+
+    async with AsyncSessionLocal() as db:
+        lead = await db.get(WaitlistLead, lead_id)
+        if not lead:
+            raise HTTPException(status_code=404, detail="Waitlist lead not found")
+
+        lead.status = "APPROVED"
+
+        # Provision user account & default workspace with 50 welcome credits
+        try:
+            await _find_or_create_user_and_org(
+                db=db,
+                email=lead.email,
+                full_name=lead.full_name
+            )
+        except Exception:
+            pass
+
+        await db.commit()
+        await db.refresh(lead)
+
+        # Craft invite URL
+        base_url = "https://kobits.space"
+        if request:
+            host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+            proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+            if host:
+                base_url = f"{proto}://{host}".rstrip("/")
+
+        invite_url = f"{base_url}/portal.html?email={lead.email}#register"
+
+        return {
+            "status": "success",
+            "message": f"Lead {lead.email} approved and workspace provisioned with 50 credits.",
+            "lead": {
+                "id": lead.id,
+                "email": lead.email,
+                "full_name": lead.full_name,
+                "company": lead.company,
+                "status": lead.status,
+                "invite_url": invite_url
+            }
+        }
+
+
+@app.post("/api/v1/waitlist/leads/{lead_id}/reject")
+async def reject_waitlist_lead(lead_id: str):
+    """Mark a waitlist lead as rejected."""
+    from backend.models.waitlist import WaitlistLead
+    from backend.core.database import AsyncSessionLocal
+    from fastapi import HTTPException
+
+    async with AsyncSessionLocal() as db:
+        lead = await db.get(WaitlistLead, lead_id)
+        if not lead:
+            raise HTTPException(status_code=404, detail="Waitlist lead not found")
+        lead.status = "REJECTED"
+        await db.commit()
+        await db.refresh(lead)
+        return {
+            "status": "success",
+            "message": f"Lead {lead.email} marked as rejected.",
+            "lead": {
+                "id": lead.id,
+                "email": lead.email,
+                "status": lead.status
+            }
+        }
+
+
+@app.delete("/api/v1/waitlist/leads/{lead_id}")
+async def delete_waitlist_lead(lead_id: str):
+    """Delete a waitlist submission."""
+    from backend.models.waitlist import WaitlistLead
+    from backend.core.database import AsyncSessionLocal
+    from fastapi import HTTPException
+
+    async with AsyncSessionLocal() as db:
+        lead = await db.get(WaitlistLead, lead_id)
+        if not lead:
+            raise HTTPException(status_code=404, detail="Waitlist lead not found")
+        await db.delete(lead)
+        await db.commit()
+        return {
+            "status": "success",
+            "message": "Lead deleted successfully."
+        }
 
 
 @app.get("/api/health")

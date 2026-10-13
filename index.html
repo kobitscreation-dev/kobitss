@@ -1766,7 +1766,28 @@
     })();
 
     // Early Access Application Modal Logic
-    (function initEarlyAccessModal() {
+    function openEarlyAccessModal() {
+      const modal = document.getElementById('modal-early-access');
+      const form = document.getElementById('form-early-access');
+      const successView = document.getElementById('ea-success');
+      const errEl = document.getElementById('ea-error');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      if (form) form.classList.remove('hidden');
+      if (successView) successView.classList.add('hidden');
+      if (errEl) errEl.classList.add('hidden');
+      const emailInput = document.getElementById('ea-email');
+      if (emailInput) setTimeout(() => emailInput.focus(), 80);
+    }
+    window.openEarlyAccessModal = openEarlyAccessModal;
+
+    function closeEarlyAccessModal() {
+      const modal = document.getElementById('modal-early-access');
+      if (modal) modal.classList.add('hidden');
+    }
+    window.closeEarlyAccessModal = closeEarlyAccessModal;
+
+    function setupEarlyAccessModal() {
       const modal = document.getElementById('modal-early-access');
       const form = document.getElementById('form-early-access');
       const successView = document.getElementById('ea-success');
@@ -1774,35 +1795,28 @@
       const doneBtn = document.getElementById('btn-done-early-access');
       const submitBtn = document.getElementById('btn-submit-early-access');
 
-      function openModal() {
-        if (!modal) return;
-        modal.classList.remove('hidden');
-        if (form) form.classList.remove('hidden');
-        if (successView) successView.classList.add('hidden');
-        const emailInput = document.getElementById('ea-email');
-        if (emailInput) setTimeout(() => emailInput.focus(), 80);
-      }
-
-      function closeModal() {
-        if (!modal) return;
-        modal.classList.add('hidden');
-      }
-
-      document.querySelectorAll('[data-open-early-access]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          openModal();
-        });
+      closeBtn?.addEventListener('click', closeEarlyAccessModal);
+      doneBtn?.addEventListener('click', closeEarlyAccessModal);
+      modal?.addEventListener('click', (e) => {
+        if (e.target === modal) closeEarlyAccessModal();
       });
 
-      closeBtn?.addEventListener('click', closeModal);
-      doneBtn?.addEventListener('click', closeModal);
-      modal?.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal();
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+          closeEarlyAccessModal();
+        }
+      });
+
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-open-early-access]');
+        if (btn) {
+          e.preventDefault();
+          openEarlyAccessModal();
+        }
       });
 
       if (window.location.search.includes('open_apply=1') || window.location.hash === '#early-access') {
-        setTimeout(openModal, 200);
+        setTimeout(openEarlyAccessModal, 200);
       }
 
       form?.addEventListener('submit', async (e) => {
@@ -1854,7 +1868,13 @@
           }
         }
       });
-    })();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setupEarlyAccessModal);
+    } else {
+      setupEarlyAccessModal();
+    }
     </script>
 
     <!-- EARLY ACCESS APPLICATION MODAL -->

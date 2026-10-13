@@ -1631,6 +1631,8 @@ let _settingsCache = {
   user: null,
   balance: null,
   github: null,
+  leads: null,
+  leadsFilter: 'all',
 };
 
 async function performLogout() {
@@ -1759,7 +1761,144 @@ async function renderSettingsPage() {
           `}
         </div>
 
-        <!-- 3. Workspace Details -->
+        <!-- 3. Early Access Applications / Waitlist Management -->
+        <div class="ky-card" id="ky-card-waitlist" style="margin-bottom:20px;padding:24px">
+          <div class="ky-card-head" style="margin-bottom:18px">
+            <div>
+              <div class="ky-section-title" style="font-size:15px;font-weight:600">Early Access Applications</div>
+              <div style="font-size:12px;color:var(--text-2);margin-top:2px">Manage incoming applicant requests from the landing page. Approve to grant access with 50 welcome credits.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              ${(() => {
+                const leads = _settingsCache.leads || [];
+                const pending = leads.filter(l => (l.status || '').toUpperCase() === 'PENDING').length;
+                return pending > 0 
+                  ? `<span class="ky-badge ky-badge-warn">${pending} Pending</span>` 
+                  : (leads.length > 0 ? `<span class="ky-badge ky-badge-done">${leads.length} Total</span>` : '');
+              })()}
+              <button id="ky-btn-refresh-leads" type="button" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border);display:inline-flex;align-items:center;gap:4px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
+                <span>Refresh</span>
+              </button>
+            </div>
+          </div>
+
+          ${(() => {
+            const leads = _settingsCache.leads;
+            if (leads === null) {
+              return `<div style="padding:24px 0;text-align:center;color:var(--text-3);font-size:13px">Loading early access applications…</div>`;
+            }
+            if (!leads.length) {
+              return `
+                <div style="padding:32px 16px;text-align:center;background:var(--bg);border:1px dashed var(--border);border-radius:8px">
+                  <div style="font-weight:600;font-size:13.5px;color:var(--text-1);margin-bottom:4px">No early access requests yet</div>
+                  <div style="font-size:12px;color:var(--text-3);max-width:440px;margin:0 auto">
+                    When visitors click "Apply for Early Access" on the landing page, their applications will show up here. You can approve them with 1 click to provision their 50 credits and get their direct invite link.
+                  </div>
+                </div>
+              `;
+            }
+
+            const curFilter = _settingsCache.leadsFilter || 'all';
+            const pendingCount = leads.filter(l => (l.status || '').toUpperCase() === 'PENDING').length;
+            const approvedCount = leads.filter(l => (l.status || '').toUpperCase() === 'APPROVED').length;
+            const rejectedCount = leads.filter(l => (l.status || '').toUpperCase() === 'REJECTED').length;
+
+            const filteredLeads = leads.filter(l => {
+              const st = (l.status || '').toUpperCase();
+              if (curFilter === 'pending') return st === 'PENDING';
+              if (curFilter === 'approved') return st === 'APPROVED';
+              if (curFilter === 'rejected') return st === 'REJECTED';
+              return true;
+            });
+
+            return `
+              <div style="display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:12px">
+                <button type="button" class="ky-leads-filter ky-btn ${curFilter === 'all' ? 'ky-btn-primary' : 'ky-btn-ghost'} ky-btn-xs" data-filter="all">All (${leads.length})</button>
+                <button type="button" class="ky-leads-filter ky-btn ${curFilter === 'pending' ? 'ky-btn-primary' : 'ky-btn-ghost'} ky-btn-xs" data-filter="pending">Pending (${pendingCount})</button>
+                <button type="button" class="ky-leads-filter ky-btn ${curFilter === 'approved' ? 'ky-btn-primary' : 'ky-btn-ghost'} ky-btn-xs" data-filter="approved">Approved (${approvedCount})</button>
+                ${rejectedCount > 0 ? `<button type="button" class="ky-leads-filter ky-btn ${curFilter === 'rejected' ? 'ky-btn-primary' : 'ky-btn-ghost'} ky-btn-xs" data-filter="rejected">Declined (${rejectedCount})</button>` : ''}
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:10px">
+                ${filteredLeads.map(lead => {
+                  const st = (lead.status || 'PENDING').toUpperCase();
+                  const isApproved = st === 'APPROVED';
+                  const isPending = st === 'PENDING';
+                  const inviteUrl = `https://kobits.space/portal.html?email=${encodeURIComponent(lead.email)}#register`;
+
+                  return `
+                    <div style="padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;gap:10px">
+                      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+                        <div>
+                          <div style="font-weight:600;font-size:13.5px;color:var(--text-1);display:flex;align-items:center;gap:8px">
+                            <span>${esc(lead.full_name || 'Applicant')}</span>
+                            <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-2);font-weight:400">${esc(lead.email)}</span>
+                          </div>
+                          <div style="font-size:11.5px;color:var(--text-3);margin-top:3px;display:flex;align-items:center;gap:10px">
+                            ${lead.company ? `<span>🏢 ${esc(lead.company)}</span>` : ''}
+                            ${lead.github_handle ? `<span>🐙 @${esc(lead.github_handle)}</span>` : ''}
+                            <span>⏱ ${timeAgo(lead.created_at)}</span>
+                          </div>
+                        </div>
+                        <div>
+                          ${isPending ? `<span class="ky-badge ky-badge-warn">Pending Review</span>` : ''}
+                          ${isApproved ? `<span class="ky-badge ky-badge-done">Approved (50 Credits)</span>` : ''}
+                          ${st === 'REJECTED' ? `<span class="ky-badge ky-badge-err">Declined</span>` : ''}
+                        </div>
+                      </div>
+
+                      ${lead.use_case ? `
+                        <div style="font-size:12px;color:var(--text-2);background:var(--surface-2);padding:8px 10px;border-radius:6px;line-height:1.4">
+                          <span style="font-size:10.5px;text-transform:uppercase;color:var(--text-3);font-family:var(--font-mono);display:block;margin-bottom:2px">Use Case:</span>
+                          "${esc(lead.use_case)}"
+                        </div>
+                      ` : ''}
+
+                      <!-- Actions Row -->
+                      <div style="display:flex;align-items:center;justify-content:space-between;padding-top:6px;border-top:1px solid var(--border)">
+                        <div style="display:flex;align-items:center;gap:8px">
+                          ${isPending ? `
+                            <button type="button" class="ky-btn ky-btn-primary ky-btn-xs ky-btn-approve-lead" data-id="${lead.id}" data-email="${esc(lead.email)}">
+                              ✓ Approve & Activate (50 Credits)
+                            </button>
+                            <button type="button" class="ky-btn ky-btn-ghost ky-btn-xs ky-btn-reject-lead" data-id="${lead.id}" style="color:var(--text-3)">
+                              Decline
+                            </button>
+                          ` : ''}
+
+                          ${isApproved ? `
+                            <button type="button" class="ky-btn ky-btn-primary ky-btn-xs ky-btn-copy-invite" data-url="${inviteUrl}">
+                              Copy Invite Link
+                            </button>
+                            <a href="${inviteUrl}" target="_blank" class="ky-btn ky-btn-ghost ky-btn-xs" style="border:1px solid var(--border)">
+                              Open Invite ↗
+                            </a>
+                            <button type="button" class="ky-btn ky-btn-ghost ky-btn-xs ky-btn-reject-lead" data-id="${lead.id}" style="color:var(--text-3)">
+                              Revoke
+                            </button>
+                          ` : ''}
+
+                          ${st === 'REJECTED' ? `
+                            <button type="button" class="ky-btn ky-btn-ghost ky-btn-xs ky-btn-approve-lead" data-id="${lead.id}" data-email="${esc(lead.email)}" style="border:1px solid var(--border)">
+                              Re-approve
+                            </button>
+                          ` : ''}
+                        </div>
+
+                        <button type="button" class="ky-btn ky-btn-ghost ky-btn-xs ky-btn-delete-lead" data-id="${lead.id}" style="color:rgba(239,68,68,0.7);font-size:11px" title="Delete record">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `;
+          })()}
+        </div>
+
+        <!-- 4. Workspace Details -->
         <div class="ky-card" style="margin-bottom:20px;padding:24px">
           <div class="ky-card-head" style="margin-bottom:18px">
             <div>
@@ -1785,7 +1924,7 @@ async function renderSettingsPage() {
           </div>
         </div>
 
-        <!-- 4. Appearance -->
+        <!-- 5. Appearance -->
         <div class="ky-card" style="margin-bottom:20px;padding:24px">
           <div class="ky-card-head" style="margin-bottom:18px">
             <div>
@@ -1811,7 +1950,7 @@ async function renderSettingsPage() {
           </div>
         </div>
 
-        <!-- 5. Account Actions / Sign Out -->
+        <!-- 6. Account Actions / Sign Out -->
         <div class="ky-card" style="border-color:rgba(239, 68, 68, 0.25);padding:24px">
           <div class="ky-card-head" style="margin-bottom:0">
             <div>
@@ -1879,6 +2018,111 @@ async function renderSettingsPage() {
       }
     });
 
+    // Wire Early Access Leads Interactions
+    view.querySelectorAll('.ky-leads-filter').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        _settingsCache.leadsFilter = ev.currentTarget.getAttribute('data-filter') || 'all';
+        renderContent();
+      });
+    });
+
+    document.getElementById('ky-btn-refresh-leads')?.addEventListener('click', async (ev) => {
+      const btn = ev.currentTarget;
+      btn.disabled = true;
+      try {
+        _settingsCache.leads = await get('/waitlist/leads');
+        notify('Applications list refreshed.', 'info');
+        renderContent();
+      } catch (_) {
+        notify('Failed to refresh applications.', 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    view.querySelectorAll('.ky-btn-approve-lead').forEach(btn => {
+      btn.addEventListener('click', async (ev) => {
+        const b = ev.currentTarget;
+        const id = b.getAttribute('data-id');
+        const email = b.getAttribute('data-email');
+        b.disabled = true;
+        b.textContent = 'Approving…';
+        try {
+          const res = await post(`/waitlist/leads/${id}/approve`);
+          if (_settingsCache.leads) {
+            const item = _settingsCache.leads.find(l => l.id === id);
+            if (item) item.status = 'APPROVED';
+          }
+          const inviteUrl = res?.lead?.invite_url || `https://kobits.space/portal.html?email=${encodeURIComponent(email)}#register`;
+          if (navigator.clipboard) {
+            await navigator.clipboard.writeText(inviteUrl);
+            notify(`Approved ${email}! Invite link copied to clipboard.`, 'info');
+          } else {
+            notify(`Approved ${email}! 50 credits granted.`, 'info');
+          }
+          renderContent();
+        } catch (err) {
+          notify(err.message || 'Failed to approve lead.', 'error');
+          b.disabled = false;
+          b.textContent = '✓ Approve & Activate (50 Credits)';
+        }
+      });
+    });
+
+    view.querySelectorAll('.ky-btn-copy-invite').forEach(btn => {
+      btn.addEventListener('click', async (ev) => {
+        const b = ev.currentTarget;
+        const url = b.getAttribute('data-url');
+        if (!url) return;
+        try {
+          await navigator.clipboard.writeText(url);
+          const oldText = b.textContent;
+          b.textContent = '✓ Copied!';
+          notify('Invite link copied to clipboard!', 'info');
+          setTimeout(() => { b.textContent = oldText; }, 2000);
+        } catch (_) {
+          prompt('Copy this invite link:', url);
+        }
+      });
+    });
+
+    view.querySelectorAll('.ky-btn-reject-lead').forEach(btn => {
+      btn.addEventListener('click', async (ev) => {
+        const b = ev.currentTarget;
+        const id = b.getAttribute('data-id');
+        b.disabled = true;
+        try {
+          await post(`/waitlist/leads/${id}/reject`);
+          if (_settingsCache.leads) {
+            const item = _settingsCache.leads.find(l => l.id === id);
+            if (item) item.status = 'REJECTED';
+          }
+          notify('Lead marked as declined.', 'info');
+          renderContent();
+        } catch (err) {
+          notify(err.message || 'Failed to update lead.', 'error');
+          b.disabled = false;
+        }
+      });
+    });
+
+    view.querySelectorAll('.ky-btn-delete-lead').forEach(btn => {
+      btn.addEventListener('click', async (ev) => {
+        const id = ev.currentTarget.getAttribute('data-id');
+        if (!confirm('Are you sure you want to delete this applicant record?')) return;
+        try {
+          await fetch(`/api/v1/waitlist/leads/${id}`, { method: 'DELETE' });
+          if (_settingsCache.leads) {
+            _settingsCache.leads = _settingsCache.leads.filter(l => l.id !== id);
+          }
+          notify('Record removed.', 'info');
+          renderContent();
+        } catch (_) {
+          notify('Failed to delete lead.', 'error');
+        }
+      });
+    });
+
     // Wire Theme buttons
     view.querySelectorAll('.ky-theme-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1898,14 +2142,16 @@ async function renderSettingsPage() {
 
   // Refresh in background
   try {
-    const [u, bal, gh] = await Promise.all([
+    const [u, bal, gh, leads] = await Promise.all([
       get('/auth/me').catch(() => _settingsCache.user),
       get('/billing/balance').catch(() => _settingsCache.balance),
       get('/github/status').catch(() => _settingsCache.github),
+      get('/waitlist/leads').catch(() => _settingsCache.leads),
     ]);
     if (u) _settingsCache.user = u;
     if (bal) _settingsCache.balance = bal;
     if (gh) _settingsCache.github = gh;
+    if (leads) _settingsCache.leads = leads;
     renderContent();
   } catch (_) {}
 }
