@@ -166,7 +166,11 @@ class CloudMicroVMSandbox:
         start_ts = time.perf_counter()
         try:
             # Wrap command to ensure it runs in the proper working directory
-            cd_cmd = f"cd {workdir} 2>/dev/null || true; {command}"
+            # If command invokes pytest, ensure pytest is present in the MicroVM
+            if "pytest" in command:
+                cd_cmd = f"cd {workdir} 2>/dev/null || true; which pytest >/dev/null 2>&1 || pip install pytest -q; {command}"
+            else:
+                cd_cmd = f"cd {workdir} 2>/dev/null || true; {command}"
             res = self._sandbox.commands.run(cd_cmd, timeout=timeout)
             dur_ms = int((time.perf_counter() - start_ts) * 1000)
             return {
