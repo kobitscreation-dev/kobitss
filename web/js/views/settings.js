@@ -37,6 +37,17 @@ export async function render() {
         </div>
       </div>
 
+      <!-- Early Access Applications (Founder Admin) -->
+      <div class="card" id="waitlist-card">
+        <div class="card-head" style="display:flex;align-items:center;justify-content:space-between">
+          <h2>Early Access Applications</h2>
+          <span id="waitlist-count" class="badge" style="font-size:11px;padding:2px 8px;border-radius:99px;background:rgba(255,255,255,0.08);color:var(--text-3,#a1a1aa)">Founder Admin</span>
+        </div>
+        <div class="card-body" id="waitlist-body">
+          ${skeleton(2)}
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-head"><h2>About Kobits</h2></div>
         <div class="card-body" style="line-height: 1.5;">
@@ -53,6 +64,7 @@ export async function render() {
   setupThemeButtons();
   await loadGitHub();
   await loadHealth();
+  await loadWaitlist();
 }
 
 function setupThemeButtons() {
@@ -191,3 +203,71 @@ function showGitHubForm(body, badge, prefillUser = '') {
     }
   });
 }
+
+async function loadWaitlist() {
+  const body = document.getElementById('waitlist-body');
+  const countBadge = document.getElementById('waitlist-count');
+  if (!body) return;
+  try {
+    const leads = await get('/waitlist/leads');
+    if (!leads || !Array.isArray(leads) || leads.length === 0) {
+      body.innerHTML = `<p class="faint" style="font-size:13px;line-height:1.5">No early access applications received yet. Visitors can apply via the landing page modal, and you can approve them here.</p>`;
+      if (countBadge) countBadge.textContent = '0 Leads';
+      return;
+    }
+    const pendingCount = leads.filter(l => l.status === 'PENDING').length;
+    if (countBadge) countBadge.textContent = `${pendingCount} Pending`;
+
+    body.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${leads.map(l => {
+          const isPending = l.status === 'PENDING';
+          const host = window.location.origin;
+          const inviteUrl = `${host}/portal.html?email=${encodeURIComponent(l.email)}#register`;
+          return `
+          <div style="display:flex;flex-direction:column;gap:6px;padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <div style="font-weight:600;font-size:13px;color:#fff">${esc(l.full_name || 'Anonymous Applicant')}</div>
+                <div class="faint mono" style="font-size:11px">${esc(l.email)} ${l.company ? '• ' + esc(l.company) : ''} ${l.github_handle ? '• @' + esc(l.github_handle) : ''}</div>
+              </div>
+              <div>
+                ${isPending ? `
+                  <button class="btn btn-primary btn-sm btn-approve-lead" data-id="${esc(l.id)}" style="background:#22c55e;border-color:#22c55e;color:#000;font-weight:600;padding:3px 10px;font-size:11px">Approve & Invite</button>
+                ` : `
+                  <span class="badge" style="background:rgba(34,197,94,0.15);color:#4ade80;font-size:11px;padding:2px 8px;border-radius:99px;font-weight:600">Approved</span>
+                `}
+              </div>
+            </div>
+            ${l.use_case ? `<div style="font-size:12px;color:var(--text-2,#d4d4d8);background:rgba(255,255,255,0.02);padding:6px 8px;border-radius:4px">${esc(l.use_case)}</div>` : ''}
+            ${!isPending ? `
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;padding:4px 8px;background:rgba(34,197,94,0.05);border-radius:4px">
+                <span class="mono faint" style="font-size:10px">Workspace ready (50 credits)</span>
+                <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px" onclick="navigator.clipboard.writeText('${inviteUrl}'); alert('Copied invite link: ${inviteUrl}')">Copy Invite Link</button>
+              </div>
+            ` : ''}
+          </div>
+        `}).join('')}
+      </div>
+    `;
+
+    body.querySelectorAll('.btn-approve-lead').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.target.getAttribute('data-id');
+        e.target.disabled = true;
+        e.target.textContent = 'Approving…';
+        try {
+          await post(`/waitlist/leads/${id}/approve`, {});
+          await loadWaitlist();
+        } catch (err) {
+          alert('Failed to approve lead: ' + (err.message || err));
+          e.target.disabled = false;
+          e.target.textContent = 'Approve & Invite';
+        }
+      });
+    });
+  } catch (err) {
+    body.innerHTML = `<p class="faint" style="font-size:13px">Could not load waitlist: ${esc(err.message)}</p>`;
+  }
+}
+
