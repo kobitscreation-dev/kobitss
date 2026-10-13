@@ -196,6 +196,27 @@ async def lifespan(app: FastAPI):
             await db.rollback()
             _startup_logger.info(f"Credit packages already seeded by peer worker: {_pkg_err}")
 
+        try:
+            # Auto-seed all 22 specialist agents if empty
+            from backend.models.agent import Agent, AgentType, AgentStatus
+            from backend.services.agent_registry import AGENT_REGISTRY
+            for agent_type, agent_def in AGENT_REGISTRY.items():
+                existing = (await db.execute(select(Agent).where(Agent.type == agent_type))).scalar_one_or_none()
+                if not existing:
+                    a = Agent(
+                        name=agent_def.name,
+                        type=agent_type,
+                        description=agent_def.description,
+                        system_prompt=agent_def.system_prompt,
+                        capabilities=json.dumps(agent_def.capabilities),
+                        status=AgentStatus.IDLE
+                    )
+                    db.add(a)
+            await db.commit()
+        except Exception as _agent_err:
+            await db.rollback()
+            _startup_logger.info(f"Agents already seeded by peer worker: {_agent_err}")
+
     # Resume ACTIVE missions and clear dangling locks
     from backend.models.mission import Mission, MissionStatus
     from backend.services.mission_runtime import MissionRuntime

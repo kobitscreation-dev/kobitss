@@ -93,6 +93,7 @@ class Mission(Base):
     dry_run: Mapped[bool] = mapped_column(Boolean, default=False)
     risk_profile_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     rework_risk: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    metadata_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     current_stage: Mapped[Optional[str]] = mapped_column(String)
     active_branch: Mapped[Optional[str]] = mapped_column(String)

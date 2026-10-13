@@ -2114,7 +2114,14 @@ class MissionRuntime:
 
             stmt = select(Agent).where(Agent.type == agent_type)
             agent_record = (await db.execute(stmt)).scalars().first()
-            agent_id = agent_record.id if agent_record else "system"
+            if not agent_record:
+                agent_record = (await db.execute(select(Agent).limit(1))).scalars().first()
+            if not agent_record:
+                # Seed or create default agent on the fly to satisfy foreign key
+                agent_record = Agent(name="Axiom", type=AgentType.ORCHESTRATOR)
+                db.add(agent_record)
+                await db.flush()
+            agent_id = agent_record.id
 
             run = AgentRun(
                 agent_id=agent_id,
