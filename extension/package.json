@@ -1,0 +1,96 @@
+{
+  "name": "kobits-autonomous-engineer",
+  "displayName": "Kobits — Autonomous Multi-Agent Software Engineer",
+  "description": "Autonomous multi-agent engineering swarm in VS Code. Plan, implement, verify, and apply code changes directly in your workspace.",
+  "version": "1.0.0",
+  "publisher": "kobits",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Machine Learning",
+    "Testing"
+  ],
+  "keywords": [
+    "autonomous engineer",
+    "ai agent",
+    "multi-agent",
+    "swe-bench",
+    "tdd reproducer",
+    "kobits"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "kobits.login",
+        "title": "Kobits: Set API Key",
+        "category": "Kobits"
+      },
+      {
+        "command": "kobits.dispatchPrompt",
+        "title": "Kobits: Autonomous Engineering Mission...",
+        "category": "Kobits"
+      },
+      {
+        "command": "kobits.dispatchSelection",
+        "title": "Kobits: Fix or Refactor Selected Code",
+        "category": "Kobits"
+      },
+      {
+        "command": "kobits.viewDiff",
+        "title": "Kobits: View Sandbox Solution Diff",
+        "category": "Kobits"
+      },
+      {
+        "command": "kobits.applyDiff",
+        "title": "Kobits: Apply Validated Diff to Workspace",
+        "category": "Kobits"
+      },
+      {
+        "command": "kobits.showStatus",
+        "title": "Kobits: Show Swarm Status",
+        "category": "Kobits"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "kobits.dispatchSelection",
+          "when": "editorHasSelection",
+          "group": "7_modification@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Kobits",
+      "properties": {
+        "kobits.apiUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8000",
+          "description": "Base URL of the Kobits API server."
+        },
+        "kobits.autoStream": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically show progress notification when a mission runs."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.4.0"
+  }
+}

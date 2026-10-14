@@ -44,6 +44,9 @@ export async function render() {
         <button class="settings-nav-btn ${currentTab === 'billing' ? 'active' : ''}" data-tab="billing">
           💳 Billing & Credits
         </button>
+        <button class="settings-nav-btn ${currentTab === 'api-keys' ? 'active' : ''}" data-tab="api-keys">
+          🔑 API Keys & CLI
+        </button>
         <button class="settings-nav-btn ${currentTab === 'early-access' ? 'active' : ''}" data-tab="early-access">
           🛡️ Early Access Admin <span id="tab-lead-badge" style="display:none;background:#22c55e;color:#000;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:4px">1</span>
         </button>
@@ -107,6 +110,9 @@ async function renderActiveTab() {
       break;
     case 'billing':
       await renderBillingTab(pane);
+      break;
+    case 'api-keys':
+      await renderApiKeysTab(pane);
       break;
     case 'early-access':
       await renderEarlyAccessTab(pane);
@@ -1034,3 +1040,289 @@ async function renderEarlyAccessTab(container) {
     });
   });
 }
+
+
+// ────────────────────────────────────────────────────────────────
+// TAB 7: API KEYS & DEVELOPER ACCESS (CLI / EXTENSION / CI/CD)
+// ────────────────────────────────────────────────────────────────
+async function renderApiKeysTab(container) {
+  container.innerHTML = skeleton(4);
+  let keys = [];
+  try {
+    const res = await get('/auth/api-keys');
+    if (res && Array.isArray(res)) keys = res;
+  } catch (err) {
+    console.error('Failed to load API keys:', err);
+  }
+
+  container.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:24px;">
+      <!-- Top Overview Card -->
+      <div class="card" style="padding:24px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;">
+          <div>
+            <div class="ky-eyebrow" style="color:var(--text-accent, #38bdf8);font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">
+              Enterprise Authentication &amp; Developer Access
+            </div>
+            <h2 style="font-size:18px;font-weight:700;margin:0 0 6px 0;">Cryptographic API Keys</h2>
+            <p class="faint" style="font-size:13px;margin:0;max-width:650px;line-height:1.5;">
+              API keys allow you to authenticate the Kobits Developer CLI (<code style="background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;font-family:var(--font-mono)">cli/kobits.py</code>), the official VS Code Extension, and automated CI/CD workflows. Raw keys are prefixed with <code style="color:#22c55e;font-family:var(--font-mono)">kb_live_</code> and are hashed via SHA-256 upon storage.
+            </p>
+          </div>
+          <button id="btn-open-create-key" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;font-size:13px;font-weight:600;white-space:nowrap;">
+            <span>+</span> Generate New Key
+          </button>
+        </div>
+
+        <!-- Quickstart Terminal Box -->
+        <div style="background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:8px;padding:14px 18px;margin-top:12px;font-family:var(--font-mono);font-size:12px;color:var(--text-2);position:relative;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="color:var(--text-3);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;">CLI Quickstart</span>
+            <button id="btn-copy-cli-snippet" class="btn btn-ghost" style="padding:2px 8px;font-size:11px;height:24px;">Copy Snippet</button>
+          </div>
+          <div id="cli-snippet-text" style="color:#e2e8f0;line-height:1.6;">
+            <span style="color:#64748b;"># 1. Login to Kobits via CLI</span><br>
+            <span style="color:#38bdf8;">py -3.12 cli/kobits.py login</span> --api-key <span style="color:#22c55e;">&lt;your_key&gt;</span><br><br>
+            <span style="color:#64748b;"># 2. Launch an autonomous engineering mission with live streaming</span><br>
+            <span style="color:#38bdf8;">py -3.12 cli/kobits.py run</span> <span style="color:#fcd34d;">"Refactor authentication to Argon2id and add pytest suite"</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Creation Form Drawer (Hidden by default) -->
+      <div id="card-create-key-drawer" class="card" style="display:none;padding:24px;border:1px solid #38bdf8;background:rgba(56,189,248,0.03);">
+        <h3 style="font-size:16px;font-weight:700;margin:0 0 4px 0;">Create a New API Key</h3>
+        <p class="faint" style="font-size:12.5px;margin:0 0 16px 0;">Give your key a descriptive name to track where it is being used.</p>
+
+        <div style="display:grid;grid-template-columns:1fr 180px;gap:16px;margin-bottom:16px;">
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text-2);">Key Name</label>
+            <input id="input-new-key-name" type="text" placeholder="e.g. MacBook Pro M3, VS Code Extension, CI/CD Runner" class="input" style="width:100%;padding:8px 12px;font-size:13px;" />
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text-2);">Expiration</label>
+            <select id="select-new-key-expiry" class="input" style="width:100%;padding:8px 12px;font-size:13px;">
+              <option value="30">30 days</option>
+              <option value="90" selected>90 days</option>
+              <option value="365">1 year</option>
+              <option value="">Never (No Expiration)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;">
+          <button id="btn-cancel-create-key" class="btn btn-ghost" style="padding:6px 14px;font-size:13px;">Cancel</button>
+          <button id="btn-submit-create-key" class="btn btn-primary" style="padding:6px 16px;font-size:13px;font-weight:600;">Generate Key</button>
+        </div>
+      </div>
+
+      <!-- One-Time Reveal Modal (Hidden by default) -->
+      <div id="card-key-reveal-modal" class="card" style="display:none;padding:24px;border:1px solid #22c55e;background:rgba(34,197,94,0.04);">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#22c55e;color:#000;font-weight:bold;">✓</span>
+          <div>
+            <h3 style="font-size:16px;font-weight:700;margin:0;color:#22c55e;">API Key Generated Successfully</h3>
+            <span class="faint" style="font-size:12px;">Please copy your key now. For your security, it will never be shown again.</span>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+          <input id="input-revealed-key" type="text" readonly class="input" style="font-family:var(--font-mono);font-size:13px;color:#22c55e;background:rgba(0,0,0,0.6);border:1px solid #22c55e;flex:1;padding:10px 14px;" />
+          <button id="btn-copy-revealed-key" class="btn btn-primary" style="padding:10px 18px;font-size:13px;font-weight:600;white-space:nowrap;">
+            Copy Key
+          </button>
+        </div>
+
+        <div style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.3);border-radius:6px;padding:10px 14px;font-size:12px;color:#fde047;display:flex;align-items:center;justify-content:space-between;">
+          <span>⚠️ Anyone with this key has programmatic access to dispatch missions and review code in this workspace.</span>
+          <button id="btn-done-key-reveal" class="btn btn-ghost" style="padding:4px 10px;font-size:12px;color:#fff;background:rgba(255,255,255,0.1);">Done</button>
+        </div>
+      </div>
+
+      <!-- Active Keys Table -->
+      <div class="card" style="padding:22px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <h3 style="font-size:15px;font-weight:700;margin:0;">Active Keys (${keys.length})</h3>
+        </div>
+
+        ${keys.length === 0 ? `
+          <div style="text-align:center;padding:48px 20px;border:1px dashed var(--border);border-radius:8px;">
+            <div style="font-size:28px;margin-bottom:8px;">🔑</div>
+            <div style="font-weight:600;font-size:14px;margin-bottom:4px;">No API Keys Yet</div>
+            <div class="faint" style="font-size:12.5px;max-width:400px;margin:0 auto 16px auto;">
+              Generate an API key to securely connect your terminal CLI and VS Code extension to your autonomous swarm.
+            </div>
+          </div>
+        ` : `
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;text-align:left;">
+              <thead>
+                <tr style="border-bottom:1px solid var(--border);color:var(--text-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">
+                  <th style="padding:10px 12px;">Name</th>
+                  <th style="padding:10px 12px;">Key Prefix</th>
+                  <th style="padding:10px 12px;">Scopes</th>
+                  <th style="padding:10px 12px;">Created</th>
+                  <th style="padding:10px 12px;">Last Used</th>
+                  <th style="padding:10px 12px;">Status</th>
+                  <th style="padding:10px 12px;text-align:right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${keys.map(k => `
+                  <tr style="border-bottom:1px solid var(--border);transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding:12px;font-weight:600;color:var(--text-1);">
+                      ${esc(k.name)}
+                    </td>
+                    <td style="padding:12px;font-family:var(--font-mono);font-size:12px;color:#22c55e;">
+                      ${esc(k.key_prefix)}••••••••
+                    </td>
+                    <td style="padding:12px;">
+                      <span style="font-size:11px;font-family:var(--font-mono);background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;color:var(--text-2);">
+                        ${esc(k.scopes)}
+                      </span>
+                    </td>
+                    <td style="padding:12px;color:var(--text-3);font-size:12px;">
+                      ${k.created_at ? new Date(k.created_at).toLocaleDateString() : '—'}
+                    </td>
+                    <td style="padding:12px;color:var(--text-3);font-size:12px;">
+                      ${k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : 'Never'}
+                    </td>
+                    <td style="padding:12px;">
+                      ${k.is_active ? `
+                        <span style="display:inline-flex;align-items:center;gap:4px;color:#22c55e;font-size:11px;font-weight:600;">
+                          <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;"></span> Active
+                        </span>
+                      ` : `
+                        <span style="color:#64748b;font-size:11px;">Revoked</span>
+                      `}
+                    </td>
+                    <td style="padding:12px;text-align:right;">
+                      ${k.is_active ? `
+                        <button class="btn btn-ghost btn-revoke-key" data-id="${k.id}" style="color:#ef4444;padding:4px 10px;font-size:11px;">
+                          Revoke
+                        </button>
+                      ` : `
+                        <span style="color:var(--text-3);font-size:11px;">—</span>
+                      `}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+
+  // Attach event listeners
+  const openCreateBtn = container.querySelector('#btn-open-create-key');
+  const cancelCreateBtn = container.querySelector('#btn-cancel-create-key');
+  const submitCreateBtn = container.querySelector('#btn-submit-create-key');
+  const createDrawer = container.querySelector('#card-create-key-drawer');
+  const revealModal = container.querySelector('#card-key-reveal-modal');
+
+  if (openCreateBtn && createDrawer) {
+    openCreateBtn.addEventListener('click', () => {
+      createDrawer.style.display = 'block';
+      const nameInput = container.querySelector('#input-new-key-name');
+      if (nameInput) nameInput.focus();
+    });
+  }
+
+  if (cancelCreateBtn && createDrawer) {
+    cancelCreateBtn.addEventListener('click', () => {
+      createDrawer.style.display = 'none';
+    });
+  }
+
+  if (submitCreateBtn) {
+    submitCreateBtn.addEventListener('click', async () => {
+      const name = (container.querySelector('#input-new-key-name')?.value || '').trim() || 'Developer Key';
+      const expiryVal = container.querySelector('#select-new-key-expiry')?.value;
+      const expires_in_days = expiryVal ? parseInt(expiryVal, 10) : null;
+
+      submitCreateBtn.disabled = true;
+      submitCreateBtn.textContent = 'Generating…';
+      try {
+        const newKey = await post('/auth/api-keys', {
+          name,
+          scopes: 'read,write,cli,extension',
+          expires_in_days,
+        });
+
+        if (newKey && newKey.key) {
+          createDrawer.style.display = 'none';
+          revealModal.style.display = 'block';
+          const keyInput = container.querySelector('#input-revealed-key');
+          if (keyInput) keyInput.value = newKey.key;
+          toast('Cryptographic API key generated!', 'info');
+        }
+      } catch (err) {
+        alert('Failed to generate key: ' + (err.message || err));
+        submitCreateBtn.disabled = false;
+        submitCreateBtn.textContent = 'Generate Key';
+      }
+    });
+  }
+
+  const copyRevealedBtn = container.querySelector('#btn-copy-revealed-key');
+  if (copyRevealedBtn) {
+    copyRevealedBtn.addEventListener('click', () => {
+      const keyVal = container.querySelector('#input-revealed-key')?.value;
+      if (keyVal) {
+        navigator.clipboard.writeText(keyVal);
+        copyRevealedBtn.textContent = '✓ Copied!';
+        toast('Copied API key to clipboard!', 'info');
+        setTimeout(() => { copyRevealedBtn.textContent = 'Copy Key'; }, 2000);
+      }
+    });
+  }
+
+  const doneRevealBtn = container.querySelector('#btn-done-key-reveal');
+  if (doneRevealBtn) {
+    doneRevealBtn.addEventListener('click', async () => {
+      await renderApiKeysTab(container);
+    });
+  }
+
+  const copySnippetBtn = container.querySelector('#btn-copy-cli-snippet');
+  if (copySnippetBtn) {
+    copySnippetBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText('py -3.12 cli/kobits.py login\npy -3.12 cli/kobits.py run "Refactor code and add pytest suite"');
+      copySnippetBtn.textContent = '✓ Copied!';
+      setTimeout(() => { copySnippetBtn.textContent = 'Copy Snippet'; }, 2000);
+    });
+  }
+
+  // Revoke listeners
+  container.querySelectorAll('.btn-revoke-key').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const keyId = e.target.getAttribute('data-id');
+      if (!confirm('Are you sure you want to revoke this API key? Any CLI or VS Code session using this key will immediately lose access.')) {
+        return;
+      }
+      e.target.disabled = true;
+      e.target.textContent = 'Revoking…';
+      try {
+        const res = await fetch(`/api/v1/auth/api-keys/${keyId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (res.ok) {
+          toast('API key revoked.', 'info');
+          await renderApiKeysTab(container);
+        } else {
+          alert('Failed to revoke API key.');
+          e.target.disabled = false;
+          e.target.textContent = 'Revoke';
+        }
+      } catch (err) {
+        alert('Network error while revoking key: ' + err.message);
+        e.target.disabled = false;
+        e.target.textContent = 'Revoke';
+      }
+    });
+  });
+}
+
