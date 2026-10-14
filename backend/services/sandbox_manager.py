@@ -237,7 +237,9 @@ class SandboxManager:
         clone_url: str = None, 
         base_commit_sha: str = None, 
         branch_name: str = None,
-        repositories: list = None
+        repositories: list = None,
+        isolation_driver: Optional[str] = None,
+        vm_id: Optional[str] = None,
     ) -> SandboxSession:
         """
         Create an isolated sandbox workspace from the given project root or clone URL.
@@ -253,7 +255,26 @@ class SandboxManager:
         sandbox_dir = os.path.join(cls.SANDBOX_ROOT, f"sandbox-{session_id}")
         os.makedirs(sandbox_dir, exist_ok=True)
 
+        from backend.services.environment_bootstrapper import EnvironmentBootstrapper
+        cloud_sb = None
+        driver_detected = isolation_driver or EnvironmentBootstrapper.detect_isolation_driver()
+        if driver_detected == "cloud_microvm":
+            try:
+                from backend.services.cloud_sandbox import CloudMicroVMSandbox
+                if CloudMicroVMSandbox.is_configured():
+                    cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=session_id)
+            except Exception as e:
+                logger.warning(f"Cloud MicroVM auto-attach deferred: {e}")
+
         if repositories:
+            if cloud_sb:
+                for repo in repositories:
+                    r_url = repo.get("clone_url")
+                    if r_url and not r_url.startswith("file://") and r_url not in ("test", "test_repo"):
+                        try:
+                            cloud_sb.clone_repo(r_url, branch=branch_name)
+                        except Exception as e:
+                            logger.warning(f"Cloud MicroVM remote repo clone deferred: {e}")
             for repo in repositories:
                 repo_url = repo.get("clone_url")
                 mount_path = repo.get("mount_path", "").strip("/")
@@ -286,6 +307,11 @@ class SandboxManager:
                 _run_git(target_dir, "checkout", "-b", branch_name)
         elif clone_url:
             logger.info(f"Cloning {clone_url} into {sandbox_dir}")
+            if cloud_sb and not clone_url.startswith("file://") and clone_url not in ("test", "test_repo"):
+                try:
+                    cloud_sb.clone_repo(clone_url, branch=branch_name)
+                except Exception as e:
+                    logger.warning(f"Cloud MicroVM remote clone deferred: {e}")
             if clone_url == "test_repo" or clone_url == "test" or clone_url.startswith("file://"):
                 used_wt = False
                 if not os.environ.get("PYTEST_CURRENT_TEST") and clone_url in ("test_repo", "test"):
@@ -355,12 +381,9 @@ class SandboxManager:
             except Exception:
                 pass
 
-        from backend.services.environment_bootstrapper import EnvironmentBootstrapper
         EnvironmentBootstrapper.ensure_virtual_rootfs(sandbox_dir)
 
-        cloud_sb = None
-        driver_detected = EnvironmentBootstrapper.detect_isolation_driver()
-        if driver_detected == "cloud_microvm":
+        if not cloud_sb and driver_detected == "cloud_microvm":
             try:
                 from backend.services.cloud_sandbox import CloudMicroVMSandbox
                 if CloudMicroVMSandbox.is_configured():
@@ -368,14 +391,20 @@ class SandboxManager:
             except Exception as e:
                 logger.warning(f"Cloud MicroVM auto-attach deferred: {e}")
 
+        if cloud_sb:
+            try:
+                cloud_sb.ensure_synced(local_dir=sandbox_dir, remote_dir="/workspace")
+            except Exception as e:
+                logger.debug(f"Initial cloud sync: {e}")
+
         session = SandboxSession(
             session_id=session_id,
             project_root=sandbox_dir,
             branch_name=branch_name,
             sandbox_dir=sandbox_dir,
             base_commit_sha=resolved_base_sha,
-            vm_id=f"e2b-{cloud_sb.sandbox_id}" if cloud_sb else None,
-            isolation_driver="cloud_microvm" if cloud_sb else None,
+            vm_id=vm_id or (f"e2b-{cloud_sb.sandbox_id}" if cloud_sb else None),
+            isolation_driver=isolation_driver or ("cloud_microvm" if cloud_sb else driver_detected),
         )
         if cloud_sb:
             session.remote_preview_url = cloud_sb.get_preview_url()
@@ -575,6 +604,27 @@ class SandboxManager:
                     except Exception as e:
                         logger.error(f"Failed to recover sandbox metadata from {metadata_path}: {e}")
                         
+        return None
+
+    @classmethod
+    def get_session_by_dir(cls, sandbox_dir: str) -> Optional[SandboxSession]:
+        """Resolve an active or persisted SandboxSession from its sandbox directory path."""
+        if not sandbox_dir:
+            return None
+        norm_dir = os.path.realpath(sandbox_dir)
+        for s in cls._sessions.values():
+            if s.sandbox_dir and os.path.realpath(s.sandbox_dir) == norm_dir:
+                return s
+        metadata_path = os.path.join(sandbox_dir, ".kobits_sandbox.json")
+        if os.path.isfile(metadata_path):
+            try:
+                with open(metadata_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                session = cls._rehydrate_session_from_dict(data)
+                cls._sessions[session.session_id] = session
+                return session
+            except Exception:
+                pass
         return None
 
     @classmethod
@@ -1111,10 +1161,74 @@ class SandboxManager:
             return {"error": "Sandbox session not found"}
 
         rel_path = cls._normalize_sandbox_rel_path(rel_path)
+
         sandbox_abs = os.path.realpath(session.sandbox_dir)
         abs_path = os.path.realpath(os.path.join(sandbox_abs, rel_path))
         if not (abs_path == sandbox_abs or abs_path.startswith(sandbox_abs + os.sep)):
             return {"error": "Security Block: Path traversal attempt detected."}
+
+        # Cloud MicroVM remote routing for 100% remote execution
+        from backend.services.cloud_sandbox import CloudMicroVMSandbox
+        is_cloud = (
+            getattr(session, "isolation_driver", None) == "cloud_microvm"
+            or CloudMicroVMSandbox.is_configured()
+            or CloudMicroVMSandbox.is_cloud_native()
+        )
+        if is_cloud and CloudMicroVMSandbox.is_configured():
+            try:
+                cloud_sb = CloudMicroVMSandbox.get_or_create(session_id)
+                clean_rel = rel_path.lstrip("/\\")
+                remote_path = f"/workspace/{clean_rel}" if clean_rel not in (".", "") else "/workspace"
+                if clean_rel in (".", ""):
+                    files = cloud_sb.list_remote_files("/workspace")
+                    return {"type": "directory", "files": files}
+                remote_content = cloud_sb.read_file(remote_path)
+                if remote_content is not None:
+                    all_lines = remote_content.splitlines()
+                    total_lines = len(all_lines)
+                    if start_line is not None or end_line is not None:
+                        s_line = max(1, int(start_line or 1))
+                        e_line = min(total_lines, int(end_line or total_lines))
+                        if s_line > e_line and total_lines > 0:
+                            return {
+                                "error": f"Invalid line range [{s_line}, {e_line}] for {rel_path} ({total_lines} lines)."
+                            }
+                        sliced = all_lines[s_line - 1 : e_line] if total_lines > 0 else []
+                        sliced_content = "\n".join(sliced)
+                        numbered = "\n".join(f"{s_line + idx}: {ln}" for idx, ln in enumerate(sliced))
+                        return {
+                            "type": "file",
+                            "path": rel_path,
+                            "content": sliced_content,
+                            "numbered_content": numbered,
+                            "start_line": s_line,
+                            "end_line": e_line,
+                            "total_lines": total_lines,
+                            "driver": "cloud_microvm",
+                        }
+                    MAX_READ_CHARS = 60000
+                    truncated = False
+                    if len(remote_content) > MAX_READ_CHARS:
+                        remote_content = (
+                            remote_content[:MAX_READ_CHARS]
+                            + f"\n... [TRUNCATED AT {MAX_READ_CHARS} CHARS — USE start_line/end_line TO READ SPECIFIC RANGES]"
+                        )
+                        truncated = True
+                    return {
+                        "type": "file",
+                        "content": remote_content,
+                        "path": rel_path,
+                        "total_lines": total_lines,
+                        "truncated": truncated,
+                        "driver": "cloud_microvm",
+                    }
+                else:
+                    # Check if remote_path is a directory in MicroVM
+                    sub_files = cloud_sb.list_remote_files(remote_path)
+                    if sub_files:
+                        return {"type": "directory", "files": sub_files}
+            except Exception as e:
+                logger.debug(f"Cloud MicroVM read_file fallback: {e}")
 
         if not os.path.exists(abs_path):
             return {"error": f"File not found: {rel_path}"}
@@ -1575,6 +1689,50 @@ class SandboxManager:
         if not session:
             return {"error": "Sandbox session not found"}
 
+        # Cloud MicroVM remote search routing for 100% remote execution
+        from backend.services.cloud_sandbox import CloudMicroVMSandbox
+        is_cloud = (
+            getattr(session, "isolation_driver", None) == "cloud_microvm"
+            or CloudMicroVMSandbox.is_configured()
+            or CloudMicroVMSandbox.is_cloud_native()
+        )
+        if is_cloud and CloudMicroVMSandbox.is_configured():
+            try:
+                cloud_sb = CloudMicroVMSandbox.get_or_create(session_id)
+                s_res = cloud_sb.search_remote_code(
+                    query=query,
+                    file_pattern=file_pattern,
+                    case_sensitive=case_sensitive,
+                    workdir="/workspace",
+                    max_results=max_results,
+                )
+                stdout = s_res.get("stdout", "")
+                lines = [l.strip() for l in stdout.splitlines() if l.strip()]
+                parsed_res = []
+                for l in lines[:max_results]:
+                    parts = l.split(":", 2)
+                    if len(parts) >= 3:
+                        rel = parts[0].replace("/workspace/", "").lstrip("/\\")
+                        try:
+                            ln = int(parts[1])
+                        except ValueError:
+                            ln = 1
+                        parsed_res.append({
+                            "file": rel,
+                            "line": ln,
+                            "content": parts[2][:200],
+                            "snippet": f"{ln}: {parts[2]}",
+                            "match_mode": "cloud_grep",
+                        })
+                if parsed_res:
+                    return {
+                        "results": parsed_res,
+                        "total_matches": len(parsed_res),
+                        "match_mode": "cloud_microvm_grep",
+                    }
+            except Exception as e:
+                logger.debug(f"Cloud MicroVM search fallback: {e}")
+
         return cls.search_directory(
             root_dir=session.sandbox_dir,
             query=query,
@@ -1598,10 +1756,27 @@ class SandboxManager:
             return {"error": "Sandbox session not found"}
 
         rel_path = cls._normalize_sandbox_rel_path(rel_path)
+
         sandbox_abs = os.path.realpath(session.sandbox_dir)
         abs_path = os.path.realpath(os.path.join(sandbox_abs, rel_path))
         if not (abs_path == sandbox_abs or abs_path.startswith(sandbox_abs + os.sep)):
             return {"error": "Security Block: Path traversal attempt detected."}
+
+        # Cloud MicroVM remote routing for 100% remote execution
+        from backend.services.cloud_sandbox import CloudMicroVMSandbox
+        is_cloud = (
+            getattr(session, "isolation_driver", None) == "cloud_microvm"
+            or CloudMicroVMSandbox.is_configured()
+            or CloudMicroVMSandbox.is_cloud_native()
+        )
+        if is_cloud and CloudMicroVMSandbox.is_configured():
+            try:
+                cloud_sb = CloudMicroVMSandbox.get_or_create(session_id)
+                clean_rel = rel_path.lstrip("/\\")
+                remote_path = f"/workspace/{clean_rel}"
+                cloud_sb.write_file(remote_path, content)
+            except Exception as e:
+                logger.debug(f"Cloud MicroVM write_file error: {e}")
 
         os.makedirs(os.path.dirname(abs_path), exist_ok=True)
         try:
@@ -1806,10 +1981,47 @@ class SandboxManager:
             return {"error": "Sandbox session not found"}
 
         rel_path = cls._normalize_sandbox_rel_path(rel_path)
+
+        # Cloud MicroVM remote routing for 100% remote execution
+        from backend.services.cloud_sandbox import CloudMicroVMSandbox
+        is_cloud = (
+            getattr(session, "isolation_driver", None) == "cloud_microvm"
+            or CloudMicroVMSandbox.is_configured()
+            or CloudMicroVMSandbox.is_cloud_native()
+        )
         sandbox_abs = os.path.realpath(session.sandbox_dir)
         abs_path = os.path.realpath(os.path.join(sandbox_abs, rel_path))
         if not (abs_path == sandbox_abs or abs_path.startswith(sandbox_abs + os.sep)):
             return {"error": "Security Block: Path traversal attempt detected."}
+
+        if is_cloud and CloudMicroVMSandbox.is_configured():
+            try:
+                cloud_sb = CloudMicroVMSandbox.get_or_create(session_id)
+                clean_rel = rel_path.lstrip("/\\")
+                remote_path = f"/workspace/{clean_rel}"
+                cloud_res = cloud_sb.edit_file(
+                    remote_path,
+                    old_string=old_string,
+                    new_string=new_string,
+                    replace_all=replace_all,
+                    edits=edits,
+                )
+                if cloud_res.get("success"):
+                    if rel_path not in session.files_changed:
+                        session.files_changed.append(rel_path)
+                    if os.path.exists(abs_path):
+                        try:
+                            updated_text = cloud_sb.read_file(remote_path)
+                            with open(abs_path, "w", encoding="utf-8") as lf:
+                                lf.write(updated_text)
+                        except Exception:
+                            pass
+                    cls._persist_session(session)
+                    return cloud_res
+                elif not os.path.exists(abs_path):
+                    return cloud_res
+            except Exception as e:
+                logger.debug(f"Cloud MicroVM edit_file fallback: {e}")
 
         if not os.path.exists(abs_path):
             if old_string == "" and new_string is not None and not edits:
@@ -1911,6 +2123,7 @@ class SandboxManager:
             return {"error": "Sandbox session not found"}
 
         rel_path = cls._normalize_sandbox_rel_path(rel_path)
+
         sandbox_abs = os.path.realpath(session.sandbox_dir)
         abs_path = os.path.realpath(os.path.join(sandbox_abs, rel_path))
         if not (abs_path != sandbox_abs and abs_path.startswith(sandbox_abs + os.sep)):
@@ -1920,8 +2133,35 @@ class SandboxManager:
         if norm_rel == ".git" or norm_rel.startswith(".git/") or norm_rel.startswith(".kobits_") or os.path.basename(norm_rel).startswith(".kobits_"):
             return {"error": f"Security Block: Cannot delete protected sandbox metadata ({rel_path})."}
 
-        if not os.path.exists(abs_path):
+        # Cloud MicroVM remote routing for 100% remote execution
+        from backend.services.cloud_sandbox import CloudMicroVMSandbox
+        is_cloud = (
+            getattr(session, "isolation_driver", None) == "cloud_microvm"
+            or CloudMicroVMSandbox.is_configured()
+            or CloudMicroVMSandbox.is_cloud_native()
+        )
+        exists_remote = False
+        if is_cloud and CloudMicroVMSandbox.is_configured():
+            try:
+                cloud_sb = CloudMicroVMSandbox.get_or_create(session_id)
+                clean_rel = rel_path.lstrip("/\\")
+                remote_path = f"/workspace/{clean_rel}"
+                exists_remote = cloud_sb.file_exists(remote_path)
+                if exists_remote:
+                    cloud_sb.delete_file(remote_path)
+            except Exception as e:
+                logger.debug(f"Cloud MicroVM delete_file error: {e}")
+
+        exists_local = os.path.exists(abs_path)
+        if not exists_remote and not exists_local:
             return {"error": f"File not found: {rel_path}"}
+
+        if not exists_local:
+            if rel_path not in session.files_changed:
+                session.files_changed.append(rel_path)
+            cls._persist_session(session)
+            return {"success": True, "path": rel_path, "deleted": True}
+
         if os.path.isdir(abs_path):
             return {"error": f"Cannot delete directory with repository.delete: {rel_path}"}
 
@@ -2103,6 +2343,34 @@ class SandboxManager:
         if not session:
             return {"error": "Sandbox session not found"}
 
+        from backend.services.cloud_sandbox import CloudMicroVMSandbox
+        is_cloud = (
+            getattr(session, "isolation_driver", None) == "cloud_microvm"
+            or CloudMicroVMSandbox.is_configured()
+            or CloudMicroVMSandbox.is_cloud_native()
+        )
+        if is_cloud and CloudMicroVMSandbox.is_configured():
+            try:
+                cloud_sb = CloudMicroVMSandbox.get_or_create(session_id)
+                r_diff = cloud_sb.run_command("git diff --stat && echo '---SPLIT---' && git diff && echo '---SPLIT---' && git diff --name-only", workdir="/workspace")
+                if r_diff.get("exit_code") == 0 and r_diff.get("stdout"):
+                    parts = r_diff["stdout"].split("---SPLIT---")
+                    if len(parts) >= 3:
+                        stat = parts[0].strip()
+                        diff_text = parts[1].strip()
+                        names = [n.strip() for n in parts[2].splitlines() if n.strip()]
+                        for n in names:
+                            if n not in session.files_changed:
+                                session.files_changed.append(n)
+                        if diff_text or stat:
+                            return {
+                                "summary": stat,
+                                "diff": diff_text,
+                                "files_changed": session.files_changed,
+                            }
+            except Exception as e:
+                logger.debug(f"Cloud MicroVM get_diff error: {e}")
+
         summary = ""
         diff_full = ""
         for repo in cls._find_git_repos(session.sandbox_dir):
@@ -2148,6 +2416,26 @@ class SandboxManager:
         session = cls._sessions.get(session_id)
         if not session:
             return {"error": "Sandbox session not found"}
+
+        from backend.services.cloud_sandbox import CloudMicroVMSandbox
+        is_cloud = (
+            getattr(session, "isolation_driver", None) == "cloud_microvm"
+            or CloudMicroVMSandbox.is_configured()
+            or CloudMicroVMSandbox.is_cloud_native()
+        )
+        if is_cloud and CloudMicroVMSandbox.is_configured():
+            try:
+                cloud_sb = CloudMicroVMSandbox.get_or_create(session_id)
+                safe_msg = message.replace("'", "'\\''")
+                cloud_res = cloud_sb.run_command(
+                    f"git add -A && git commit -m '{safe_msg}'",
+                    workdir="/workspace"
+                )
+                if cloud_res.get("exit_code") == 0:
+                    session.status = "COMMITTED"
+                    cls._persist_session(session)
+            except Exception as e:
+                logger.debug(f"Cloud MicroVM commit_changes: {e}")
             
         repos = cls._find_git_repos(session.sandbox_dir)
         results = []
@@ -2193,6 +2481,27 @@ class SandboxManager:
 
         diff_data = cls.get_diff(session_id)
 
+        from backend.services.cloud_sandbox import CloudMicroVMSandbox
+        is_cloud = (
+            getattr(session, "isolation_driver", None) == "cloud_microvm"
+            or CloudMicroVMSandbox.is_configured()
+            or CloudMicroVMSandbox.is_cloud_native()
+        )
+        if is_cloud and CloudMicroVMSandbox.is_configured():
+            try:
+                cloud_sb = CloudMicroVMSandbox.get_or_create(session_id)
+                token = os.environ.get("GITHUB_TOKEN")
+                repo_url = os.environ.get("GITHUB_REPO_URL") or "https://github.com/kobits-org/project.git"
+                cloud_sb.git_commit_and_push(
+                    branch=session.branch_name,
+                    message=f"Auto-commit: {title}",
+                    repo_url=repo_url,
+                    auth_token=token,
+                    workdir="/workspace",
+                )
+            except Exception as e:
+                logger.debug(f"Cloud MicroVM create_pr push: {e}")
+
         # Get the full commit log on this branch
         log = _run_git(session.sandbox_dir, "log", "--oneline", "--all")
 
@@ -2222,6 +2531,8 @@ class SandboxManager:
             return {"error": "Sandbox session not found"}
         try:
             from backend.services.environment_bootstrapper import EnvironmentBootstrapper
+            from backend.services.cloud_sandbox import CloudMicroVMSandbox
+            CloudMicroVMSandbox.close_session(session_id)
             EnvironmentBootstrapper.destroy_session_container(session_id)
             shutil.rmtree(session.sandbox_dir, ignore_errors=True)
             del cls._sessions[session_id]

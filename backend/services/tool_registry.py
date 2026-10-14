@@ -415,9 +415,26 @@ async def handle_list_directory(path: str = ".", context: dict = None, **kwargs)
         target_dir = None
         if context and context.get("sandbox_session_id"):
             from backend.services.sandbox_manager import SandboxManager
+            from backend.services.cloud_sandbox import CloudMicroVMSandbox
             sess = SandboxManager.get_session(context["sandbox_session_id"])
             if sess:
                 target_dir = sess.sandbox_dir
+                is_cloud = (
+                    getattr(sess, "isolation_driver", None) == "cloud_microvm"
+                    or CloudMicroVMSandbox.is_configured()
+                    or CloudMicroVMSandbox.is_cloud_native()
+                )
+                if is_cloud and CloudMicroVMSandbox.is_configured():
+                    try:
+                        cloud_sb = CloudMicroVMSandbox.get_or_create(sess.session_id)
+                        clean_p = path.lstrip("/\\")
+                        remote_w = f"/workspace/{clean_p}".rstrip("/") if clean_p and clean_p != "." else "/workspace"
+                        r_files = cloud_sb.list_remote_files(workdir=remote_w)
+                        if r_files:
+                            items = [f"[REMOTE] {fn}" for fn in sorted(r_files)]
+                            return "\n".join(items)
+                    except Exception:
+                        pass
         if not target_dir:
             if context and context.get("sandbox_dir") and os.path.isdir(context["sandbox_dir"]):
                 target_dir = context["sandbox_dir"]
@@ -449,9 +466,26 @@ async def handle_search_code(query: str, file_pattern: str = None, context: dict
         target_dir = None
         if context and context.get("sandbox_session_id"):
             from backend.services.sandbox_manager import SandboxManager
+            from backend.services.cloud_sandbox import CloudMicroVMSandbox
             sess = SandboxManager.get_session(context["sandbox_session_id"])
             if sess:
                 target_dir = sess.sandbox_dir
+                is_cloud = (
+                    getattr(sess, "isolation_driver", None) == "cloud_microvm"
+                    or CloudMicroVMSandbox.is_configured()
+                    or CloudMicroVMSandbox.is_cloud_native()
+                )
+                if is_cloud and CloudMicroVMSandbox.is_configured():
+                    try:
+                        cloud_sb = CloudMicroVMSandbox.get_or_create(sess.session_id)
+                        s_res = cloud_sb.search_remote_code(query=query, workdir="/workspace")
+                        stdout = s_res.get("stdout", "")
+                        lines = [l.strip() for l in stdout.splitlines() if l.strip()]
+                        if lines:
+                            matches = [l.replace("/workspace/", "") for l in lines[:50]]
+                            return "\n".join(matches)
+                    except Exception:
+                        pass
         if not target_dir:
             if context and context.get("sandbox_dir") and os.path.isdir(context["sandbox_dir"]):
                 target_dir = context["sandbox_dir"]
@@ -516,8 +550,34 @@ async def handle_database_migrate(migration_script: str) -> dict:
     """Applies a database migration. Mocked for safety."""
     return {"success": True, "message": "Migration simulated successfully. Schema updated."}
 
-async def handle_deployment_preview(**kwargs) -> dict:
-    """Spins up a preview deployment URL."""
+async def handle_deployment_preview(port: int = 3000, command: str = "npm run dev", context: dict = None, **kwargs) -> dict:
+    """Spins up a preview deployment URL or cloud tunnel."""
+    try:
+        if context and context.get("sandbox_session_id"):
+            from backend.services.sandbox_manager import SandboxManager
+            from backend.services.cloud_sandbox import CloudMicroVMSandbox
+            sess = SandboxManager.get_session(context["sandbox_session_id"])
+            if sess:
+                is_cloud = (
+                    getattr(sess, "isolation_driver", None) == "cloud_microvm"
+                    or CloudMicroVMSandbox.is_configured()
+                    or CloudMicroVMSandbox.is_cloud_native()
+                )
+                if is_cloud and CloudMicroVMSandbox.is_configured():
+                    cloud_sb = CloudMicroVMSandbox.get_or_create(sess.session_id)
+                    dev_res = cloud_sb.start_dev_server(command=command, port=port)
+                    sess.remote_preview_url = dev_res.get("preview_url")
+                    return {
+                        "success": True,
+                        "preview_url": dev_res.get("preview_url"),
+                        "port": port,
+                        "pid": dev_res.get("pid"),
+                        "message": f"Cloud MicroVM dev server running and tunneled at {dev_res.get('preview_url')}",
+                    }
+                elif getattr(sess, "remote_preview_url", None):
+                    return {"success": True, "preview_url": sess.remote_preview_url, "message": "Preview environment is live."}
+    except Exception:
+        pass
     return {"success": True, "preview_url": "https://preview-deploy.kobits.dev/pr-123", "message": "Preview environment is live."}
 
 async def handle_deployment_deploy(environment: str, **kwargs) -> dict:
@@ -536,6 +596,24 @@ async def handle_git_run(command: str, context: dict = None) -> dict:
     """Runs a git command in the repository."""
     if not command.startswith("git "):
         command = f"git {command}"
+    if context and context.get("sandbox_session_id"):
+        from backend.services.sandbox_manager import SandboxManager
+        from backend.services.cloud_sandbox import CloudMicroVMSandbox
+        sess = SandboxManager.get_session(context["sandbox_session_id"])
+        if sess:
+            is_cloud = (
+                getattr(sess, "isolation_driver", None) == "cloud_microvm"
+                or CloudMicroVMSandbox.is_configured()
+                or CloudMicroVMSandbox.is_cloud_native()
+            )
+            if is_cloud and CloudMicroVMSandbox.is_configured():
+                try:
+                    cloud_sb = CloudMicroVMSandbox.get_or_create(sess.session_id)
+                    res = cloud_sb.run_command(command, workdir="/workspace")
+                    await _broadcast_terminal(context, command, res)
+                    return res
+                except Exception:
+                    pass
     if context and context.get("sandbox_dir"):
         from backend.services.sandbox_manager import _run_git
         cmd_args = command.split(" ")[1:]

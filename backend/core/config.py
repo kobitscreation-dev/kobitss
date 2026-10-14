@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 from typing import Optional
+import os
 import logging
 import warnings
 
@@ -121,3 +122,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True, extra="ignore")
 
 settings = Settings()
+if settings.E2B_API_KEY and not os.environ.get("E2B_API_KEY"):
+    import os
+    os.environ["E2B_API_KEY"] = settings.E2B_API_KEY

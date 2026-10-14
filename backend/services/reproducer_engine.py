@@ -137,6 +137,19 @@ class ReproducerEngine:
             except OSError:
                 pass
 
+        # Remote sync to Cloud MicroVM if configured
+        try:
+            from backend.services.cloud_sandbox import CloudMicroVMSandbox
+            from backend.services.sandbox_manager import SandboxManager
+            if CloudMicroVMSandbox.is_configured():
+                session = SandboxManager.get_session_by_dir(sandbox_dir)
+                sid = session.session_id if session else "default"
+                cloud_sb = CloudMicroVMSandbox.get_or_create(sid)
+                clean_rel = clean_name.replace("\\", "/")
+                cloud_sb.write_file(f"/workspace/{clean_rel}", content)
+        except Exception as e:
+            logger.debug(f"Cloud MicroVM author_reproducer sync error: {e}")
+
         logger.info(f"Authored reproducer test at: {target_path}")
         return target_path
 
@@ -173,6 +186,56 @@ class ReproducerEngine:
         Hermetically executes the reproducer script inside sandbox_dir with strict isolation,
         timeout protection, and full stdout/stderr capture.
         """
+        # Cloud MicroVM remote execution routing for zero-local footprint
+        try:
+            from backend.services.cloud_sandbox import CloudMicroVMSandbox
+            from backend.services.environment_bootstrapper import EnvironmentBootstrapper
+            from backend.services.sandbox_manager import SandboxManager
+
+            session = SandboxManager.get_session_by_dir(sandbox_dir)
+            sid = session.session_id if session else "default"
+            is_cloud = (
+                (session and getattr(session, "isolation_driver", None) == "cloud_microvm")
+                or EnvironmentBootstrapper.detect_isolation_driver() == "cloud_microvm"
+                or CloudMicroVMSandbox.is_cloud_native()
+            )
+            if is_cloud and CloudMicroVMSandbox.is_configured():
+                cloud_sb = CloudMicroVMSandbox.get_or_create(sid)
+                if sandbox_dir and os.path.isabs(script_path):
+                    try:
+                        clean_rel = os.path.relpath(script_path, sandbox_dir).replace("\\", "/")
+                    except ValueError:
+                        clean_rel = os.path.basename(script_path)
+                else:
+                    clean_rel = script_path.replace("\\", "/").lstrip("/")
+                remote_path = f"/workspace/{clean_rel}"
+                local_cand = script_path if (sandbox_dir and os.path.isabs(script_path)) else (os.path.join(sandbox_dir, script_path) if sandbox_dir else None)
+                if local_cand and os.path.isfile(local_cand):
+                    try:
+                        with open(local_cand, "r", encoding="utf-8") as rf:
+                            cloud_sb.write_file(remote_path, rf.read())
+                    except Exception:
+                        pass
+                start_time = time.perf_counter()
+                remote_res = cloud_sb.execute_script(
+                    clean_rel,
+                    timeout=timeout,
+                    env_overrides=env_overrides,
+                    workdir="/workspace",
+                )
+                dur = time.perf_counter() - start_time
+                return ReproducerExecution(
+                    exit_code=remote_res.get("exit_code", 0),
+                    stdout=remote_res.get("stdout", ""),
+                    stderr=remote_res.get("stderr", ""),
+                    duration_seconds=round(dur, 4),
+                    command=["cloud_microvm", clean_rel],
+                    timed_out=bool(remote_res.get("timed_out")),
+                    error=remote_res.get("error"),
+                )
+        except Exception as e:
+            logger.debug(f"Cloud MicroVM execute_script error, falling back to local: {e}")
+
         if not os.path.isdir(sandbox_dir):
             return ReproducerExecution(
                 exit_code=-1,
@@ -374,15 +437,46 @@ class ReproducerEngine:
         # 2. Regression test suite check
         regression_exec = None
         if regression_cmd:
-            if isinstance(regression_cmd, list):
-                cmd = regression_cmd
-            else:
-                try:
-                    cmd = shlex.split(regression_cmd, posix=(os.name != "nt"))
-                except Exception:
-                    cmd = regression_cmd.split()
+            try:
+                from backend.services.cloud_sandbox import CloudMicroVMSandbox
+                from backend.services.environment_bootstrapper import EnvironmentBootstrapper
+                from backend.services.sandbox_manager import SandboxManager
 
-            start_t = time.perf_counter()
+                session = SandboxManager.get_session_by_dir(sandbox_dir)
+                sid = session.session_id if session else "default"
+                is_cloud = (
+                    (session and getattr(session, "isolation_driver", None) == "cloud_microvm")
+                    or EnvironmentBootstrapper.detect_isolation_driver() == "cloud_microvm"
+                    or CloudMicroVMSandbox.is_cloud_native()
+                )
+                if is_cloud and CloudMicroVMSandbox.is_configured():
+                    cloud_sb = CloudMicroVMSandbox.get_or_create(sid)
+                    cmd_str = " ".join(regression_cmd) if isinstance(regression_cmd, list) else str(regression_cmd)
+                    start_t = time.perf_counter()
+                    c_res = cloud_sb.execute_tests(test_cmd=cmd_str, timeout=timeout, workdir="/workspace")
+                    reg_dur = time.perf_counter() - start_t
+                    regression_exec = ReproducerExecution(
+                        exit_code=c_res.get("exit_code", 0),
+                        stdout=c_res.get("stdout", ""),
+                        stderr=c_res.get("stderr", ""),
+                        duration_seconds=round(reg_dur, 4),
+                        command=["cloud_microvm", cmd_str],
+                        timed_out=bool(c_res.get("timed_out")),
+                        error=c_res.get("error"),
+                    )
+            except Exception as e:
+                logger.debug(f"Cloud MicroVM regression_cmd execution error: {e}")
+
+            if regression_exec is None:
+                if isinstance(regression_cmd, list):
+                    cmd = regression_cmd
+                else:
+                    try:
+                        cmd = shlex.split(regression_cmd, posix=(os.name != "nt"))
+                    except Exception:
+                        cmd = regression_cmd.split()
+
+                start_t = time.perf_counter()
             try:
                 env = os.environ.copy()
                 existing_py = env.get("PYTHONPATH", "")

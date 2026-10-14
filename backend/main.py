@@ -522,6 +522,17 @@ async def _handle_terminal_ws(websocket: WebSocket, mission_id: str):
             "mission_id": mission_id,
             "message": f"Connected to Mission {mission_id} live terminal."
         }
+        try:
+            from backend.services.cloud_sandbox import CloudMicroVMSandbox
+            if CloudMicroVMSandbox.is_cloud_native() or CloudMicroVMSandbox.is_configured():
+                greeting_payload["cloud_native"] = True
+                greeting_payload["cloud_telemetry"] = {
+                    "isolation": "cloud_microvm",
+                    "engine": "E2B Firecracker Linux MicroVM",
+                    "cloud_native": True,
+                }
+        except Exception:
+            pass
         if pty_session:
             hist = pty_session.get_history()
             if hist:
@@ -661,9 +672,28 @@ async def _handle_terminal_ws(websocket: WebSocket, mission_id: str):
                             cmd_data += "\n"
                         if pty_session and pty_session.is_alive:
                             await pty_session.write(cmd_data)
+                        else:
+                            try:
+                                from backend.services.cloud_sandbox import CloudMicroVMSandbox
+                                if CloudMicroVMSandbox.is_configured() or CloudMicroVMSandbox.is_cloud_native():
+                                    cloud_sb = CloudMicroVMSandbox.get_or_create(mission_id)
+                                    res = cloud_sb.run_command(cmd_data.strip())
+                                    out = res.get("stdout", "")
+                                    err = res.get("stderr", "")
+                                    await websocket.send_json({
+                                        "type": "pty_output",
+                                        "mission_id": mission_id,
+                                        "data": f"$ {cmd_data.strip()}\n{out if out else err}\n",
+                                        "cloud_telemetry": {
+                                            "sandbox_id": cloud_sb.sandbox_id,
+                                            "exit_code": res.get("exit_code", 0),
+                                        }
+                                    })
+                            except Exception:
+                                pass
                     continue
-                elif raw_payload.get("message") or raw_payload.get("content"):
-                    clean_text = str(raw_payload.get("message") or raw_payload.get("content") or "").strip()
+                elif msg_type in ("steer", "steering", "feedback", "user_input") or raw_payload.get("instruction") or raw_payload.get("message") or raw_payload.get("content"):
+                    clean_text = str(raw_payload.get("instruction") or raw_payload.get("message") or raw_payload.get("content") or raw_payload.get("prompt") or "").strip()
                     try:
                         import backend.core.database as db_core
                         async with db_core.AsyncSessionLocal() as db:
@@ -690,11 +720,23 @@ async def _handle_terminal_ws(websocket: WebSocket, mission_id: str):
                                     "mission_id": mission_id,
                                     "message": f"[User Input Acknowledged] Appended real-time task to {ph_name} queue: \"{clean_text}\""
                                 })
+                                await manager.broadcast(mission_id, {
+                                    "type": "steer_acknowledged",
+                                    "mission_id": mission_id,
+                                    "instruction": clean_text,
+                                    "message": f"[Mid-Flight Steering Injected] Trajectory adjusted: \"{clean_text}\""
+                                })
                             else:
                                 await manager.broadcast(mission_id, {
                                     "type": "system", 
                                     "mission_id": mission_id,
                                     "message": f"[User Input Acknowledged] Live terminal instruction recorded: \"{clean_text}\""
+                                })
+                                await manager.broadcast(mission_id, {
+                                    "type": "steer_acknowledged",
+                                    "mission_id": mission_id,
+                                    "instruction": clean_text,
+                                    "message": f"[Mid-Flight Steering Injected] \"{clean_text}\""
                                 })
                     except Exception as db_err:
                         await websocket.send_json({"type": "system", "message": f"[Input Error] {str(db_err)}"})
@@ -734,11 +776,33 @@ async def _handle_terminal_ws(websocket: WebSocket, mission_id: str):
                     await pty_session.write(data)
             else:
                 if clean_text:
-                    await websocket.send_json({
-                        "type": "system",
-                        "mission_id": mission_id,
-                        "message": f"[Terminal Command] {clean_text}"
-                    })
+                    executed_in_cloud = False
+                    try:
+                        from backend.services.cloud_sandbox import CloudMicroVMSandbox
+                        if CloudMicroVMSandbox.is_configured() or CloudMicroVMSandbox.is_cloud_native():
+                            cloud_sb = CloudMicroVMSandbox.get_or_create(mission_id)
+                            res = cloud_sb.run_command(clean_text)
+                            out = res.get("stdout", "")
+                            err = res.get("stderr", "")
+                            msg_out = out if out else err
+                            await websocket.send_json({
+                                "type": "pty_output",
+                                "mission_id": mission_id,
+                                "data": f"$ {clean_text}\n{msg_out}\n",
+                                "cloud_telemetry": {
+                                    "sandbox_id": cloud_sb.sandbox_id,
+                                    "exit_code": res.get("exit_code", 0),
+                                }
+                            })
+                            executed_in_cloud = True
+                    except Exception:
+                        pass
+                    if not executed_in_cloud:
+                        await websocket.send_json({
+                            "type": "system",
+                            "mission_id": mission_id,
+                            "message": f"[Terminal Command] {clean_text}"
+                        })
 
     except WebSocketDisconnect:
         pass

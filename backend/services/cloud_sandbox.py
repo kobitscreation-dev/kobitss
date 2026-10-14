@@ -29,34 +29,198 @@ class _ClassOrInstanceMethod:
         return wrapper
 
 
-class _MockE2BCommands:
-    def run(self, cmd: str, timeout: int = 120):
-        class _Result:
-            def __init__(self, cmd):
-                self.cmd = cmd
-                self.stdout = f"Mock cloud execution: {cmd[:60]}"
-                self.stderr = ""
-                self.exit_code = 0
-                self.error = None
-        return _Result(cmd)
-
-
 class _MockE2BFiles:
     def __init__(self):
         self._storage: Dict[str, str] = {}
+
+    def _resolve_key(self, path: str) -> Optional[str]:
+        if path in self._storage:
+            return path
+        cand = f"/workspace/{path.lstrip('/')}"
+        if cand in self._storage:
+            return cand
+        clean = path.replace("/workspace/", "")
+        if clean in self._storage:
+            return clean
+        return None
 
     def write(self, path: str, content: str):
         self._storage[path] = content
 
     def read(self, path: str) -> str:
-        return self._storage.get(path, "")
+        key = self._resolve_key(path)
+        if key is not None:
+            return self._storage[key]
+        raise FileNotFoundError(f"File not found in mock MicroVM: {path}")
+
+    def exists(self, path: str) -> bool:
+        return self._resolve_key(path) is not None
+
+    def delete(self, path: str) -> bool:
+        key = self._resolve_key(path)
+        if key is not None:
+            del self._storage[key]
+            return True
+        return False
+
+    def remove(self, path: str) -> bool:
+        return self.delete(path)
+
+    def list(self, dir_path: str = "/workspace") -> List[str]:
+        clean = dir_path.rstrip("/")
+        prefix = f"{clean}/" if clean else ""
+        return [k for k in self._storage.keys() if k.startswith(prefix)]
+
+
+class _MockE2BCommands:
+    def __init__(self, files: Optional[_MockE2BFiles] = None):
+        self.files = files or _MockE2BFiles()
+
+    def run(self, cmd: str, timeout: int = 120):
+        class _Result:
+            def __init__(self, cmd, stdout="", stderr="", exit_code=0, error=None):
+                self.cmd = cmd
+                self.stdout = stdout
+                self.stderr = stderr
+                self.exit_code = exit_code
+                self.error = error
+
+        norm_cmd = cmd.strip()
+        # Remove any leading cd/setup prefix added by run_command
+        while ";" in norm_cmd:
+            first_clause, rest = norm_cmd.split(";", 1)
+            first_stripped = first_clause.strip()
+            if first_stripped.startswith("cd ") or "pip install" in first_stripped or "which " in first_stripped:
+                norm_cmd = rest.strip()
+            else:
+                break
+
+        # Handle python script execution in mock
+        if "python3 " in norm_cmd or "python " in norm_cmd:
+            parts = norm_cmd.split()
+            script_candidate = None
+            for part in parts:
+                if part.endswith(".py"):
+                    script_candidate = part
+                    break
+            if script_candidate:
+                full_cand = script_candidate if script_candidate.startswith("/") else f"/workspace/{script_candidate}"
+                script_content = self.files._storage.get(full_cand) or self.files._storage.get(script_candidate)
+                if script_content:
+                    # Check if script reproduces failure or passes
+                    if "sys.exit(1)" in script_content or "BUG REPRODUCED" in script_content or "assert False" in script_content:
+                        return _Result(cmd, stdout="BUG REPRODUCED: Failing test condition detected\n", stderr="", exit_code=1)
+                    if "sys.exit(0)" in script_content or "SUCCESS" in script_content:
+                        return _Result(cmd, stdout="SUCCESS: All reproducer verification checks passed\n", stderr="", exit_code=0)
+
+        # Handle cat in mock
+        if norm_cmd.startswith("cat "):
+            target_f = norm_cmd[4:].strip().split()[-1]
+            if self.files.exists(target_f):
+                content = self.files.read(target_f)
+                return _Result(cmd, stdout=content, stderr="", exit_code=0)
+            return _Result(cmd, stdout="", stderr=f"cat: {target_f}: No such file or directory", exit_code=1)
+
+        # Handle rm in mock
+        if norm_cmd.startswith("rm "):
+            target_f = norm_cmd.split()[-1]
+            self.files.delete(target_f)
+            return _Result(cmd, stdout="", stderr="", exit_code=0)
+
+        # Handle test -f / test -e / test -d in mock
+        if norm_cmd.startswith("test -f ") or norm_cmd.startswith("test -e ") or norm_cmd.startswith("test -d "):
+            target_f = norm_cmd.split()[-1]
+            if self.files.exists(target_f):
+                return _Result(cmd, stdout="", stderr="", exit_code=0)
+            return _Result(cmd, stdout="", stderr="", exit_code=1)
+
+        # Handle find in mock
+        if "find " in norm_cmd:
+            find_part = norm_cmd[norm_cmd.index("find "):]
+            parts = find_part.split()
+            target_dir = "/workspace"
+            for p in parts[1:]:
+                if not p.startswith("-") and not p.startswith("|") and not p.startswith("!"):
+                    target_dir = p
+                    break
+            clean_tgt = target_dir.rstrip("/")
+            prefix = f"{clean_tgt}/" if clean_tgt else ""
+            keys = [k for k in self.files._storage.keys() if k.startswith(prefix) or k == clean_tgt]
+            return _Result(cmd, stdout="\n".join(keys) + "\n", stderr="", exit_code=0)
+
+        # Handle grep in mock
+        if "grep " in norm_cmd:
+            import shlex
+            import fnmatch
+            grep_part = norm_cmd[norm_cmd.index("grep "):]
+            is_ci = "-i" in grep_part
+            file_pattern = None
+            q = ""
+            target_dir = "/workspace"
+            try:
+                cmd_before_pipe = grep_part.split("|")[0].strip()
+                tokens = shlex.split(cmd_before_pipe)
+            except Exception:
+                tokens = grep_part.split("|")[0].strip().split()
+            
+            positional = []
+            for tok in tokens:
+                if tok == "grep":
+                    continue
+                if tok.startswith("--include="):
+                    file_pattern = tok.split("=", 1)[1].strip("'\"")
+                elif tok.startswith("-"):
+                    continue
+                else:
+                    positional.append(tok)
+
+            if len(positional) >= 2:
+                q = positional[0]
+                target_dir = positional[1]
+            elif len(positional) == 1:
+                q = positional[0]
+
+            q_comp = q.lower() if is_ci else q
+            clean_tgt = target_dir.rstrip("/")
+            prefix = f"{clean_tgt}/" if clean_tgt else ""
+            matches = []
+            if q:
+                for k, v in self.files._storage.items():
+                    if clean_tgt and not (k.startswith(prefix) or k == clean_tgt or clean_tgt == "/workspace"):
+                        continue
+                    if file_pattern and not fnmatch.fnmatch(os.path.basename(k), file_pattern):
+                        continue
+                    for idx, line in enumerate(v.splitlines(), 1):
+                        line_comp = line.lower() if is_ci else line
+                        if q_comp in line_comp:
+                            matches.append(f"{k}:{idx}:{line}")
+            return _Result(cmd, stdout="\n".join(matches[:100]) + ("\n" if matches else ""), stderr="", exit_code=0 if matches else 1)
+
+        # Handle sudo in mock
+        if norm_cmd.startswith("sudo "):
+            norm_cmd = norm_cmd[5:].strip()
+
+        # Handle mkdir in mock
+        if norm_cmd.startswith("mkdir "):
+            return _Result(cmd, stdout="", stderr="", exit_code=0)
+
+        # Handle node / node --test in mock
+        if "node " in norm_cmd:
+            return _Result(cmd, stdout="# tests 1\n# pass 1\n# fail 0\n# ok\n", stderr="", exit_code=0)
+
+        # Handle pytest in mock
+        if "pytest " in norm_cmd:
+            return _Result(cmd, stdout="1 passed in 0.05s\n", stderr="", exit_code=0)
+
+        # Default mock execution
+        return _Result(cmd, stdout=f"Mock cloud execution: {cmd[:60]}", stderr="", exit_code=0)
 
 
 class _MockE2BSandbox:
     def __init__(self):
         self.sandbox_id = "mock-sb-01"
-        self.commands = _MockE2BCommands()
         self.files = _MockE2BFiles()
+        self.commands = _MockE2BCommands(files=self.files)
         self._running = True
 
     def is_running(self) -> bool:
@@ -79,7 +243,7 @@ class CloudMicroVMSandbox:
 
     def __init__(self, session_id: Optional[str] = None, api_key: Optional[str] = None):
         self.session_id = session_id or "default"
-        self.api_key = api_key or os.environ.get("E2B_API_KEY")
+        self.api_key = api_key if api_key is not None else os.environ.get("E2B_API_KEY")
         self._sandbox = None
         self.sandbox_id: Optional[str] = None
         self._synced = False
@@ -87,8 +251,22 @@ class CloudMicroVMSandbox:
     @_ClassOrInstanceMethod
     def is_configured(self_or_cls) -> bool:
         """Check whether E2B_API_KEY is available."""
-        api_key = getattr(self_or_cls, "api_key", None)
-        return bool(api_key or os.environ.get("E2B_API_KEY") or os.environ.get("KOBITS_MOCK_CLOUD_SANDBOX") == "1")
+        if os.environ.get("KOBITS_MOCK_CLOUD_SANDBOX") == "1":
+            return True
+        if not isinstance(self_or_cls, type):
+            if getattr(self_or_cls, "api_key", None):
+                return True
+            env_key = os.environ.get("E2B_API_KEY")
+            return bool(env_key and env_key.strip())
+        env_key = os.environ.get("E2B_API_KEY")
+        return bool(env_key and env_key.strip())
+
+    @classmethod
+    def is_cloud_native(cls) -> bool:
+        """Check whether the platform is operating in 100% remote cloud-native mode."""
+        from backend.core.config import settings
+        mode = os.environ.get("KOBITS_EXECUTION_MODE") or getattr(settings, "KOBITS_EXECUTION_MODE", "cloud_native")
+        return mode == "cloud_native" or os.environ.get("KOBITS_CLOUD_NATIVE") == "1" or cls.is_configured()
 
     @classmethod
     def get_or_create(cls, session_id: str, api_key: Optional[str] = None) -> "CloudMicroVMSandbox":
@@ -141,6 +319,10 @@ class CloudMicroVMSandbox:
         self.sandbox_id = getattr(self._sandbox, "sandbox_id", str(id(self._sandbox)))
         dur_ms = int((time.perf_counter() - start_ts) * 1000)
         logger.info(f"Spawned E2B Firecracker MicroVM {self.sandbox_id} for session {self.session_id} in {dur_ms}ms")
+        try:
+            self.run_command("sudo mkdir -p /workspace && sudo chown -R $(whoami):$(whoami) /workspace 2>/dev/null || mkdir -p /workspace", timeout=10)
+        except Exception:
+            pass
         return self.sandbox_id
 
     def ensure_synced(self, local_dir: str, remote_dir: str = "/workspace") -> None:
@@ -160,7 +342,7 @@ class CloudMicroVMSandbox:
 
         # Ensure remote workdir exists
         try:
-            self.run_command(f"mkdir -p {remote_dir}", timeout=10)
+            self.run_command(f"sudo mkdir -p {remote_dir} && sudo chown -R $(whoami):$(whoami) {remote_dir} 2>/dev/null || mkdir -p {remote_dir}", timeout=10)
         except Exception:
             pass
 
@@ -189,6 +371,12 @@ class CloudMicroVMSandbox:
         if not self._sandbox:
             self.start()
         try:
+            remote_parent = os.path.dirname(remote_path).replace("\\", "/")
+            if remote_parent and remote_parent != "/":
+                try:
+                    self.run_command(f"sudo mkdir -p {remote_parent} 2>/dev/null || mkdir -p {remote_parent}", timeout=10)
+                except Exception:
+                    pass
             if hasattr(self._sandbox, "files") and hasattr(self._sandbox.files, "write"):
                 self._sandbox.files.write(remote_path, content)
                 return True
@@ -201,18 +389,44 @@ class CloudMicroVMSandbox:
             logger.error(f"Failed to write file {remote_path} to MicroVM: {exc}")
             return False
 
-    def read_file(self, remote_path: str) -> str:
-        """Read a text file from the isolated cloud MicroVM."""
+    def file_exists(self, remote_path: str) -> bool:
+        """Check whether a file or directory exists inside the isolated cloud MicroVM."""
         if not self._sandbox:
             self.start()
         try:
-            if hasattr(self._sandbox, "files") and hasattr(self._sandbox.files, "read"):
-                return self._sandbox.files.read(remote_path)
+            if hasattr(self._sandbox, "files"):
+                if hasattr(self._sandbox.files, "exists"):
+                    return bool(self._sandbox.files.exists(remote_path))
+                if hasattr(self._sandbox.files, "_storage"):
+                    return remote_path in self._sandbox.files._storage or f"/workspace/{remote_path.lstrip('/')}" in self._sandbox.files._storage
+            res = self.run_command(f"test -e {remote_path}")
+            return res.get("exit_code") == 0
+        except Exception:
+            return False
+
+    def read_file(self, remote_path: str) -> Optional[str]:
+        """
+        Read a text file from the isolated cloud MicroVM.
+        Returns None if file does not exist, preserving empty files as empty strings.
+        """
+        if not self._sandbox:
+            self.start()
+        try:
+            if hasattr(self._sandbox, "files"):
+                if hasattr(self._sandbox.files, "exists") and not self._sandbox.files.exists(remote_path):
+                    return None
+                if hasattr(self._sandbox.files, "read"):
+                    try:
+                        return self._sandbox.files.read(remote_path)
+                    except Exception:
+                        return None
             res = self.run_command(f"cat {remote_path}")
+            if res.get("exit_code") != 0:
+                return None
             return res.get("stdout", "")
         except Exception as exc:
             logger.error(f"Failed to read file {remote_path} from MicroVM: {exc}")
-            return ""
+            return None
 
     def run_command(self, command: str, timeout: int = 120, workdir: str = "/workspace") -> Dict[str, Any]:
         """Executes a command inside the isolated cloud MicroVM."""
@@ -274,7 +488,7 @@ class CloudMicroVMSandbox:
 
         branch_flag = f"--branch {branch}" if branch else ""
         cmd = (
-            f"mkdir -p {workdir} && "
+            f"(sudo mkdir -p {workdir} && sudo chown -R $(whoami):$(whoami) {workdir} 2>/dev/null || mkdir -p {workdir}) && "
             "git config --global user.name 'Kobits Autonomous Agent' && "
             "git config --global user.email 'agent@kobits.ai' && "
             f"git clone --depth 50 {branch_flag} '{auth_url}' {workdir} || "
@@ -333,10 +547,19 @@ class CloudMicroVMSandbox:
         prefix = workdir.rstrip("/") + "/"
         return [l[len(prefix):] if l.startswith(prefix) else l for l in lines]
 
-    def search_remote_code(self, query: str, workdir: str = "/workspace") -> Dict[str, Any]:
+    def search_remote_code(
+        self,
+        query: str,
+        file_pattern: Optional[str] = None,
+        case_sensitive: Optional[bool] = None,
+        workdir: str = "/workspace",
+        max_results: int = 100,
+    ) -> Dict[str, Any]:
         """Executes full-text code search directly inside the remote MicroVM."""
         safe_q = query.replace("'", "'\\''")
-        cmd = f"grep -rnI --exclude-dir='.git' --exclude-dir='node_modules' --exclude-dir='venv' --exclude-dir='__pycache__' '{safe_q}' {workdir} | head -n 100"
+        inc_flag = f"--include='{file_pattern}'" if file_pattern else ""
+        ci_flag = "-i" if (case_sensitive is False or (case_sensitive is None and query.islower())) else ""
+        cmd = f"grep -rnI -F {ci_flag} {inc_flag} --exclude-dir='.git' --exclude-dir='node_modules' --exclude-dir='venv' --exclude-dir='__pycache__' '{safe_q}' {workdir} | head -n {max_results}"
         return self.run_command(cmd, timeout=30, workdir=workdir)
 
     def git_commit_and_push(
@@ -363,6 +586,139 @@ class CloudMicroVMSandbox:
             f"git push -u origin {branch} --force"
         )
         return self.run_command(cmd, timeout=120, workdir=workdir)
+
+    def delete_file(self, remote_path: str) -> Dict[str, Any]:
+        """Delete a file inside the isolated cloud MicroVM."""
+        if not self._sandbox:
+            self.start()
+        if not self.file_exists(remote_path):
+            return {"error": f"File not found in MicroVM: {remote_path}", "path": remote_path, "deleted": False}
+        try:
+            if hasattr(self._sandbox, "files"):
+                if hasattr(self._sandbox.files, "remove"):
+                    self._sandbox.files.remove(remote_path)
+                elif hasattr(self._sandbox.files, "delete"):
+                    self._sandbox.files.delete(remote_path)
+            self.run_command(f"rm -f {remote_path}")
+            return {"success": True, "path": remote_path, "deleted": True}
+        except Exception as exc:
+            logger.error(f"Failed to delete file {remote_path} from MicroVM: {exc}")
+            return {"error": str(exc), "path": remote_path, "deleted": False}
+
+    def edit_file(
+        self,
+        remote_path: str,
+        old_string: Optional[str] = None,
+        new_string: Optional[str] = None,
+        replace_all: bool = False,
+        edits: Optional[list] = None,
+    ) -> Dict[str, Any]:
+        """
+        Surgically patches a file directly inside the isolated cloud MicroVM.
+        Applies multi-tier matching (exact -> trailing whitespace -> relative indentation).
+        """
+        if not self._sandbox:
+            self.start()
+
+        content = self.read_file(remote_path)
+        if content is None:
+            if old_string == "" and new_string is not None and not edits:
+                write_ok = self.write_file(remote_path, new_string)
+                if write_ok:
+                    return {
+                        "success": True,
+                        "path": remote_path,
+                        "replacements": 1,
+                        "snippet": new_string[:100],
+                        "syntax_valid": True,
+                    }
+            return {"error": f"File not found in MicroVM: {remote_path}"}
+
+        from backend.services.sandbox_manager import SandboxManager
+
+        chunk_list = edits if (edits and isinstance(edits, list)) else []
+        if not chunk_list:
+            if old_string is None or new_string is None:
+                return {"error": "Missing old_string/new_string or edits list for edit_file"}
+            chunk_list = [{"old_string": old_string, "new_string": new_string, "replace_all": replace_all}]
+
+        curr_content = content
+        total_replacements = 0
+        last_snippet = None
+
+        for chunk in chunk_list:
+            c_old = chunk.get("old_string") or chunk.get("search_block") or ""
+            c_new = chunk.get("new_string") or chunk.get("replace_block") or ""
+            c_all = bool(chunk.get("replace_all", replace_all))
+            patch_res = SandboxManager._apply_single_surgical_chunk(
+                curr_content, remote_path, c_old, c_new, replace_all=c_all
+            )
+            if not patch_res.get("ok"):
+                return {"error": patch_res.get("error", "Surgical patch failed in MicroVM")}
+            curr_content = patch_res["updated_content"]
+            total_replacements += patch_res.get("replacements", 1)
+            last_snippet = patch_res.get("snippet")
+
+        write_ok = self.write_file(remote_path, curr_content)
+        if not write_ok:
+            return {"error": f"Failed to save patched file {remote_path} to MicroVM"}
+
+        syn = SandboxManager._validate_file_syntax(remote_path, curr_content)
+        return {
+            "success": True,
+            "path": remote_path,
+            "replacements": total_replacements,
+            "snippet": last_snippet,
+            "syntax_valid": syn.get("syntax_valid", True),
+            "syntax_error": syn.get("syntax_error"),
+        }
+
+    def execute_script(
+        self,
+        script_path: str,
+        timeout: int = 30,
+        env_overrides: Optional[dict] = None,
+        workdir: str = "/workspace",
+    ) -> Dict[str, Any]:
+        """
+        Executes a reproducer or testing script inside the remote Linux MicroVM.
+        """
+        if not self._sandbox:
+            self.start()
+
+        env_prefix = ""
+        if env_overrides:
+            env_prefix = " ".join(f"{k}='{v}'" for k, v in env_overrides.items()) + " "
+
+        clean_path = script_path
+        if clean_path.startswith(workdir):
+            clean_path = clean_path[len(workdir):].lstrip("/")
+
+        ext = os.path.splitext(clean_path)[1].lower()
+        if ext == ".py":
+            runner = "python3"
+        elif ext in (".js", ".mjs"):
+            runner = "node"
+        elif ext == ".ts":
+            runner = "npx ts-node"
+        elif ext in (".sh", ".bash"):
+            runner = "bash"
+        else:
+            runner = "python3"
+
+        cmd = f"{env_prefix}{runner} {clean_path}"
+        return self.run_command(cmd, timeout=timeout, workdir=workdir)
+
+    def execute_tests(
+        self,
+        test_cmd: str = "pytest -q",
+        timeout: int = 60,
+        workdir: str = "/workspace",
+    ) -> Dict[str, Any]:
+        """
+        Runs the test suite inside the remote Linux MicroVM.
+        """
+        return self.run_command(test_cmd, timeout=timeout, workdir=workdir)
 
     def close(self) -> None:
         """Kills and destroys the ephemeral cloud microVM."""

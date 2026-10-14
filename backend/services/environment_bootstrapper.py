@@ -117,7 +117,15 @@ class EnvironmentBootstrapper:
         if forced in ("jail", "virtual_rootfs_jail"):
             return "virtual_rootfs_jail"
 
-        if os.environ.get("KOBITS_MICROVM_ENDPOINT") or os.environ.get("E2B_API_KEY"):
+        if os.environ.get("KOBITS_MICROVM_ENDPOINT"):
+            return "cloud_microvm"
+        try:
+            from backend.services.cloud_sandbox import CloudMicroVMSandbox
+            if CloudMicroVMSandbox.is_configured():
+                return "cloud_microvm"
+        except Exception:
+            pass
+        if os.environ.get("E2B_API_KEY"):
             return "cloud_microvm"
         if cls.is_docker_daemon_available():
             return "docker_container"
@@ -620,12 +628,13 @@ WORKDIR /workspace
         vm_id = f"kobits-vm-{session_id}"
 
         # 0. Cloud MicroVM Execution (E2B Firecracker MicroVM on AWS/GCP)
-        if driver == "cloud_microvm" and (os.environ.get("E2B_API_KEY") or os.environ.get("KOBITS_MOCK_CLOUD_SANDBOX") == "1"):
+        if driver == "cloud_microvm":
             try:
                 from backend.services.cloud_sandbox import CloudMicroVMSandbox
-                cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=session_id)
-                cloud_sb.ensure_synced(local_dir=sandbox_abs, remote_dir="/workspace")
-                return cloud_sb.run_command(command, timeout=timeout, workdir="/workspace")
+                if CloudMicroVMSandbox.is_configured():
+                    cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=session_id)
+                    cloud_sb.ensure_synced(local_dir=sandbox_abs, remote_dir="/workspace")
+                    return cloud_sb.run_command(command, timeout=timeout, workdir="/workspace")
             except Exception as e:
                 logger.warning(f"Cloud microVM execution failed, falling back to jail: {e}")
 
