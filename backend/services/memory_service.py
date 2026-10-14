@@ -224,7 +224,11 @@ class MemoryService:
 
         scored_docs = []
         q_lower = query.strip().lower()
+        dense_sims = []
+        lexical_sims = []
+        symbol_boosts = []
 
+        # 1. Compute Dense Similarity, Lexical BM25 Similarity, and AST Boosts
         for idx, d in enumerate(docs):
             meta = d.metadata_json if isinstance(d.metadata_json, dict) else {}
             sym = (meta.get("symbol") or "").strip()
@@ -232,7 +236,7 @@ class MemoryService:
             path_lower = (d.file_path or "").lower()
             d_toks = doc_token_sets[idx]
 
-            # 1. Dense Cosine Similarity
+            # Dense Cosine Similarity
             dense_sim = 0.0
             emb_data = getattr(d, "embedding", None)
             if emb_data:
@@ -242,12 +246,14 @@ class MemoryService:
                         dense_sim = max(0.0, float(np.dot(query_vec, doc_vec)))
                 except Exception:
                     dense_sim = 0.0
+            dense_sims.append(dense_sim)
 
-            # 2. IDF-Weighted Lexical Identifier Overlap
+            # IDF-Weighted Lexical Identifier Overlap (BM25)
             matched_idf = sum(idf_weights[t] for t in q_token_set if t in d_toks)
             lexical_sim = matched_idf / total_q_idf if q_token_set else 0.0
+            lexical_sims.append(lexical_sim)
 
-            # 3. Structural AST Symbol & File Path Boost
+            # Structural AST Symbol & File Path Boost
             symbol_boost = 0.0
             if sym_lower:
                 if sym_lower == q_lower or sym_lower.endswith("." + q_lower):
@@ -264,7 +270,41 @@ class MemoryService:
             if len(q_lower) >= 3 and q_lower in (d.content_chunk or "").lower():
                 symbol_boost += 0.20
 
-            hybrid_score = (0.50 * dense_sim) + (0.35 * lexical_sim) + symbol_boost
+            symbol_boosts.append(symbol_boost)
+
+        # 2. Reciprocal Rank Fusion (RRF: sum w / (k + rank) with k=60)
+        k_rrf = 60
+        w_dense = 0.60
+        w_lexical = 0.40
+
+        # Dense ranking (1-indexed)
+        dense_ranked_indices = [i for i in range(N) if dense_sims[i] > 0.0]
+        dense_ranked_indices.sort(key=lambda i: dense_sims[i], reverse=True)
+        dense_ranks = {doc_idx: rank + 1 for rank, doc_idx in enumerate(dense_ranked_indices)}
+
+        # Lexical ranking (1-indexed)
+        lexical_ranked_indices = [i for i in range(N) if lexical_sims[i] > 0.0]
+        lexical_ranked_indices.sort(key=lambda i: lexical_sims[i], reverse=True)
+        lexical_ranks = {doc_idx: rank + 1 for rank, doc_idx in enumerate(lexical_ranked_indices)}
+
+        scored_docs = []
+        for idx, d in enumerate(docs):
+            meta = d.metadata_json if isinstance(d.metadata_json, dict) else {}
+            sym = (meta.get("symbol") or "").strip()
+            dense_sim = dense_sims[idx]
+            lexical_sim = lexical_sims[idx]
+            s_boost = symbol_boosts[idx]
+
+            d_rank = dense_ranks.get(idx)
+            l_rank = lexical_ranks.get(idx)
+
+            rrf_d = (w_dense / (k_rrf + d_rank)) if d_rank is not None else 0.0
+            rrf_l = (w_lexical / (k_rrf + l_rank)) if l_rank is not None else 0.0
+            rrf_raw = rrf_d + rrf_l
+
+            # Normalized RRF score scaled by (k + 1) to map [0, 1.0] for threshold filtering
+            rrf_normalized = rrf_raw * (k_rrf + 1)
+            hybrid_score = rrf_normalized + s_boost
 
             if hybrid_score >= threshold:
                 scored_docs.append({
@@ -275,8 +315,11 @@ class MemoryService:
                     "kind": meta.get("kind", "block"),
                     "content": d.content_chunk,
                     "similarity": round(min(1.0, hybrid_score), 4),
+                    "rrf_score": round(rrf_raw, 6),
                     "dense_similarity": round(dense_sim, 4),
                     "lexical_similarity": round(lexical_sim, 4),
+                    "dense_rank": d_rank,
+                    "lexical_rank": l_rank,
                 })
 
         scored_docs.sort(key=lambda x: (x["similarity"], x["lexical_similarity"], x["dense_similarity"]), reverse=True)

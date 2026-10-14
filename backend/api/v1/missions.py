@@ -643,22 +643,15 @@ async def create_mission(
             db.add(m_repo)
         await db.commit()
 
-    if request.auto_execute is not False:
-        from backend.services.worker_queue import WorkerQueue
-        await WorkerQueue.enqueue(
-            "mission.execute",
-            {"mission_id": mission.id, "org_id": membership.organization_id, "user_id": current_user.id},
+    if (request.auto_execute is True) or (request.auto_execute is not False and os.environ.get("KOBITS_NO_AUTO_EXECUTE") != "1"):
+        from backend.services.durable_queue import DurableQueue
+        await DurableQueue.enqueue(
+            task_type="EXECUTE_MISSION",
+            payload={"mission_id": mission.id, "org_id": membership.organization_id, "user_id": current_user.id},
+            queue_name="missions",
+            priority=10,
             job_id=f"job_mission_{mission.id}",
         )
-        if os.environ.get("KOBITS_NO_AUTO_EXECUTE") != "1":
-            from backend.services.durable_queue import DurableQueue
-            await DurableQueue.enqueue(
-                task_type="EXECUTE_MISSION",
-                payload={"mission_id": mission.id, "org_id": membership.organization_id, "user_id": current_user.id},
-                queue_name="missions",
-                priority=10,
-                job_id=f"mission_{mission.id}",
-            )
 
     return {
         "status": mission.status.value,

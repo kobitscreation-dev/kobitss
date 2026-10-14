@@ -388,24 +388,66 @@ class WorkerQueue:
                 return dict(row)
 
         raw = await asyncio.to_thread(_sync_get)
-        if not raw:
-            return None
-        return JobRecord(
-            id=raw["id"],
-            queue=raw["queue_name"],
-            task_type=raw["task_type"],
-            payload=json.loads(raw["payload_json"]) if raw["payload_json"] else {},
-            priority=raw["priority"],
-            status=raw["status"],
-            worker_id=raw["worker_id"],
-            lease_timeout_at=raw["lease_timeout_at"],
-            attempt_count=raw["attempt_count"],
-            max_retries=raw["max_retries"],
-            result=json.loads(raw["result_json"]) if raw["result_json"] else None,
-            error=raw["error"],
-            created_at=raw["created_at"],
-            updated_at=raw["updated_at"],
-        )
+        if raw:
+            return JobRecord(
+                id=raw["id"],
+                queue=raw["queue_name"],
+                task_type=raw["task_type"],
+                payload=json.loads(raw["payload_json"]) if raw["payload_json"] else {},
+                priority=raw["priority"],
+                status=raw["status"],
+                worker_id=raw["worker_id"],
+                lease_timeout_at=raw["lease_timeout_at"],
+                attempt_count=raw["attempt_count"],
+                max_retries=raw["max_retries"],
+                result=json.loads(raw["result_json"]) if raw["result_json"] else None,
+                error=raw["error"],
+                created_at=raw["created_at"],
+                updated_at=raw["updated_at"],
+            )
+
+        # Backward-compatibility fallback: lookup in DurableQueue (durable_queue_jobs)
+        try:
+            from sqlalchemy import select
+            from backend.core.database import AsyncSessionLocal
+            from backend.models.durable_job import DurableJob
+            async with AsyncSessionLocal() as db_session:
+                stmt = select(DurableJob).where(DurableJob.id == job_id)
+                res = await db_session.execute(stmt)
+                d_job = res.scalar_one_or_none()
+                if not d_job and job_id.startswith("job_"):
+                    alt_id = job_id.removeprefix("job_")
+                    res = await db_session.execute(select(DurableJob).where(DurableJob.id == alt_id))
+                    d_job = res.scalar_one_or_none()
+                if not d_job and not job_id.startswith("job_"):
+                    alt_id = f"job_{job_id}"
+                    res = await db_session.execute(select(DurableJob).where(DurableJob.id == alt_id))
+                    d_job = res.scalar_one_or_none()
+
+                if d_job:
+                    payload = json.loads(d_job.payload_json) if d_job.payload_json else {}
+                    task_type = "mission.execute" if d_job.task_type == "EXECUTE_MISSION" else d_job.task_type
+                    status_val = d_job.status.value if hasattr(d_job.status, "value") else str(d_job.status)
+                    return JobRecord(
+                        id=d_job.id,
+                        queue=d_job.queue_name,
+                        task_type=task_type,
+                        payload=payload,
+                        priority=d_job.priority,
+                        status=status_val,
+                        worker_id=d_job.worker_id,
+                        lease_timeout_at=d_job.lease_timeout_at.isoformat() if d_job.lease_timeout_at else None,
+                        attempt_count=d_job.attempt_count,
+                        max_retries=d_job.max_retries,
+                        result=json.loads(d_job.result_json) if d_job.result_json else None,
+                        error=d_job.error_trace,
+                        created_at=d_job.created_at.isoformat() if d_job.created_at else "",
+                        updated_at=d_job.updated_at.isoformat() if d_job.updated_at else "",
+                    )
+        except Exception as _d_err:
+            logger.debug(f"WorkerQueue.get_job DurableJob fallback failed: {_d_err}")
+
+        return None
 
     @classmethod
     async def list_jobs(

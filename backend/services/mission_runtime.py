@@ -3,9 +3,12 @@ import asyncio
 import uuid
 import os
 import shutil
+import logging
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger("kobits.mission_runtime")
 
 from backend.core.database import AsyncSessionLocal
 from backend.models.mission import Mission, MissionStatus, WorkflowPhase, WorkflowCheckpoint, Milestone, MilestoneStatus
@@ -552,10 +555,12 @@ class MissionRuntime:
                     return None
                     
             from backend.services.sandbox_manager import SandboxManager
-            if mission.active_branch and mission.active_branch.startswith("kobits/mission/"):
+            if mission.active_branch:
                 sess = SandboxManager.get_session_by_branch(mission.active_branch)
                 if sess:
                     return sess
+                if mission.active_branch.startswith("kobits/missing/"):
+                    return None
 
             mid = mission.id if mission else self.mission_id
             branch_name = (
@@ -1585,6 +1590,17 @@ class MissionRuntime:
                     m_meta["fluid_loop"] = fluid_loop
                     self._save_mission_meta(mission, m_meta)
                     mission.current_stage = f"Verification failed after {iteration} fluid iterations: {err_summary[:160]}"
+                    # Atomic rollback on validation failure to keep repository clean
+                    try:
+                        from backend.services.sandbox_rollback import SandboxRollbackManager
+                        from backend.services.sandbox_manager import SandboxManager
+                        sb_sess = SandboxManager.get_session_by_branch(mission.active_branch) if mission.active_branch else None
+                        last_sha = m_meta.get("last_checkpoint_sha")
+                        if sb_sess and sb_sess.sandbox_dir and last_sha:
+                            logger.info(f"Reverting sandbox to checkpoint {last_sha} on validation exhaustion")
+                            SandboxRollbackManager.rollback(sb_sess.sandbox_dir, last_sha)
+                    except Exception as _rb_err:
+                        logger.warning(f"Sandbox rollback warning: {_rb_err}")
                     await db.commit()
                     return "ERROR"
 
@@ -2295,6 +2311,24 @@ class MissionRuntime:
 
             if task.is_correction:
                 input_data["is_correction"] = True
+
+            # Create atomic git checkpoint before agent executes modifications
+            checkpoint_sha = None
+            active_sb_dir = input_data.get("sandbox_dir")
+            if active_sb_dir and not is_read_only_task:
+                try:
+                    from backend.services.sandbox_rollback import SandboxRollbackManager
+                    checkpoint_sha = SandboxRollbackManager.create_checkpoint(
+                        active_sb_dir, step_name=f"task_{task.id}"
+                    )
+                    if checkpoint_sha:
+                        task_meta["checkpoint_sha"] = checkpoint_sha
+                        task.metadata_json = json.dumps(task_meta)
+                        m_meta = self._load_mission_meta(mission)
+                        m_meta["last_checkpoint_sha"] = checkpoint_sha
+                        self._save_mission_meta(mission, m_meta)
+                except Exception as _cp_err:
+                    logger.warning(f"Failed to create pre-task checkpoint: {_cp_err}")
                 
             run.input_text = json.dumps(input_data)
             async with self._db_lock:
@@ -2491,6 +2525,13 @@ class MissionRuntime:
                                     run.error = f"Failed to normalize and create implementation tasks: {str(e)}"
                                     run.status = AgentRunStatus.FAILED
                         else:
+                            if checkpoint_sha and active_sb_dir:
+                                try:
+                                    from backend.services.sandbox_rollback import SandboxRollbackManager
+                                    logger.info(f"Reverting sandbox to checkpoint {checkpoint_sha} due to contract failure")
+                                    SandboxRollbackManager.rollback(active_sb_dir, checkpoint_sha)
+                                except Exception as _rb_err:
+                                    logger.warning(f"Sandbox rollback warning: {_rb_err}")
                             task.status = TaskStatus.FAILED
                             run.error = "PolicyEngine: Task evidence did not satisfy contract (insufficient evidence provided)"
                 async with self._db_lock:
@@ -2499,6 +2540,12 @@ class MissionRuntime:
             except Exception as e:
                 import traceback
                 traceback.print_exc()
+                if checkpoint_sha and active_sb_dir:
+                    try:
+                        from backend.services.sandbox_rollback import SandboxRollbackManager
+                        SandboxRollbackManager.rollback(active_sb_dir, checkpoint_sha)
+                    except Exception:
+                        pass
                 async with self._db_lock:
                     await db.rollback() # Fix PendingRollbackError
                     task.status = TaskStatus.FAILED

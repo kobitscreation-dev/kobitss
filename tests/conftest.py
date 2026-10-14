@@ -5,21 +5,12 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 
 # 1. Force the application to use a test database before any internal modules import config
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test_kobits.db"
+os.environ.pop("E2B_API_KEY", None)
 
 # Now we can safely import backend modules
 from backend.core.database import engine, AsyncSessionLocal
+import backend.models
 from backend.models.base import Base
-from backend.models.organization import User, Organization, OrganizationMember
-from backend.models.project import Project, Task, Activity, ProjectMemory, Notification
-from backend.models.agent import Agent, AgentRun
-from backend.models.github import GitHubConnection, Repository, RepositoryBranch, RepositorySnapshot, PullRequest
-from backend.models.mission import Mission, Milestone, MissionPlan
-from backend.models.finding import Finding
-from backend.models.debate_log import DebateLog
-from backend.models.communication import AgentMessage, AgentArtifact, AgentDecision, AgentLesson
-from backend.models.intelligence import TaskContract, ProcessMemory, ProcessOutcomeRecord, IntelligenceTrace, MemoryUsefulness, HumanFeedback, ContextEfficiencyRecord
-from backend.models.memory import AgentMemory, MissionMemory
-from backend.models.audit_log import AuditLog
 
 @pytest_asyncio.fixture(autouse=True, scope="function")
 async def setup_db():
@@ -27,14 +18,20 @@ async def setup_db():
     Global fixture for all tests to ensure they use a clean, isolated database.
     This prevents wiping the production/development database.
     """
-    # Create all tables in the test database
+    from sqlalchemy import text
+    # Clean setup: disable foreign keys so table drops/creates and isolated unit mocks work reliably
     async with engine.begin() as conn:
+        if "sqlite" in str(engine.url):
+            await conn.execute(text("PRAGMA foreign_keys = OFF"))
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     
     yield
     
     # Drop all tables after the test completes to maintain isolation
     async with engine.begin() as conn:
+        if "sqlite" in str(engine.url):
+            await conn.execute(text("PRAGMA foreign_keys = OFF"))
         await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.fixture(autouse=True)
@@ -46,7 +43,9 @@ def isolate_test_state():
     from backend.core.config import settings
     from backend.services.sandbox_manager import SandboxManager
 
+    os.environ.pop("E2B_API_KEY", None)
     orig_env = dict(os.environ)
+    orig_env.pop("E2B_API_KEY", None)
     orig_llm = settings.LLM_PROVIDER
     orig_anthropic_key = settings.ANTHROPIC_API_KEY
     orig_deepseek_key = settings.DEEPSEEK_API_KEY
@@ -54,7 +53,6 @@ def isolate_test_state():
     SandboxManager._sessions.clear()
 
     yield
-
     os.environ.clear()
     os.environ.update(orig_env)
     settings.LLM_PROVIDER = orig_llm

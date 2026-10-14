@@ -18,6 +18,17 @@ _IGNORE_SYNC_DIRS = {
 }
 
 
+class _ClassOrInstanceMethod:
+    def __init__(self, func):
+        self.func = func
+
+    def __get__(self, obj, objtype=None):
+        target = obj if obj is not None else objtype
+        def wrapper(*args, **kwargs):
+            return self.func(target, *args, **kwargs)
+        return wrapper
+
+
 class CloudMicroVMSandbox:
     """
     E2B Firecracker MicroVM Sandbox Manager.
@@ -33,10 +44,11 @@ class CloudMicroVMSandbox:
         self.sandbox_id: Optional[str] = None
         self._synced = False
 
-    @classmethod
-    def is_configured(cls) -> bool:
+    @_ClassOrInstanceMethod
+    def is_configured(self_or_cls) -> bool:
         """Check whether E2B_API_KEY is available."""
-        return bool(os.environ.get("E2B_API_KEY"))
+        api_key = getattr(self_or_cls, "api_key", None)
+        return bool(api_key or os.environ.get("E2B_API_KEY"))
 
     @classmethod
     def get_or_create(cls, session_id: str, api_key: Optional[str] = None) -> "CloudMicroVMSandbox":

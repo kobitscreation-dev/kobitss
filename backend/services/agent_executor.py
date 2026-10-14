@@ -714,9 +714,9 @@ class AgentExecutor:
             else:
                 agent_run.recovery_action = "ABORT"
                 
-        # Set run status from classification
-
         agent_run.status = run_status
+        agent_run.output_text = scrub_secrets(json.dumps(result))
+        agent_run.tool_calls_json = scrub_secrets(json.dumps(trace_logs)) if trace_logs else "[]"
             
         if "_usage" in result:
             usage = result["_usage"]

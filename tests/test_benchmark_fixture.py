@@ -8,9 +8,7 @@ import uuid
 import json
 from pathlib import Path
 
-# Load env before importing backend
-from dotenv import load_dotenv
-load_dotenv(Path.cwd() / ".env")
+# No top-level load_dotenv to prevent polluting global test environment with production secrets
 
 sys.path.insert(0, str(Path.cwd()))
 from backend.services.sandbox_manager import SandboxManager

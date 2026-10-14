@@ -17,9 +17,10 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import select, event, text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 
 from backend.main import app
 from backend.core.database import get_db
@@ -31,7 +32,25 @@ from backend.models.mission import Mission, MissionStatus, WorkflowPhase, Approv
 import kobits_cli
 
 DB_PATH = "./test_kyros_parity_worst_case.db"
-engine = create_async_engine(f"sqlite+aiosqlite:///{DB_PATH}", echo=False)
+engine = create_async_engine(
+    f"sqlite+aiosqlite:///{DB_PATH}",
+    echo=False,
+    poolclass=NullPool,
+    connect_args={"check_same_thread": False, "timeout": 30.0},
+)
+
+@event.listens_for(engine.sync_engine, "connect")
+def _set_sqlite_pragmas(dbapi_connection, connection_record):
+    try:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.execute("PRAGMA foreign_keys=OFF")
+        cursor.close()
+    except Exception:
+        pass
+
 Session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 USER = User(id="kyros_user", email="kyros@test.local", full_name="Kyros Tester", hashed_password="x")
@@ -40,7 +59,9 @@ NOW = datetime(2026, 10, 6, 12, 0, tzinfo=timezone.utc)
 
 
 async def _seed():
+    await engine.dispose()
     async with engine.begin() as conn:
+        await conn.execute(text("PRAGMA foreign_keys = OFF"))
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     async with Session() as s:

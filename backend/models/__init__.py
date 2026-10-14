@@ -43,3 +43,4 @@ from backend.models.billing import LedgerTransaction, LedgerTransactionType
 from backend.models.audit_log import AuditLog, AuditEvent
 from backend.models.password_reset import PasswordResetToken
 from backend.models.waitlist import WaitlistLead
+from backend.models.durable_job import DurableJob, JobStatus

@@ -12,6 +12,50 @@ from backend.models.memory import CodeDocument
 from backend.models.project import Project
 from backend.services.embedding import EmbeddingUtils
 
+# Multi-Language AST/CST Extraction Patterns
+_JS_TS_CLASS_RE = re.compile(
+    r"^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+([A-Za-z_$][A-Za-z0-9_$]*)"
+)
+_JS_TS_INTERFACE_RE = re.compile(
+    r"^\s*(?:export\s+)?interface\s+([A-Za-z_$][A-Za-z0-9_$]*)"
+)
+_JS_TS_TYPE_RE = re.compile(
+    r"^\s*(?:export\s+)?type\s+([A-Za-z_$][A-Za-z0-9_$]*)"
+)
+_JS_TS_ENUM_RE = re.compile(
+    r"^\s*(?:export\s+)?enum\s+([A-Za-z_$][A-Za-z0-9_$]*)"
+)
+_JS_TS_FUNC_RE = re.compile(
+    r"^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*(?:\*\s*)?([A-Za-z_$][A-Za-z0-9_$]*)"
+)
+_JS_TS_VAR_FUNC_RE = re.compile(
+    r"^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][A-Za-z0-9_$]*)\s*=>"
+)
+_JS_TS_METHOD_RE = re.compile(
+    r"^\s*(?:(?:public|private|protected|static|async|get|set|readonly|override)\s+)*(?:([A-Za-z_$][A-Za-z0-9_$]*)|constructor)\s*\([^)]*\)\s*(?::\s*[^;{]+)?\s*\{?"
+)
+
+_GO_METHOD_RE = re.compile(
+    r"^\s*func\s*\(\s*(?:[A-Za-z0-9_]+\s+)?\*?([A-Za-z_][A-Za-z0-9_]*)(?:\[[^\]]+\])?\s*\)\s*([A-Za-z_][A-Za-z0-9_]*)"
+)
+_GO_FUNC_RE = re.compile(
+    r"^\s*func\s+([A-Za-z_][A-Za-z0-9_]*)"
+)
+_GO_TYPE_RE = re.compile(
+    r"^\s*type\s+([A-Za-z_][A-Za-z0-9_]*)\s+(struct|interface)"
+)
+
+_RUST_IMPL_RE = re.compile(
+    r"^\s*impl(?:\s*<[^>]+>)?\s+(?:(?:[A-Za-z_][A-Za-z0-9_]*::)*[A-Za-z_][A-Za-z0-9_]*(?:<[^>]+>)?\s+for\s+)?(?:[A-Za-z_][A-Za-z0-9_]*::)*([A-Za-z_][A-Za-z0-9_]*)"
+)
+_RUST_FN_RE = re.compile(
+    r"^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:const\s+)?(?:unsafe\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)"
+)
+_RUST_TYPE_RE = re.compile(
+    r"^\s*(?:pub(?:\([^)]*\))?\s+)?(struct|enum|trait)\s+([A-Za-z_][A-Za-z0-9_]*)"
+)
+
+# Multi-group legacy patterns imported by GraphIndexerService
 _JS_TS_DECL_RE = re.compile(
     r"^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?(?:async\s+)?"
     r"(?:(class|interface|type|enum|function)\s+([A-Za-z_$][A-Za-z0-9_$]*)|"
@@ -39,6 +83,7 @@ class RepositoryIndexer:
         "bower_components", "bundle", ".tox", ".serverless", "bin", "obj",
         ".idea", ".vscode", "tmp", "temp", "pods", "Pods", ".cache",
         ".turbo", ".gradle", ".cargo", "site-packages",
+        "repos", "training_data", "benchmark_fixture_repo",
     }
     IGNORE_EXTS = {
         ".pyc", ".pyo", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg",
@@ -230,10 +275,20 @@ class RepositoryIndexer:
             if py_chunks:
                 return py_chunks
 
-        if ext in (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".go", ".rs"):
-            decl_chunks = cls._chunk_declarations(rel_path, lines, ext, max_chunk_chars)
-            if decl_chunks:
-                return decl_chunks
+        if ext in (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"):
+            ts_chunks = cls._chunk_ts_js(rel_path, lines, max_chunk_chars)
+            if ts_chunks:
+                return ts_chunks
+
+        if ext == ".go":
+            go_chunks = cls._chunk_go(rel_path, lines, max_chunk_chars)
+            if go_chunks:
+                return go_chunks
+
+        if ext == ".rs":
+            rs_chunks = cls._chunk_rust(rel_path, lines, max_chunk_chars)
+            if rs_chunks:
+                return rs_chunks
 
         return cls._chunk_lines_fallback(rel_path, lines, max_chunk_chars=max_chunk_chars)
 
@@ -251,7 +306,7 @@ class RepositoryIndexer:
         try:
             tree = ast.parse(content)
         except SyntaxError:
-            return []
+            return cls._chunk_lines_fallback(rel_path, lines, max_chunk_chars=max_chunk_chars)
 
         top_nodes = [
             n for n in tree.body
@@ -297,7 +352,7 @@ class RepositoryIndexer:
                     ch for ch in node.body
                     if isinstance(ch, (ast.FunctionDef, ast.AsyncFunctionDef))
                 ]
-                if len(node_text) <= max_chunk_chars or not methods:
+                if not methods:
                     chunks.extend(
                         cls._split_oversized_block(
                             rel_path, node_lines, s_line, e_line,
@@ -338,58 +393,427 @@ class RepositoryIndexer:
         return chunks
 
     @classmethod
+    def _find_matching_brace(cls, lines: List[str], start_idx: int) -> int:
+        """
+        Finds the 0-indexed line where the brace that opens at or after start_idx closes.
+        Handles quotes, escapes, line comments, block comments, and multiline template strings.
+        """
+        depth = 0
+        opened = False
+        in_block_comment = False
+        in_string = None
+
+        for idx in range(start_idx, len(lines)):
+            line = lines[idx]
+            i = 0
+            n = len(line)
+
+            while i < n:
+                if in_block_comment:
+                    if line[i : i + 2] == "*/":
+                        in_block_comment = False
+                        i += 2
+                        continue
+                    i += 1
+                    continue
+
+                if in_string:
+                    if line[i] == "\\":
+                        i += 2
+                        continue
+                    if line[i] == in_string:
+                        in_string = None
+                    i += 1
+                    continue
+
+                # Comments
+                if line[i : i + 2] == "//":
+                    break
+                if line[i : i + 2] == "/*":
+                    in_block_comment = True
+                    i += 2
+                    continue
+
+                # Strings
+                if line[i] in ('"', "'", "`"):
+                    in_string = line[i]
+                    i += 1
+                    continue
+
+                # Braces
+                if line[i] == "{":
+                    depth += 1
+                    opened = True
+                elif line[i] == "}":
+                    depth -= 1
+                    if opened and depth <= 0:
+                        return idx
+
+                i += 1
+
+            # End of line string state handling:
+            # Single/double quotes in JS/TS/Go/Rust do not span multiple lines unless escaped/raw
+            if in_string in ('"', "'"):
+                in_string = None
+
+            # If not yet opened: check if it's a signature terminating with ; (e.g. abstract/interface method)
+            if not opened:
+                trimmed = line.strip()
+                if trimmed.endswith(";") and not in_block_comment and not in_string:
+                    return idx
+
+        return len(lines) - 1
+
+    @classmethod
+    def _chunk_ts_js(
+        cls, rel_path: str, lines: List[str], max_chunk_chars: int = 1800
+    ) -> List[Dict[str, Any]]:
+        chunks: List[Dict[str, Any]] = []
+        n = len(lines)
+        idx = 0
+        first_decl_seen = False
+        reserved_words = {"if", "for", "while", "switch", "catch", "with"}
+
+        while idx < n:
+            line = lines[idx]
+            stripped = line.strip()
+            if not stripped or stripped.startswith("//") or stripped.startswith("/*"):
+                idx += 1
+                continue
+
+            # 1. Class definition
+            m_class = _JS_TS_CLASS_RE.match(line)
+            if m_class:
+                if not first_decl_seen:
+                    first_decl_seen = True
+                    if idx > 0:
+                        hdr_lines = lines[:idx]
+                        if "\n".join(hdr_lines).strip():
+                            chunks.extend(
+                                cls._split_oversized_block(
+                                    rel_path, hdr_lines, 1, idx,
+                                    symbol="module_imports", kind="module_header",
+                                    max_chunk_chars=max_chunk_chars,
+                                )
+                            )
+                cls_name = m_class.group(1)
+                end_idx = cls._find_matching_brace(lines, idx)
+                cls_s_line = idx + 1
+                cls_e_line = end_idx + 1
+
+                # Parse methods inside the class
+                method_chunks = []
+                inner_idx = idx + 1
+                while inner_idx < end_idx:
+                    m_line = lines[inner_idx]
+                    m_match = _JS_TS_METHOD_RE.match(m_line)
+                    if m_match:
+                        m_sym = m_match.group(1) or "constructor"
+                        if m_sym not in reserved_words:
+                            m_end_idx = cls._find_matching_brace(lines, inner_idx)
+                            if m_end_idx <= end_idx:
+                                m_s = inner_idx + 1
+                                m_e = m_end_idx + 1
+                                m_lines = lines[inner_idx : m_end_idx + 1]
+                                method_chunks.extend(
+                                    cls._split_oversized_block(
+                                        rel_path, m_lines, m_s, m_e,
+                                        symbol=f"{cls_name}.{m_sym}",
+                                        kind="method",
+                                        max_chunk_chars=max_chunk_chars,
+                                    )
+                                )
+                                inner_idx = m_end_idx + 1
+                                continue
+                    inner_idx += 1
+
+                cls_lines = lines[idx : end_idx + 1]
+                cls_text = "\n".join(cls_lines)
+                if not method_chunks:
+                    chunks.extend(
+                        cls._split_oversized_block(
+                            rel_path, cls_lines, cls_s_line, cls_e_line,
+                            symbol=cls_name, kind="class",
+                            max_chunk_chars=max_chunk_chars,
+                        )
+                    )
+                else:
+                    first_m_line = method_chunks[0]["start_line"]
+                    if first_m_line > cls_s_line:
+                        hdr_lines = lines[idx : first_m_line - 1]
+                        if "\n".join(hdr_lines).strip():
+                            chunks.append(
+                                cls._format_chunk_header(
+                                    rel_path, "\n".join(hdr_lines), cls_s_line, first_m_line - 1,
+                                    symbol=cls_name, kind="class_header"
+                                )
+                            )
+                    chunks.extend(method_chunks)
+
+                idx = end_idx + 1
+                continue
+
+            # 2. Function / Arrow Function / Interface / Type / Enum
+            m_func = _JS_TS_FUNC_RE.match(line)
+            m_arrow = _JS_TS_VAR_FUNC_RE.match(line)
+            m_iface = _JS_TS_INTERFACE_RE.match(line)
+            m_type = _JS_TS_TYPE_RE.match(line)
+            m_enum = _JS_TS_ENUM_RE.match(line)
+
+            match_res = None
+            if m_func:
+                match_res = (m_func.group(1), "function")
+            elif m_arrow:
+                match_res = (m_arrow.group(1), "function")
+            elif m_iface:
+                match_res = (m_iface.group(1), "interface")
+            elif m_type:
+                match_res = (m_type.group(1), "type")
+            elif m_enum:
+                match_res = (m_enum.group(1), "enum")
+
+            if match_res:
+                sym_name, kind_name = match_res
+                if not first_decl_seen:
+                    first_decl_seen = True
+                    if idx > 0:
+                        hdr_lines = lines[:idx]
+                        if "\n".join(hdr_lines).strip():
+                            chunks.extend(
+                                cls._split_oversized_block(
+                                    rel_path, hdr_lines, 1, idx,
+                                    symbol="module_imports", kind="module_header",
+                                    max_chunk_chars=max_chunk_chars,
+                                )
+                            )
+
+                end_idx = cls._find_matching_brace(lines, idx)
+                s_line = idx + 1
+                e_line = end_idx + 1
+                decl_lines = lines[idx : end_idx + 1]
+                chunks.extend(
+                    cls._split_oversized_block(
+                        rel_path, decl_lines, s_line, e_line,
+                        symbol=sym_name, kind=kind_name,
+                        max_chunk_chars=max_chunk_chars,
+                    )
+                )
+                idx = end_idx + 1
+                continue
+
+            idx += 1
+
+        return chunks
+
+    @classmethod
+    def _chunk_go(
+        cls, rel_path: str, lines: List[str], max_chunk_chars: int = 1800
+    ) -> List[Dict[str, Any]]:
+        chunks: List[Dict[str, Any]] = []
+        n = len(lines)
+        idx = 0
+        first_decl_seen = False
+
+        while idx < n:
+            line = lines[idx]
+            stripped = line.strip()
+            if not stripped or stripped.startswith("//") or stripped.startswith("/*"):
+                idx += 1
+                continue
+
+            m_method = _GO_METHOD_RE.match(line)
+            m_func = _GO_FUNC_RE.match(line)
+            m_type = _GO_TYPE_RE.match(line)
+
+            match_res = None
+            if m_method:
+                receiver = m_method.group(1)
+                m_name = m_method.group(2)
+                match_res = (f"{receiver}.{m_name}", "method")
+            elif m_func:
+                fn_name = m_func.group(1)
+                match_res = (fn_name, "function")
+            elif m_type:
+                t_name = m_type.group(1)
+                t_kind = m_type.group(2)
+                match_res = (t_name, t_kind)
+
+            if match_res:
+                sym_name, kind_name = match_res
+                if not first_decl_seen:
+                    first_decl_seen = True
+                    if idx > 0:
+                        hdr_lines = lines[:idx]
+                        if "\n".join(hdr_lines).strip():
+                            chunks.extend(
+                                cls._split_oversized_block(
+                                    rel_path, hdr_lines, 1, idx,
+                                    symbol="module_imports", kind="module_header",
+                                    max_chunk_chars=max_chunk_chars,
+                                )
+                            )
+
+                end_idx = cls._find_matching_brace(lines, idx)
+                s_line = idx + 1
+                e_line = end_idx + 1
+                decl_lines = lines[idx : end_idx + 1]
+                chunks.extend(
+                    cls._split_oversized_block(
+                        rel_path, decl_lines, s_line, e_line,
+                        symbol=sym_name, kind=kind_name,
+                        max_chunk_chars=max_chunk_chars,
+                    )
+                )
+                idx = end_idx + 1
+                continue
+
+            idx += 1
+
+        return chunks
+
+    @classmethod
+    def _chunk_rust(
+        cls, rel_path: str, lines: List[str], max_chunk_chars: int = 1800
+    ) -> List[Dict[str, Any]]:
+        chunks: List[Dict[str, Any]] = []
+        n = len(lines)
+        idx = 0
+        first_decl_seen = False
+
+        while idx < n:
+            line = lines[idx]
+            stripped = line.strip()
+            if not stripped or stripped.startswith("//") or stripped.startswith("/*"):
+                idx += 1
+                continue
+
+            # 1. Impl block
+            m_impl = _RUST_IMPL_RE.match(line)
+            if m_impl:
+                if not first_decl_seen:
+                    first_decl_seen = True
+                    if idx > 0:
+                        hdr_lines = lines[:idx]
+                        if "\n".join(hdr_lines).strip():
+                            chunks.extend(
+                                cls._split_oversized_block(
+                                    rel_path, hdr_lines, 1, idx,
+                                    symbol="module_imports", kind="module_header",
+                                    max_chunk_chars=max_chunk_chars,
+                                )
+                            )
+
+                target_name = m_impl.group(1)
+                end_idx = cls._find_matching_brace(lines, idx)
+
+                # Scan inside impl block for methods
+                method_chunks = []
+                inner_idx = idx + 1
+                while inner_idx < end_idx:
+                    m_line = lines[inner_idx]
+                    m_fn = _RUST_FN_RE.match(m_line)
+                    if m_fn:
+                        fn_name = m_fn.group(1)
+                        m_end_idx = cls._find_matching_brace(lines, inner_idx)
+                        if m_end_idx <= end_idx:
+                            m_s = inner_idx + 1
+                            m_e = m_end_idx + 1
+                            m_lines = lines[inner_idx : m_end_idx + 1]
+                            method_chunks.extend(
+                                cls._split_oversized_block(
+                                    rel_path, m_lines, m_s, m_e,
+                                    symbol=f"{target_name}.{fn_name}",
+                                    kind="method",
+                                    max_chunk_chars=max_chunk_chars,
+                                )
+                            )
+                            inner_idx = m_end_idx + 1
+                            continue
+                    inner_idx += 1
+
+                impl_lines = lines[idx : end_idx + 1]
+                impl_text = "\n".join(impl_lines)
+                if not method_chunks:
+                    chunks.extend(
+                        cls._split_oversized_block(
+                            rel_path, impl_lines, idx + 1, end_idx + 1,
+                            symbol=target_name, kind="impl",
+                            max_chunk_chars=max_chunk_chars,
+                        )
+                    )
+                else:
+                    first_m_line = method_chunks[0]["start_line"]
+                    if first_m_line > idx + 1:
+                        hdr_lines = lines[idx : first_m_line - 1]
+                        if "\n".join(hdr_lines).strip():
+                            chunks.append(
+                                cls._format_chunk_header(
+                                    rel_path, "\n".join(hdr_lines), idx + 1, first_m_line - 1,
+                                    symbol=target_name, kind="impl_header"
+                                )
+                            )
+                    chunks.extend(method_chunks)
+
+                idx = end_idx + 1
+                continue
+
+            # 2. Standalone functions, structs, enums, traits
+            m_fn = _RUST_FN_RE.match(line)
+            m_type = _RUST_TYPE_RE.match(line)
+
+            match_res = None
+            if m_fn:
+                match_res = (m_fn.group(1), "function")
+            elif m_type:
+                t_kind = m_type.group(1)
+                t_name = m_type.group(2)
+                match_res = (t_name, t_kind)
+
+            if match_res:
+                sym_name, kind_name = match_res
+                if not first_decl_seen:
+                    first_decl_seen = True
+                    if idx > 0:
+                        hdr_lines = lines[:idx]
+                        if "\n".join(hdr_lines).strip():
+                            chunks.extend(
+                                cls._split_oversized_block(
+                                    rel_path, hdr_lines, 1, idx,
+                                    symbol="module_imports", kind="module_header",
+                                    max_chunk_chars=max_chunk_chars,
+                                )
+                            )
+
+                end_idx = cls._find_matching_brace(lines, idx)
+                s_line = idx + 1
+                e_line = end_idx + 1
+                decl_lines = lines[idx : end_idx + 1]
+                chunks.extend(
+                    cls._split_oversized_block(
+                        rel_path, decl_lines, s_line, e_line,
+                        symbol=sym_name, kind=kind_name,
+                        max_chunk_chars=max_chunk_chars,
+                    )
+                )
+                idx = end_idx + 1
+                continue
+
+            idx += 1
+
+        return chunks
+
+    @classmethod
     def _chunk_declarations(
         cls, rel_path: str, lines: List[str], ext: str, max_chunk_chars: int = 1800
     ) -> List[Dict[str, Any]]:
+        """Legacy dispatcher preserved for backward compatibility."""
         if ext == ".go":
-            pattern = _GO_DECL_RE
+            return cls._chunk_go(rel_path, lines, max_chunk_chars)
         elif ext == ".rs":
-            pattern = _RUST_DECL_RE
-        else:
-            pattern = _JS_TS_DECL_RE
-
-        decl_starts = []
-        for idx, line in enumerate(lines):
-            m = pattern.match(line)
-            if m:
-                groups = [g for g in m.groups() if g]
-                if len(groups) >= 2:
-                    kind, sym = groups[0], groups[1]
-                elif len(groups) == 1:
-                    kind, sym = "function", groups[0]
-                else:
-                    kind, sym = "declaration", "anonymous"
-                decl_starts.append((idx + 1, sym, kind))
-
-        if not decl_starts:
-            return []
-
-        chunks: List[Dict[str, Any]] = []
-        first_decl_line = decl_starts[0][0]
-        if first_decl_line > 1:
-            hdr_lines = lines[: first_decl_line - 1]
-            if "\n".join(hdr_lines).strip():
-                chunks.extend(
-                    cls._split_oversized_block(
-                        rel_path, hdr_lines, 1, first_decl_line - 1,
-                        symbol="module_imports", kind="module_header",
-                        max_chunk_chars=max_chunk_chars,
-                    )
-                )
-
-        for i, (s_line, sym, kind) in enumerate(decl_starts):
-            e_line = (decl_starts[i + 1][0] - 1) if (i + 1 < len(decl_starts)) else len(lines)
-            block_lines = lines[s_line - 1 : e_line]
-            if "\n".join(block_lines).strip():
-                chunks.extend(
-                    cls._split_oversized_block(
-                        rel_path, block_lines, s_line, e_line,
-                        symbol=sym, kind=kind,
-                        max_chunk_chars=max_chunk_chars,
-                    )
-                )
-
-        return chunks
+            return cls._chunk_rust(rel_path, lines, max_chunk_chars)
+        elif ext in (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"):
+            return cls._chunk_ts_js(rel_path, lines, max_chunk_chars)
+        return cls._chunk_lines_fallback(rel_path, lines, max_chunk_chars=max_chunk_chars)
 
     @classmethod
     def _split_oversized_block(

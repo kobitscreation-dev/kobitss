@@ -8,10 +8,13 @@ is_sqlite = settings.DATABASE_URL.startswith("sqlite")
 connect_args = {}
 engine_kwargs = {"echo": False}
 
+from sqlalchemy.pool import NullPool
+
 if is_sqlite:
     connect_args["check_same_thread"] = False
     connect_args["timeout"] = 30.0  # aiosqlite connection timeout
     engine_kwargs["connect_args"] = connect_args
+    engine_kwargs["poolclass"] = NullPool
 else:
     # Production PostgreSQL connection pool configuration
     engine_kwargs["pool_size"] = getattr(settings, "DB_POOL_SIZE", 20)

@@ -18,7 +18,7 @@ from typing import Dict, Any, Optional, Callable, Coroutine, List
 from sqlalchemy import select, update, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.database import AsyncSessionLocal, engine
+import backend.core.database as db_core
 from backend.models.durable_job import DurableJob, JobStatus
 
 logger = logging.getLogger("kobits.durable_queue")
@@ -45,8 +45,8 @@ class DurableQueue:
         Idempotent DDL ensuring the durable_queue_jobs table and indexes exist.
         Works across PostgreSQL and SQLite.
         """
-        async with engine.begin() as conn:
-            is_postgres = "postgresql" in str(engine.url).lower()
+        async with db_core.engine.begin() as conn:
+            is_postgres = "postgresql" in str(db_core.engine.url).lower()
             
             if is_postgres:
                 ddl = """
@@ -141,9 +141,16 @@ class DurableQueue:
             updated_at=now,
         )
 
-        async with AsyncSessionLocal() as db:
+        async with db_core.AsyncSessionLocal() as db:
             db.add(job)
-            await db.commit()
+            try:
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                await cls.init_schema()
+                async with db_core.AsyncSessionLocal() as retry_db:
+                    retry_db.add(job)
+                    await retry_db.commit()
 
         logger.info(f"Enqueued durable job {jid[:8]} (type={task_type}, queue={queue_name}, priority={priority})")
         return jid
@@ -163,10 +170,10 @@ class DurableQueue:
         """
         now = datetime.now(timezone.utc)
         lease_timeout = now + timedelta(seconds=lease_seconds)
-        is_postgres = "postgresql" in str(engine.url).lower()
+        is_postgres = "postgresql" in str(db_core.engine.url).lower()
 
         if is_postgres:
-            async with AsyncSessionLocal() as db:
+            async with db_core.AsyncSessionLocal() as db:
                 try:
                     stmt = text("""
                     WITH next_job AS (
@@ -209,7 +216,7 @@ class DurableQueue:
         else:
             # SQLite / Local Test Suite mode with atomic claim lock
             async with cls._sqlite_claim_lock:
-                async with AsyncSessionLocal() as db:
+                async with db_core.AsyncSessionLocal() as db:
                     try:
                         stmt = (
                             select(DurableJob)
@@ -251,7 +258,7 @@ class DurableQueue:
         now = datetime.now(timezone.utc)
         lease_timeout = now + timedelta(seconds=lease_seconds)
 
-        async with AsyncSessionLocal() as db:
+        async with db_core.AsyncSessionLocal() as db:
             try:
                 stmt = (
                     update(DurableJob)
@@ -280,7 +287,7 @@ class DurableQueue:
         now = datetime.now(timezone.utc)
         res_json = json.dumps(result_data) if result_data is not None else None
 
-        async with AsyncSessionLocal() as db:
+        async with db_core.AsyncSessionLocal() as db:
             try:
                 stmt = (
                     update(DurableJob)
@@ -317,7 +324,7 @@ class DurableQueue:
         """
         now = datetime.now(timezone.utc)
 
-        async with AsyncSessionLocal() as db:
+        async with db_core.AsyncSessionLocal() as db:
             try:
                 stmt = select(DurableJob).where(DurableJob.id == job_id)
                 res = await db.execute(stmt)
@@ -363,7 +370,7 @@ class DurableQueue:
         now = datetime.now(timezone.utc)
         reaped_count = 0
 
-        async with AsyncSessionLocal() as db:
+        async with db_core.AsyncSessionLocal() as db:
             try:
                 stmt = (
                     select(DurableJob)
