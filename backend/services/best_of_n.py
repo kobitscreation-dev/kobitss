@@ -334,3 +334,65 @@ class BestOfNExplorer:
                 success=False,
                 selection_reason="All candidate patches failed verification (reproducer or regression suites failed).",
             )
+
+    @classmethod
+    def explore(
+        cls,
+        sandbox_dir: Optional[str] = None,
+        reproducer_script: Optional[str] = None,
+        candidate_generators: Optional[list[Callable[[int, str], Any]]] = None,
+        regression_cmd: Optional[Union[str, list[str]]] = None,
+        base_checkpoint: Optional[str] = None,
+        timeout_per_candidate: int = 30,
+        **kwargs,
+    ) -> BestOfNResult:
+        """
+        Synchronous convenience wrapper around explore_and_select.
+        Safely bridges across running or new event loops and supports
+        flexible kwargs (worktree_dir, coder_action, n_samples).
+        """
+        import asyncio
+        import concurrent.futures
+
+        sbox = sandbox_dir or kwargs.get("worktree_dir") or "."
+        repro = reproducer_script or kwargs.get("reproducer_path")
+        if not repro and "reproducer_command" in kwargs:
+            rcmd = kwargs["reproducer_command"]
+            if isinstance(rcmd, list) and len(rcmd) > 1:
+                repro = rcmd[-1]
+            elif isinstance(rcmd, str):
+                repro = rcmd.split()[-1]
+        repro = repro or "reproduce_issue.py"
+
+        gens = candidate_generators
+        if gens is None:
+            if "coder_action" in kwargs:
+                action = kwargs["coder_action"]
+                n_samples = kwargs.get("n_samples", 1)
+                gens = [lambda cid, sdir, a=action, i=i: a(i) for i in range(n_samples)]
+            else:
+                gens = []
+
+        timeout = kwargs.get("timeout_seconds", timeout_per_candidate)
+
+        coro = cls.explore_and_select(
+            sandbox_dir=sbox,
+            reproducer_script=repro,
+            candidate_generators=gens,
+            regression_cmd=regression_cmd,
+            base_checkpoint=base_checkpoint,
+            timeout_per_candidate=timeout,
+        )
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(asyncio.run, coro).result()
+        else:
+            return asyncio.run(coro)
+
+

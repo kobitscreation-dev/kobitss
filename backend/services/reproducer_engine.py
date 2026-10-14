@@ -256,9 +256,10 @@ class ReproducerEngine:
     @classmethod
     def verify_negative_baseline(
         cls,
-        sandbox_dir: str,
-        script_path: str = DEFAULT_SCRIPT_NAME,
-        timeout: int = DEFAULT_TIMEOUT_SEC,
+        sandbox_dir: Optional[str] = None,
+        script_path: Optional[str] = None,
+        timeout: Optional[int] = None,
+        **kwargs,
     ) -> BaselineValidationResult:
         """
         Negative Baseline Check:
@@ -267,11 +268,22 @@ class ReproducerEngine:
         If exit_code == 0, the reproducer is invalid (does not capture the bug); reject and refine.
         If the script times out, reject with status='TIMEOUT'.
         """
-        execution = cls.execute_script(sandbox_dir, script_path, timeout=timeout)
+        sbox = sandbox_dir or kwargs.get("worktree_dir") or "."
+        script = script_path or kwargs.get("reproducer_path")
+        if not script and "reproducer_command" in kwargs:
+            repro_cmd = kwargs["reproducer_command"]
+            if isinstance(repro_cmd, list) and len(repro_cmd) > 1:
+                script = repro_cmd[-1]
+            elif isinstance(repro_cmd, str):
+                script = repro_cmd.split()[-1]
+        script = script or cls.DEFAULT_SCRIPT_NAME
+        t_out = timeout if timeout is not None else kwargs.get("timeout_seconds", cls.DEFAULT_TIMEOUT_SEC)
+
+        execution = cls.execute_script(sbox, script, timeout=t_out)
 
         if execution.timed_out:
             reason = (
-                f"Negative Baseline Check FAILED: Reproducer script timed out after {timeout} seconds. "
+                f"Negative Baseline Check FAILED: Reproducer script timed out after {t_out} seconds. "
                 "A valid reproducer must fail deterministically with a non-zero exit code, not hang."
             )
             logger.warning(reason)
@@ -326,6 +338,9 @@ class ReproducerEngine:
             rejection_reason=None,
             execution=execution,
         )
+
+    # Method alias for API consistency
+    validate_negative_baseline = verify_negative_baseline
 
     @classmethod
     def verify_positive(

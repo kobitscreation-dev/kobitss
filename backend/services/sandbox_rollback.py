@@ -20,6 +20,21 @@ class SandboxRollbackManager:
     Manages atomic git checkpoints and rollbacks in isolated sandbox directories.
     """
 
+    def __init__(self, sandbox_dir: Optional[str] = None):
+        self.sandbox_dir = sandbox_dir
+
+    def checkpoint(self, step_name: str = "pre_task") -> Optional[str]:
+        """Instance method to create a checkpoint in self.sandbox_dir."""
+        if not self.sandbox_dir:
+            return None
+        return self.create_checkpoint(self.sandbox_dir, step_name)
+
+    def revert(self, checkpoint_sha: str) -> bool:
+        """Instance method to rollback self.sandbox_dir to checkpoint_sha."""
+        if not self.sandbox_dir:
+            return False
+        return self.rollback(self.sandbox_dir, checkpoint_sha)
+
     @staticmethod
     def _is_git_repo(sandbox_dir: str) -> bool:
         if not sandbox_dir or not os.path.isdir(sandbox_dir):
@@ -43,7 +58,7 @@ class SandboxRollbackManager:
     @classmethod
     def get_current_sha(cls, sandbox_dir: str) -> Optional[str]:
         """Return the current HEAD commit SHA of the sandbox workspace."""
-        if not cls._is_git_repo(sandbox_dir):
+        if not sandbox_dir or not cls._is_git_repo(sandbox_dir):
             return None
         try:
             res = subprocess.run(
@@ -65,7 +80,7 @@ class SandboxRollbackManager:
         Creates an atomic git commit checkpoint of the sandbox workspace.
         Returns the resulting commit SHA, or None if the directory is not a git workspace.
         """
-        if not cls._is_git_repo(sandbox_dir):
+        if not sandbox_dir or not cls._is_git_repo(sandbox_dir):
             logger.debug(f"Sandbox {sandbox_dir} is not a git repository. Checkpoint skipped.")
             return None
 
@@ -124,7 +139,7 @@ class SandboxRollbackManager:
         Performs an atomic hard rollback to the specified checkpoint SHA,
         reverting all file modifications and cleaning untracked files (`git reset --hard` + `git clean -fdx`).
         """
-        if not cls._is_git_repo(sandbox_dir):
+        if not sandbox_dir or not cls._is_git_repo(sandbox_dir):
             logger.warning(f"Cannot rollback: {sandbox_dir} is not a valid git repository.")
             return False
 
@@ -136,7 +151,7 @@ class SandboxRollbackManager:
 
         try:
             # 1. Hard reset to checkpoint
-            res_reset = subprocess.run(
+            subprocess.run(
                 ["git", "reset", "--hard", target_sha],
                 cwd=sandbox_dir,
                 capture_output=True,
@@ -146,7 +161,7 @@ class SandboxRollbackManager:
             )
 
             # 2. Clean untracked files and directories
-            res_clean = subprocess.run(
+            subprocess.run(
                 ["git", "clean", "-fdx"],
                 cwd=sandbox_dir,
                 capture_output=True,
