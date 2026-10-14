@@ -182,6 +182,20 @@ class BestOfNExplorer:
 
         candidates: list[PatchCandidate] = []
 
+        # Preserve reproducer script content in case of git clean -fdx during rollbacks
+        abs_repro_path = (
+            reproducer_script
+            if os.path.isabs(reproducer_script)
+            else os.path.abspath(os.path.join(sandbox_dir, reproducer_script))
+        )
+        repro_content = None
+        if os.path.exists(abs_repro_path):
+            try:
+                with open(abs_repro_path, "r", encoding="utf-8") as rf:
+                    repro_content = rf.read()
+            except Exception:
+                pass
+
         for idx, generator in enumerate(candidate_generators):
             cand_id = idx + 1
             logger.info(f"Evaluating candidate patch {cand_id}/{len(candidate_generators)}...")
@@ -189,6 +203,15 @@ class BestOfNExplorer:
             # Roll back to clean base before generating candidate
             if base_sha != "unknown":
                 SandboxRollbackManager.rollback(sandbox_dir, base_sha)
+
+            # Restore reproducer script if it was removed by rollback
+            if repro_content is not None and not os.path.exists(abs_repro_path):
+                try:
+                    os.makedirs(os.path.dirname(abs_repro_path), exist_ok=True)
+                    with open(abs_repro_path, "w", encoding="utf-8") as rf:
+                        rf.write(repro_content)
+                except Exception:
+                    pass
 
             # Generate candidate patch
             gen_error = None

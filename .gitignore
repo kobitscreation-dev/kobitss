@@ -17,3 +17,8 @@ __pycache__/
 build/
 dist/
 .pytest_cache/
+
+# Benchmark outputs
+predictions*.json
+benchmark_report*.json
+

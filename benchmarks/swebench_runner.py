@@ -411,6 +411,13 @@ class SWEBenchRunner:
             if not pkg_file.exists():
                 pkg_file.write_text(f"# {instance.instance_id} base\n", encoding="utf-8")
 
+        # Add clean .gitignore to ignore bytecode and test caches
+        gitignore_path = target_path / ".gitignore"
+        gitignore_path.write_text(
+            "__pycache__/\n*.py[cod]\n*$py.class\n.pytest_cache/\nreproduce_issue.py\n",
+            encoding="utf-8",
+        )
+
         # Initial commit as base commit
         subprocess.run(["git", "add", "."], cwd=target_dir, check=True, capture_output=True)
         subprocess.run(
@@ -586,20 +593,17 @@ class SWEBenchRunner:
                 timeout_seconds=30,
             )
 
-            # Step 4: Extract Clean Git Diff (removing reproducer script)
-            if os.path.exists(reproducer_script_path):
-                os.remove(reproducer_script_path)
+            winner = best_of_n_result.selected_candidate
 
             diff_proc = subprocess.run(
-                ["git", "diff", base_sha or "HEAD"],
+                ["git", "diff", base_sha or "HEAD", "HEAD", "--", ":!__pycache__", ":!*.pyc", ":!reproduce_issue.py"],
                 cwd=actual_worktree,
                 capture_output=True,
                 text=True,
             )
-            raw_diff = diff_proc.stdout if diff_proc.returncode == 0 else ""
+            raw_diff = (diff_proc.stdout if diff_proc.returncode == 0 and diff_proc.stdout else "") or (winner.diff_text if winner else "")
 
             duration = time.perf_counter() - start_time
-            winner = best_of_n_result.selected_candidate
 
             if winner and winner.reproducer_passed and raw_diff:
                 return SWEBenchPrediction(
