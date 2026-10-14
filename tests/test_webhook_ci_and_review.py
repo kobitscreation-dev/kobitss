@@ -401,3 +401,116 @@ async def test_persist_mission_deliverable_posts_pr_comment_on_heal(setup_webhoo
             comment_body = mock_comment.call_args.kwargs.get("body") or (mock_comment.call_args[0][2] if len(mock_comment.call_args[0]) > 2 else "")
             assert "Kobits Autonomous CI/Review Remediation Deployed" in comment_body
             assert ctx["branch"] in comment_body
+
+
+@pytest.mark.asyncio
+async def test_human_engineer_delivery_approval_via_pr_comment(setup_webhook_context):
+    """Verify human engineer delivery approval via PR conversation comment advances to DEPLOYMENT."""
+    ctx = setup_webhook_context
+    transport = ASGITransport(app=app)
+
+    async with AsyncSessionLocal() as db:
+        m = await db.get(Mission, ctx["mission"].id)
+        m.phase = WorkflowPhase.DELIVERY_REVIEW
+        m.status = MissionStatus.AWAITING_APPROVAL
+        m.approval_status = ApprovalStatus.PENDING
+        await db.commit()
+
+    pr_comment_approval = {
+        "action": "created",
+        "issue": {
+            "number": 101,
+            "pull_request": {"url": "https://api.github.com/repos/enterprise-dev/payments-service/pulls/101"}
+        },
+        "comment": {
+            "id": 998877,
+            "body": "LGTM! Approved for delivery by Principal Engineer."
+        },
+        "repository": {
+            "full_name": "enterprise-dev/payments-service"
+        },
+        "sender": {
+            "login": "principal-architect"
+        }
+    }
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/webhooks/github",
+            json=pr_comment_approval,
+            headers={"X-GitHub-Event": "issue_comment"}
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "delivery_review_approved"
+        assert data["phase"] == "DEPLOYMENT"
+
+        async with AsyncSessionLocal() as db:
+            m = await db.get(Mission, ctx["mission"].id)
+            assert m.approval_status == ApprovalStatus.APPROVED
+            assert m.phase == WorkflowPhase.DEPLOYMENT
+
+
+@pytest.mark.asyncio
+async def test_human_engineer_delivery_approval_via_api_endpoint(setup_webhook_context):
+    """Verify /api/v1/missions/{id}/approve endpoint accepts DELIVERY_REVIEW missions."""
+    ctx = setup_webhook_context
+    from backend.api.deps import get_current_active_user
+
+    async with AsyncSessionLocal() as db:
+        m = await db.get(Mission, ctx["mission"].id)
+        m.phase = WorkflowPhase.DELIVERY_REVIEW
+        m.status = MissionStatus.COMPLETED
+        m.approval_status = ApprovalStatus.PENDING
+        await db.commit()
+
+    app.dependency_overrides[get_current_active_user] = lambda: ctx["user"]
+    transport = ASGITransport(app=app)
+
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post(f"/api/v1/missions/{ctx['mission'].id}/approve")
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "APPROVED"
+            assert resp.json()["approval_status"] == "APPROVED"
+
+            async with AsyncSessionLocal() as db:
+                m = await db.get(Mission, ctx["mission"].id)
+                assert m.phase == WorkflowPhase.DEPLOYMENT
+                assert m.approval_status == ApprovalStatus.APPROVED
+    finally:
+        app.dependency_overrides.pop(get_current_active_user, None)
+
+
+@pytest.mark.asyncio
+async def test_reproducer_engine_synthesizers(tmp_path):
+    """Verify ReproducerEngine synthesizers generate deterministic negative-to-positive reproducers."""
+    from backend.services.reproducer_engine import ReproducerEngine
+
+    sb = tmp_path / "test_sb"
+    sb.mkdir()
+
+    # Case 1: CI failure synthesizer
+    code_file = sb / "service.py"
+    code_file.write_text("def handle_request(timeout):\n    return timeout\n", encoding="utf-8")
+
+    ci_script = ReproducerEngine.synthesize_ci_reproducer(
+        check_name="timeout-validation",
+        failure_details="Timeout zero check missing in service.py: timeout=0 must be rejected",
+        annotations=[{"path": "service.py", "line": 2, "message": "Missing timeout guard"}]
+    )
+    ReproducerEngine.author_reproducer(str(sb), ci_script, file_name="reproduce_ci.py")
+
+    # Baseline on unpatched code must fail (valid negative baseline)
+    base_res = ReproducerEngine.verify_negative_baseline(str(sb), "reproduce_ci.py")
+    assert base_res.valid is True
+    assert base_res.exit_code != 0
+
+    # Apply patch
+    code_file.write_text("def handle_request(timeout):\n    if timeout <= 0:\n        raise ValueError('timeout <= 0')\n    return timeout\n", encoding="utf-8")
+
+    # Positive verification on patched code must pass
+    pos_res = ReproducerEngine.verify_positive(str(sb), "reproduce_ci.py")
+    assert pos_res.success is True
+    assert pos_res.reproducer_passed is True
+

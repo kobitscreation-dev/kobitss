@@ -2400,6 +2400,12 @@ class MissionRuntime:
             if is_tdd_mode and active_sb_dir:
                 try:
                     from backend.services.reproducer_engine import ReproducerEngine
+                    if not reproducer_content and not os.path.exists(os.path.join(active_sb_dir, reproducer_file)):
+                        reproducer_content = ReproducerEngine.synthesize_from_task(
+                            title=task.title,
+                            description=task.description or "",
+                            meta=task_meta,
+                        )
                     if reproducer_content:
                         ReproducerEngine.author_reproducer(active_sb_dir, reproducer_content, file_name=reproducer_file)
                     baseline_res = ReproducerEngine.verify_negative_baseline(active_sb_dir, reproducer_file)
@@ -2468,6 +2474,23 @@ class MissionRuntime:
                             async with self._db_lock:
                                 await db.commit()
                             return False
+
+                        # Best-of-N Candidate Score & Parsimony Assessment
+                        if task_meta.get("best_of_n"):
+                            try:
+                                from backend.services.best_of_n import BestOfNExplorer
+                                base_ref = checkpoint_sha or "HEAD~1"
+                                adds, dels, tfiles, dtext = BestOfNExplorer.extract_diff_stats(active_sb_dir, base_ref)
+                                cand_score = BestOfNExplorer.score_candidate(
+                                    reproducer_passed=pos_res.reproducer_passed,
+                                    regression_passed=pos_res.regression_passed,
+                                    additions=adds,
+                                    deletions=dels,
+                                    files_changed_count=len(tfiles),
+                                )
+                                logger.info(f"Best-of-N patch selected with parsimony score {cand_score:.2f} ({len(tfiles)} files, +{adds}/-{dels} LOC)")
+                            except Exception as _b_err:
+                                logger.debug(f"Best-of-N telemetry warning: {_b_err}")
                     except Exception as _pos_err:
                         logger.error(f"TDD positive verification exception: {_pos_err}")
                         if checkpoint_sha:

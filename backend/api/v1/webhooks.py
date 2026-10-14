@@ -262,6 +262,13 @@ async def github_webhook(
                     mission.phase = WorkflowPhase.IMPLEMENTATION
                     target_branch = head_branch or mission.active_branch or "main"
 
+                from backend.services.reproducer_engine import ReproducerEngine
+                reproducer_script_content = ReproducerEngine.synthesize_ci_reproducer(
+                    check_name=check_name,
+                    failure_details=failure_details,
+                    annotations=annotations,
+                )
+
                 task_id = str(uuid.uuid4())
                 remediation_task = Task(
                     id=task_id,
@@ -288,6 +295,8 @@ async def github_webhook(
                         "head_branch": target_branch,
                         "tdd_mode": True,
                         "best_of_n": True,
+                        "reproducer_script": reproducer_script_content,
+                        "reproducer_file": "reproduce_issue.py",
                         "annotations": annotations,
                     }),
                 )
@@ -469,6 +478,14 @@ async def github_webhook(
             existing_mission.status = MissionStatus.ACTIVE
             existing_mission.phase = WorkflowPhase.IMPLEMENTATION
 
+        from backend.services.reproducer_engine import ReproducerEngine
+        reproducer_script_content = ReproducerEngine.synthesize_review_reproducer(
+            file_path=file_path,
+            line_num=line_num,
+            comment_body=comment_body,
+            diff_hunk=diff_hunk,
+        )
+
         task_id = str(uuid.uuid4())
         correction_task = Task(
             id=task_id,
@@ -490,6 +507,8 @@ async def github_webhook(
                 "line_num": line_num,
                 "tdd_mode": True,
                 "best_of_n": True,
+                "reproducer_script": reproducer_script_content,
+                "reproducer_file": "reproduce_issue.py",
             }),
         )
         db.add(correction_task)
@@ -596,8 +615,52 @@ async def github_webhook(
         if not existing_mission:
             return {"status": "ignored", "reason": "PR not associated with active Kobits mission"}
 
+        low_comment = comment_body.strip().lower()
+        is_approval = any(
+            pat in low_comment
+            for pat in ("/approve", "lgtm", "approve delivery", "approved for delivery", "approved", "looks good to me")
+        )
+
+        # Human Engineer Delivery Review approval via PR conversation comment
+        if is_approval and (existing_mission.phase == WorkflowPhase.DELIVERY_REVIEW or existing_mission.status == MissionStatus.AWAITING_APPROVAL):
+            existing_mission.approval_status = ApprovalStatus.APPROVED
+            existing_mission.status = MissionStatus.ACTIVE
+            existing_mission.phase = WorkflowPhase.DEPLOYMENT
+            existing_mission.current_stage = "Deployment"
+
+            if tracked_pr:
+                tracked_pr.review_status = "approved"
+                if tracked_pr.checks_status == "success":
+                    tracked_pr.status = PullRequestStatus.MERGEABLE
+                else:
+                    tracked_pr.status = PullRequestStatus.APPROVED
+
+            activity = Activity(
+                organization_id=existing_mission.organization_id,
+                project_id=existing_mission.project_id,
+                type=ActivityType.MISSION_APPROVED,
+                title=f"Delivery Approved via PR Comment by @{sender_login}",
+                description=f"Human engineer delivery approval recorded from PR #{pr_number} comment.",
+            )
+            db.add(activity)
+            await db.commit()
+
+            return {
+                "status": "delivery_review_approved",
+                "mission_id": existing_mission.id,
+                "review_status": "approved",
+                "phase": "DEPLOYMENT",
+            }
+
         existing_mission.status = MissionStatus.ACTIVE
         existing_mission.phase = WorkflowPhase.IMPLEMENTATION
+
+        from backend.services.reproducer_engine import ReproducerEngine
+        reproducer_script_content = ReproducerEngine.synthesize_review_reproducer(
+            file_path="code.py",
+            line_num=1,
+            comment_body=comment_body,
+        )
 
         task_id = str(uuid.uuid4())
         correction_task = Task(
@@ -617,6 +680,8 @@ async def github_webhook(
                 "pr_number": pr_number,
                 "tdd_mode": True,
                 "best_of_n": True,
+                "reproducer_script": reproducer_script_content,
+                "reproducer_file": "reproduce_issue.py",
             }),
         )
         db.add(correction_task)

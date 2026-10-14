@@ -13,7 +13,7 @@ import uuid
 from backend.core.database import get_db
 from backend.models.organization import User, OrganizationMember
 from backend.models.project import Project, Activity, ActivityType, Task, TaskStatus
-from backend.models.mission import Mission, MissionStatus, MissionPriority, ApprovalStatus
+from backend.models.mission import Mission, MissionStatus, MissionPriority, ApprovalStatus, WorkflowPhase
 from backend.models.github import Repository, RepositoryStatus, PullRequest, PullRequestStatus, Changeset, ChangesetStatus
 from backend.api.deps import get_current_active_user
 
@@ -892,11 +892,14 @@ async def approve_mission(
     membership = await get_user_default_org(db, current_user.id)
     mission = await _resolve_owned_mission(db, mission_id, membership.organization_id)
 
-    if mission.status != MissionStatus.AWAITING_APPROVAL:
-        raise HTTPException(status_code=400, detail=f"Mission is currently {mission.status.value} (not AWAITING_APPROVAL)")
+    if mission.status != MissionStatus.AWAITING_APPROVAL and mission.phase != WorkflowPhase.DELIVERY_REVIEW:
+        raise HTTPException(status_code=400, detail=f"Mission is currently {mission.status.value} (not AWAITING_APPROVAL or DELIVERY_REVIEW)")
 
     mission.status = MissionStatus.ACTIVE
     mission.approval_status = ApprovalStatus.APPROVED
+    if mission.phase == WorkflowPhase.DELIVERY_REVIEW:
+        mission.phase = WorkflowPhase.DEPLOYMENT
+        mission.current_stage = "Deployment"
 
     act = Activity(
         organization_id=mission.organization_id,
