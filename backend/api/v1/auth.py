@@ -312,9 +312,11 @@ async def restore_session(request: Request, response: Response, db: AsyncSession
         except Exception:
             pass
     if not raw_token:
-        raw_token = request.cookies.get(settings.SESSION_COOKIE_NAME)
-
-    if not raw_token:
+        if settings.KOBITS_DEV_MODE:
+            user = await get_current_user(token=None, db=db)
+            fresh_token = _issue_user_token(user)
+            _set_session_cookie(response, fresh_token)
+            return {"status": "ok", "access_token": fresh_token, "user_id": user.id}
         raise HTTPException(status_code=401, detail="No session token provided")
 
     user = await get_current_user(token=raw_token, db=db)

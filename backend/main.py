@@ -493,13 +493,61 @@ from backend.models.mission import Mission
 
 async def _handle_terminal_ws(websocket: WebSocket, mission_id: str):
     await manager.connect(websocket, mission_id)
+    stream_task = None
+    pty_session = None
     try:
-        # Acknowledge connection immediately
-        await websocket.send_json({
+        # Resolve active sandbox worktree for interactive PTY shell
+        sandbox_dir = os.getcwd()
+        try:
+            from backend.services.sandbox_manager import SandboxManager
+            import backend.core.database as db_core
+            async with db_core.AsyncSessionLocal() as db:
+                m = await db.get(Mission, mission_id)
+                if m and m.active_branch:
+                    sess = SandboxManager.get_session_by_branch(m.active_branch)
+                    if sess and sess.sandbox_dir and os.path.isdir(sess.sandbox_dir):
+                        sandbox_dir = sess.sandbox_dir
+        except Exception:
+            pass
+
+        try:
+            from backend.services.pty_terminal import pty_manager
+            pty_session = await pty_manager.get_or_create_session(mission_id, cwd=sandbox_dir)
+        except Exception as _pty_err:
+            pass
+
+        greeting_payload = {
             "type": "system",
             "mission_id": mission_id,
             "message": f"Connected to Mission {mission_id} live terminal."
-        })
+        }
+        if pty_session:
+            hist = pty_session.get_history()
+            if hist:
+                greeting_payload["history"] = hist
+        await websocket.send_json(greeting_payload)
+
+        if pty_session and pty_session.get_history():
+            await websocket.send_json({
+                "type": "pty_output",
+                "mission_id": mission_id,
+                "data": pty_session.get_history(),
+            })
+
+        if pty_session:
+            async def _forward_pty_output():
+                try:
+                    async for chunk in pty_session.stream_output():
+                        await websocket.send_json({
+                            "type": "pty_output",
+                            "mission_id": mission_id,
+                            "data": chunk,
+                        })
+                except Exception:
+                    pass
+
+            stream_task = asyncio.create_task(_forward_pty_output())
+
 
         while True:
             # Receive frame: supports both text frames and raw binary bytes safely
@@ -508,41 +556,159 @@ async def _handle_terminal_ws(websocket: WebSocket, mission_id: str):
                 break
 
             data = ""
+            raw_bytes = None
+            if "bytes" in message and message["bytes"] is not None:
+                raw_bytes = message["bytes"]
             if "text" in message and message["text"] is not None:
                 data = message["text"]
-            elif "bytes" in message and message["bytes"] is not None:
-                try:
-                    data = message["bytes"].decode("utf-8", errors="replace")
-                except Exception:
-                    data = ""
 
-            if not data:
+            if raw_bytes is None and not data:
                 continue
-            
-            # Parse user input
-            msg_type = ""
-            text = ""
+
+            # 1. Handle raw binary frames
+            if raw_bytes is not None:
+                b_clean = raw_bytes.strip().lower()
+                if b_clean in (b"ping", b"heartbeat"):
+                    await websocket.send_json({"type": "pong", "message": "pong"})
+                    continue
+                elif b_clean == b"clear":
+                    await websocket.send_json({"type": "clear", "message": "Terminal output cleared."})
+                    continue
+                elif b_clean == b"status":
+                    status_str = "ACTIVE"
+                    try:
+                        import backend.core.database as db_core
+                        async with db_core.AsyncSessionLocal() as db:
+                            m = await db.get(Mission, mission_id)
+                            if m and m.status:
+                                status_str = m.status.value if hasattr(m.status, "value") else str(m.status)
+                    except Exception:
+                        pass
+                    await websocket.send_json({
+                        "type": "system",
+                        "mission_id": mission_id,
+                        "message": f"[Status] Mission {mission_id}: {status_str} (live terminal active)."
+                    })
+                    continue
+                else:
+                    # Forward raw binary payload directly into interactive shell process
+                    if pty_session and pty_session.is_alive:
+                        await pty_session.write(raw_bytes)
+                    continue
+
+            # 2. Parse text frames
+            is_json = False
+            raw_payload = None
             try:
                 payload = json.loads(data)
                 if isinstance(payload, dict):
-                    msg_type = str(payload.get("type") or "").lower()
-                    text = payload.get("message") or payload.get("content") or payload.get("command") or ""
-                else:
-                    text = str(payload)
+                    is_json = True
+                    raw_payload = payload
             except Exception:
-                text = str(data)
+                pass
 
-            clean_text = str(text).strip()
+            if is_json and raw_payload:
+                msg_type = str(raw_payload.get("type") or "").lower()
+                if msg_type in ("ping", "heartbeat"):
+                    await websocket.send_json({"type": "pong", "message": "pong"})
+                    continue
+                elif msg_type == "clear":
+                    await websocket.send_json({"type": "clear", "message": "Terminal output cleared."})
+                    continue
+                elif msg_type == "status":
+                    status_str = "ACTIVE"
+                    try:
+                        import backend.core.database as db_core
+                        async with db_core.AsyncSessionLocal() as db:
+                            m = await db.get(Mission, mission_id)
+                            if m and m.status:
+                                status_str = m.status.value if hasattr(m.status, "value") else str(m.status)
+                    except Exception:
+                        pass
+                    await websocket.send_json({
+                        "type": "system",
+                        "mission_id": mission_id,
+                        "message": f"[Status] Mission {mission_id}: {status_str} (live terminal active)."
+                    })
+                    continue
+                elif msg_type in ("history", "get_history"):
+                    hist = pty_session.get_history() if pty_session else ""
+                    await websocket.send_json({
+                        "type": "pty_output",
+                        "mission_id": mission_id,
+                        "data": hist,
+                    })
+                    continue
+                elif msg_type == "resize":
+                    cols = int(raw_payload.get("cols", 80))
+                    rows = int(raw_payload.get("rows", 24))
+                    if pty_session:
+                        pty_session.resize(cols, rows)
+                    await websocket.send_json({"type": "system", "message": f"Terminal resized to {cols}x{rows}."})
+                    continue
+                elif msg_type in ("stdin", "pty_input", "terminal_input"):
+                    stdin_data = raw_payload.get("data")
+                    if stdin_data is None:
+                        stdin_data = raw_payload.get("content") or raw_payload.get("message") or ""
+                    if pty_session and pty_session.is_alive:
+                        await pty_session.write(stdin_data)
+                    continue
+                elif msg_type in ("command", "execute"):
+                    cmd_data = raw_payload.get("command") or raw_payload.get("data") or ""
+                    if cmd_data:
+                        if not cmd_data.endswith("\n") and not cmd_data.endswith("\r"):
+                            cmd_data += "\n"
+                        if pty_session and pty_session.is_alive:
+                            await pty_session.write(cmd_data)
+                    continue
+                elif raw_payload.get("message") or raw_payload.get("content"):
+                    clean_text = str(raw_payload.get("message") or raw_payload.get("content") or "").strip()
+                    try:
+                        import backend.core.database as db_core
+                        async with db_core.AsyncSessionLocal() as db:
+                            mission = await db.get(Mission, mission_id)
+                            if mission:
+                                new_task = Task(
+                                    id=str(uuid.uuid4()),
+                                    mission_id=mission.id,
+                                    project_id=mission.project_id,
+                                    created_by=mission.created_by,
+                                    title="Process User Feedback",
+                                    description=f"The user has provided live input/feedback:\n\n\"{clean_text}\"\n\nPlease analyze this and adjust the mission trajectory accordingly.",
+                                    status=TaskStatus.PENDING,
+                                    phase=mission.phase,
+                                    is_correction=True,
+                                    metadata_json=json.dumps({"agent_role": "SOLUTION_ARCHITECT", "source": "terminal"})
+                                )
+                                db.add(new_task)
+                                await db.commit()
+                                
+                                ph_name = mission.phase.value if hasattr(mission.phase, 'value') else str(mission.phase)
+                                await manager.broadcast(mission_id, {
+                                    "type": "system", 
+                                    "mission_id": mission_id,
+                                    "message": f"[User Input Acknowledged] Appended real-time task to {ph_name} queue: \"{clean_text}\""
+                                })
+                            else:
+                                await manager.broadcast(mission_id, {
+                                    "type": "system", 
+                                    "mission_id": mission_id,
+                                    "message": f"[User Input Acknowledged] Live terminal instruction recorded: \"{clean_text}\""
+                                })
+                    except Exception as db_err:
+                        await websocket.send_json({"type": "system", "message": f"[Input Error] {str(db_err)}"})
+                    continue
+
+            # 3. Handle raw text strings (e.g. "ping", "clear", "status", keystrokes, shell commands)
+            clean_text = data.strip()
             lower_cmd = clean_text.lower()
-
-            # Handle interactive utility commands
-            if msg_type in ("ping", "heartbeat") or lower_cmd in ("ping", "heartbeat"):
+            if lower_cmd in ("ping", "heartbeat"):
                 await websocket.send_json({"type": "pong", "message": "pong"})
                 continue
-            elif msg_type == "clear" or lower_cmd == "clear":
+            elif lower_cmd == "clear":
                 await websocket.send_json({"type": "clear", "message": "Terminal output cleared."})
                 continue
-            elif msg_type == "status" or lower_cmd == "status":
+            elif lower_cmd == "status":
                 status_str = "ACTIVE"
                 try:
                     import backend.core.database as db_core
@@ -559,52 +725,27 @@ async def _handle_terminal_ws(websocket: WebSocket, mission_id: str):
                 })
                 continue
 
-            if not clean_text:
-                continue
-                
-            # Connect the terminal input to the active API/LLM pipeline
-            try:
-                import backend.core.database as db_core
-                async with db_core.AsyncSessionLocal() as db:
-                    mission = await db.get(Mission, mission_id)
-                    if mission:
-                        new_task = Task(
-                            id=str(uuid.uuid4()),
-                            mission_id=mission.id,
-                            project_id=mission.project_id,
-                            created_by=mission.created_by,
-                            title="Process User Feedback",
-                            description=f"The user has provided live input/feedback:\n\n\"{clean_text}\"\n\nPlease analyze this and adjust the mission trajectory accordingly.",
-                            status=TaskStatus.PENDING,
-                            phase=mission.phase,
-                            is_correction=True,
-                            metadata_json=json.dumps({"agent_role": "SOLUTION_ARCHITECT", "source": "terminal"})
-                        )
-                        db.add(new_task)
-                        await db.commit()
-                        
-                        ph_name = mission.phase.value if hasattr(mission.phase, 'value') else str(mission.phase)
-                        # Echo back to terminal
-                        await manager.broadcast(mission_id, {
-                            "type": "system", 
-                            "mission_id": mission_id,
-                            "message": f"[User Input Acknowledged] Appended real-time task to {ph_name} queue: \"{clean_text}\""
-                        })
-                    else:
-                        # Echo acknowledgment even if mission row is not yet committed
-                        await manager.broadcast(mission_id, {
-                            "type": "system",
-                            "mission_id": mission_id,
-                            "message": f"[User Input Acknowledged] Live terminal instruction recorded: \"{clean_text}\""
-                        })
-            except Exception as db_err:
-                await websocket.send_json({"type": "system", "message": f"[Input Error] {str(db_err)}"})
+            # Forward interactive shell keystrokes or line commands
+            if pty_session and pty_session.is_alive:
+                if "\n" not in data and "\r" not in data:
+                    await pty_session.write(data + "\n")
+                else:
+                    await pty_session.write(data)
+            else:
+                if clean_text:
+                    await websocket.send_json({
+                        "type": "system",
+                        "mission_id": mission_id,
+                        "message": f"[Terminal Command] {clean_text}"
+                    })
 
     except WebSocketDisconnect:
         pass
     except Exception:
         pass
     finally:
+        if stream_task and not stream_task.done():
+            stream_task.cancel()
         manager.disconnect(websocket, mission_id)
 
 

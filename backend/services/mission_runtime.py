@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional, Union, Any, Callable
 
 logger = logging.getLogger("kobits.mission_runtime")
 
@@ -538,6 +539,67 @@ class MissionRuntime:
             await manager.broadcast(self.mission_id, message)
         except Exception:
             pass  # WebSocket failures should never crash the runtime
+
+    @classmethod
+    async def execute_tdd_reproducer_cycle(
+        cls,
+        sandbox_dir: str,
+        coder_dispatch_fn: Any,
+        reproducer_script: Optional[str] = None,
+        script_name: str = "reproduce_issue.py",
+        regression_cmd: Optional[Union[str, list[str]]] = None,
+        use_best_of_n: bool = False,
+        candidate_generators: Optional[list] = None,
+        rollback_on_failure: bool = True,
+    ) -> dict:
+        """
+        SWE-bench-grade TDD Reproducer & Best-of-N Candidate exploration runner.
+        Executes negative baseline, coder implementation or best-of-N sampling, and positive verification.
+        """
+        from backend.services.reproducer_engine import ReproducerEngine
+        if use_best_of_n and candidate_generators:
+            from backend.services.best_of_n import BestOfNExplorer
+            if reproducer_script:
+                ReproducerEngine.author_reproducer(sandbox_dir, reproducer_script, file_name=script_name)
+            base_res = ReproducerEngine.verify_negative_baseline(sandbox_dir, script_name)
+            if not base_res.valid:
+                return {
+                    "success": False,
+                    "stage": "NEGATIVE_BASELINE",
+                    "error": base_res.rejection_reason,
+                    "baseline_result": base_res,
+                }
+            bon_res = await BestOfNExplorer.explore_and_select(
+                sandbox_dir=sandbox_dir,
+                reproducer_script=script_name,
+                candidate_generators=candidate_generators,
+                regression_cmd=regression_cmd,
+            )
+            return {
+                "success": bon_res.success,
+                "stage": "BEST_OF_N",
+                "selected_candidate": bon_res.selected_candidate,
+                "candidates": bon_res.candidates,
+                "selection_reason": bon_res.selection_reason,
+            }
+        else:
+            tdd_res = await ReproducerEngine.run_tdd_cycle(
+                sandbox_dir=sandbox_dir,
+                coder_dispatch_fn=coder_dispatch_fn,
+                script_content=reproducer_script,
+                script_name=script_name,
+                regression_cmd=regression_cmd,
+                rollback_on_failure=rollback_on_failure,
+            )
+            return {
+                "success": tdd_res.success,
+                "stage": tdd_res.stage,
+                "error": tdd_res.error,
+                "baseline_result": tdd_res.baseline_result,
+                "verification_result": tdd_res.verification_result,
+                "rolled_back": tdd_res.rolled_back,
+            }
+
     async def initialize_sandbox(self, db: AsyncSession = None, mission: Mission = None):
         """Initialize or retrieve the isolated sandbox for this mission (supporting single and multi-repo)."""
         close_db = False
@@ -2330,6 +2392,41 @@ class MissionRuntime:
                 except Exception as _cp_err:
                     logger.warning(f"Failed to create pre-task checkpoint: {_cp_err}")
                 
+            # Negative-to-Positive TDD Reproducer: Negative Baseline Check
+            reproducer_content = task_meta.get("reproducer_script") or input_data.get("reproducer_script")
+            reproducer_file = task_meta.get("reproducer_file") or input_data.get("reproducer_file") or "reproduce_issue.py"
+            is_tdd_mode = bool(task_meta.get("tdd_mode") or reproducer_content)
+
+            if is_tdd_mode and active_sb_dir:
+                try:
+                    from backend.services.reproducer_engine import ReproducerEngine
+                    if reproducer_content:
+                        ReproducerEngine.author_reproducer(active_sb_dir, reproducer_content, file_name=reproducer_file)
+                    baseline_res = ReproducerEngine.verify_negative_baseline(active_sb_dir, reproducer_file)
+                    if not baseline_res.valid:
+                        if checkpoint_sha:
+                            from backend.services.sandbox_rollback import SandboxRollbackManager
+                            SandboxRollbackManager.rollback(active_sb_dir, checkpoint_sha)
+                        task.status = TaskStatus.FAILED
+                        run.status = AgentRunStatus.FAILED
+                        run.error = f"TDD Baseline Check Rejected: {baseline_res.rejection_reason}"
+                        run.completed_at = datetime.now(timezone.utc)
+                        async with self._db_lock:
+                            await db.commit()
+                        return False
+                except Exception as _base_err:
+                    logger.error(f"TDD Baseline check error: {_base_err}")
+                    if checkpoint_sha:
+                        from backend.services.sandbox_rollback import SandboxRollbackManager
+                        SandboxRollbackManager.rollback(active_sb_dir, checkpoint_sha)
+                    task.status = TaskStatus.FAILED
+                    run.status = AgentRunStatus.FAILED
+                    run.error = f"TDD Baseline Setup/Execution Exception: {str(_base_err)}"
+                    run.completed_at = datetime.now(timezone.utc)
+                    async with self._db_lock:
+                        await db.commit()
+                    return False
+
             run.input_text = json.dumps(input_data)
             async with self._db_lock:
                 await db.commit()
@@ -2349,6 +2446,39 @@ class MissionRuntime:
                 run.status = run_status
                 async with self._db_lock:
                     await db.commit()
+
+                # Negative-to-Positive TDD Reproducer: Positive Verification Check
+                if is_tdd_mode and active_sb_dir and run.status == AgentRunStatus.COMPLETED:
+                    try:
+                        from backend.services.reproducer_engine import ReproducerEngine
+                        reg_cmd = task_meta.get("regression_cmd") or input_data.get("regression_cmd")
+                        pos_res = ReproducerEngine.verify_positive(
+                            active_sb_dir,
+                            script_path=reproducer_file,
+                            regression_cmd=reg_cmd
+                        )
+                        if not pos_res.success:
+                            if checkpoint_sha:
+                                from backend.services.sandbox_rollback import SandboxRollbackManager
+                                logger.info(f"TDD positive verification failed; rolling back sandbox {active_sb_dir} to {checkpoint_sha}")
+                                SandboxRollbackManager.rollback(active_sb_dir, checkpoint_sha)
+                            task.status = TaskStatus.FAILED
+                            run.status = AgentRunStatus.FAILED
+                            run.error = f"TDD Positive Verification Failed: {pos_res.reason}"
+                            async with self._db_lock:
+                                await db.commit()
+                            return False
+                    except Exception as _pos_err:
+                        logger.error(f"TDD positive verification exception: {_pos_err}")
+                        if checkpoint_sha:
+                            from backend.services.sandbox_rollback import SandboxRollbackManager
+                            SandboxRollbackManager.rollback(active_sb_dir, checkpoint_sha)
+                        task.status = TaskStatus.FAILED
+                        run.status = AgentRunStatus.FAILED
+                        run.error = f"TDD Positive Verification Exception: {str(_pos_err)}"
+                        async with self._db_lock:
+                            await db.commit()
+                        return False
                 
                 # Check for sandbox changes
                 if mission.active_branch and task_sandbox_session_id:
