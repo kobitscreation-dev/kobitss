@@ -16,11 +16,22 @@ class MockProvider(LLMProvider):
         model: str,
         tools: Optional[List[Dict[str, Any]]] = None,
         max_turns: int = 10,
-        tool_executor=None
+        tool_executor=None,
+        **kwargs
     ) -> Dict[str, Any]:
         
         # Simulate network latency
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.01)
+
+        mission_id = kwargs.get("mission_id")
+        agent_role = kwargs.get("agent_role", "MOCK_AGENT")
+        if kwargs.get("big_think") or kwargs.get("thinking_budget"):
+            from backend.services.llm.thinking_engine import ThinkingEngine
+            await ThinkingEngine.broadcast_thought(
+                mission_id=mission_id,
+                agent_role=agent_role,
+                thought_chunk=f"Analyzing task AST and calculating execution plan for {model}...",
+            )
         
         task_title = ""
         try:

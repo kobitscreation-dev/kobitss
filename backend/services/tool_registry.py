@@ -472,10 +472,22 @@ async def handle_search_code(query: str, file_pattern: str = None, context: dict
                         if pattern.search(line):
                             rel = p.relative_to(base)
                             matches.append(f"{rel}:{idx}: {line.strip()[:120]}")
-                            if len(matches) >= 50:
-                                break
                 except Exception:
                     continue
+        if not matches and context and context.get("project_id"):
+            try:
+                from backend.services.memory_service import MemoryService
+                from backend.core.database import AsyncSessionLocal
+                async with AsyncSessionLocal() as db:
+                    sem_chunks = await MemoryService.search_codebase(db, context["project_id"], query, limit=5)
+                    for sc in sem_chunks:
+                        file_path = sc.get("file_path", "")
+                        chunk_text = (sc.get("content") or "").strip()[:140]
+                        line_num = sc.get("start_line", 1)
+                        matches.append(f"{file_path}:{line_num} [AST semantic match]: {chunk_text}")
+            except Exception:
+                pass
+
         return "\n".join(matches) if matches else f"No matches found for query: '{query}'"
     except Exception as e:
         return f"Error: {e}"
@@ -881,7 +893,7 @@ async def handle_repository_search(
         from backend.services.sandbox_manager import SandboxManager
         sandbox_res = SandboxManager.search_directory(
             context["sandbox_dir"],
-            query=query,
+            query=resolved_query,
             file_pattern=file_pattern,
             exclude_pattern=exclude_pattern,
             is_regex=is_regex,
@@ -896,13 +908,13 @@ async def handle_repository_search(
 
     # 2. Supplement with AST-chunked semantic RAG results if project_id is known
     semantic_results = []
-    if resolved_project_id:
+    if resolved_project_id and resolved_query:
         try:
             from backend.services.memory_service import MemoryService
             from backend.core.database import AsyncSessionLocal
             async with AsyncSessionLocal() as db:
                 semantic_results = await MemoryService.search_codebase(
-                    db, resolved_project_id, query, limit=5
+                    db, resolved_project_id, resolved_query, limit=5
                 )
         except Exception:
             semantic_results = []

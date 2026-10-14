@@ -256,12 +256,14 @@ async def test_provider_switching():
     settings.REAL_AI_TEST = False
     settings.LLM_PROVIDER = "deepseek"
     p_deepseek = get_llm_provider()
-    assert isinstance(p_deepseek, DeepSeekProvider)
+    target_ds = p_deepseek.primary_provider if hasattr(p_deepseek, "primary_provider") else p_deepseek
+    assert isinstance(target_ds, DeepSeekProvider)
     
     settings.LLM_PROVIDER = "anthropic"
     p_anthropic = get_llm_provider()
     from backend.services.llm.anthropic_provider import AnthropicProvider
-    assert isinstance(p_anthropic, AnthropicProvider)
+    target_ant = p_anthropic.primary_provider if hasattr(p_anthropic, "primary_provider") else p_anthropic
+    assert isinstance(target_ant, AnthropicProvider)
     
     settings.LLM_PROVIDER = "mock"
     p_mock = get_llm_provider()
@@ -277,7 +279,8 @@ async def test_agent_executor_with_deepseek_integration():
     settings.DEEPSEEK_API_KEY = "sk-test-deepseek-secret-12345"
     
     executor = AgentExecutor()
-    assert isinstance(executor.provider, DeepSeekProvider)
+    target_exec_p = executor.provider.primary_provider if hasattr(executor.provider, "primary_provider") else executor.provider
+    assert isinstance(target_exec_p, DeepSeekProvider)
     
     agent_run = AgentRun(
         id=str(uuid.uuid4()),

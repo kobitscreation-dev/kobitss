@@ -42,7 +42,8 @@ class GeminiProvider(LLMProvider):
         model: Optional[str] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         max_turns: int = 10,
-        tool_executor=None
+        tool_executor=None,
+        **kwargs
     ) -> Dict[str, Any]:
         if not self.configured:
             return {
@@ -57,6 +58,17 @@ class GeminiProvider(LLMProvider):
 
         resolved_model = self._normalize_model(model)
         url = f"{self.base_url}/{resolved_model}:generateContent?key={self.api_key}"
+
+        from backend.services.llm.thinking_engine import ThinkingEngine, ThinkingConfig
+        thinking_cfg: ThinkingConfig = kwargs.get("thinking_config") or ThinkingEngine.resolve_config(
+            model_name=resolved_model,
+            requested_budget=kwargs.get("thinking_budget"),
+            requested_effort=kwargs.get("reasoning_effort"),
+            explicit_enable=kwargs.get("big_think"),
+        )
+        mission_id = kwargs.get("mission_id")
+        agent_role = kwargs.get("agent_role", "CODER")
+        thinking_trace: List[str] = []
 
         # Build tools if provided
         gemini_tools = []
@@ -94,6 +106,15 @@ class GeminiProvider(LLMProvider):
                     if c_report.observations_pruned > 0 or c_report.checkpoints_created > 0:
                         compaction_history.append(c_report.to_dict())
 
+                gen_config: Dict[str, Any] = {
+                    "responseMimeType": "application/json",
+                    "temperature": 0.2
+                }
+                if thinking_cfg.enabled and ThinkingEngine.is_reasoning_model(resolved_model):
+                    gen_config["thinkingConfig"] = {
+                        "thinkingBudget": thinking_cfg.budget_tokens
+                    }
+
                 req_body: Dict[str, Any] = {
                     "systemInstruction": {
                         "parts": [
@@ -101,10 +122,7 @@ class GeminiProvider(LLMProvider):
                         ]
                     },
                     "contents": contents,
-                    "generationConfig": {
-                        "responseMimeType": "application/json",
-                        "temperature": 0.2
-                    }
+                    "generationConfig": gen_config
                 }
                 if gemini_tools and turn_count < max_turns:
                     req_body["tools"] = gemini_tools
@@ -135,6 +153,18 @@ class GeminiProvider(LLMProvider):
                     content = candidates[0].get("content", {})
                     parts = content.get("parts", [])
 
+                    # Extract Gemini thoughts
+                    g_thoughts = ThinkingEngine.extract_thoughts_from_gemini(parts)
+                    if g_thoughts:
+                        for gt in g_thoughts:
+                            thinking_trace.append(gt)
+                            if thinking_cfg.stream_thoughts and mission_id:
+                                await ThinkingEngine.broadcast_thought(
+                                    mission_id=mission_id,
+                                    agent_role=agent_role,
+                                    thought_chunk=gt,
+                                )
+
                     function_calls = [p["functionCall"] for p in parts if "functionCall" in p]
 
                     if function_calls and tool_executor and turn_count < max_turns:
@@ -164,7 +194,7 @@ class GeminiProvider(LLMProvider):
                     # Final text response
                     text_out = ""
                     for p in parts:
-                        if "text" in p:
+                        if "text" in p and not (p.get("thought") is True):
                             text_out += p["text"]
 
                     circuit_breaker.record_success()
@@ -182,6 +212,8 @@ class GeminiProvider(LLMProvider):
                             "input_tokens": total_input_tokens,
                             "output_tokens": total_output_tokens
                         }
+                        if thinking_trace:
+                            parsed["_thinking_trace"] = thinking_trace
                         if compaction_history:
                             parsed["_usage"]["compaction"] = compaction_history[-1]
                             parsed["_usage"]["compaction_history"] = compaction_history
@@ -194,7 +226,8 @@ class GeminiProvider(LLMProvider):
                             "_usage": {
                                 "input_tokens": total_input_tokens,
                                 "output_tokens": total_output_tokens
-                            }
+                            },
+                            "_thinking_trace": thinking_trace if thinking_trace else []
                         }
 
                 except Exception as exc:

@@ -39,6 +39,10 @@ class ExtensionDispatchRequest(BaseModel):
     project_id: Optional[str] = Field(default=None, description="Target Kobits project UUID")
     branch: Optional[str] = Field(default=None, description="Active git branch in IDE")
     execution_mode: Optional[str] = Field(default="autopilot", description="autopilot or approval_required")
+    big_think: Optional[bool] = Field(default=False, description="Enable Big Think extended reasoning mode")
+    reasoning_effort: Optional[str] = Field(default="medium", description="Reasoning effort: low, medium, or high")
+    thinking_budget: Optional[int] = Field(default=4096, description="Token budget for extended reasoning")
+    provider: Optional[str] = Field(default=None, description="Preferred LLM provider override")
 
 
 class ExtensionApplyRequest(BaseModel):
@@ -195,6 +199,12 @@ async def extension_dispatch(
         requires_approval=(req.execution_mode == "approval_required"),
         approval_status=ApprovalStatus.PENDING if req.execution_mode == "approval_required" else ApprovalStatus.APPROVED,
         current_stage="Queued in durable execution pool",
+        risk_profile_json=json.dumps({
+            "big_think": bool(req.big_think),
+            "reasoning_effort": req.reasoning_effort or "medium",
+            "thinking_budget": req.thinking_budget or 4096,
+            "provider": req.provider,
+        }),
     )
     db.add(mission)
     await db.commit()
@@ -211,6 +221,10 @@ async def extension_dispatch(
             "source": "vscode_extension",
             "file_path": req.file_path,
             "selection_range": req.selection_range,
+            "big_think": bool(req.big_think),
+            "reasoning_effort": req.reasoning_effort or "medium",
+            "thinking_budget": req.thinking_budget or 4096,
+            "provider": req.provider,
         },
         queue_name="missions",
         priority=30,  # High priority for interactive IDE calls

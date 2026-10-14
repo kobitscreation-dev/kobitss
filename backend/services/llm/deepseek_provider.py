@@ -64,7 +64,8 @@ class DeepSeekProvider(LLMProvider):
         model: Optional[str] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         max_turns: int = 25,
-        tool_executor = None
+        tool_executor = None,
+        **kwargs
     ) -> Dict[str, Any]:
         
         if not self.configured:
@@ -85,6 +86,17 @@ class DeepSeekProvider(LLMProvider):
             target_model = self.default_model
         if "tokenharbor" in self.base_url and target_model in ("deepseek-flash", "deepseek-default", "deepseek-coding", "deepseek-reasoning", "deepseek-fast"):
             target_model = "deepseek-v4.1-flash:free"
+
+        from backend.services.llm.thinking_engine import ThinkingEngine, ThinkingConfig
+        thinking_cfg: ThinkingConfig = kwargs.get("thinking_config") or ThinkingEngine.resolve_config(
+            model_name=target_model,
+            requested_budget=kwargs.get("thinking_budget"),
+            requested_effort=kwargs.get("reasoning_effort"),
+            explicit_enable=kwargs.get("big_think"),
+        )
+        mission_id = kwargs.get("mission_id")
+        agent_role = kwargs.get("agent_role", "CODER")
+        thinking_trace: List[str] = []
         
         # Format tools according to OpenAI / DeepSeek function specification
         openai_tools = None
@@ -252,6 +264,19 @@ class DeepSeekProvider(LLMProvider):
                     }
                     
                 msg = choices[0].get("message", {})
+
+                # Extract reasoning content (DeepSeek-R1 / Reasoner)
+                reasoning_chunks = ThinkingEngine.extract_thoughts_from_openai_or_deepseek(msg)
+                if reasoning_chunks:
+                    for chunk in reasoning_chunks:
+                        thinking_trace.append(chunk)
+                        if thinking_cfg.stream_thoughts and mission_id:
+                            await ThinkingEngine.broadcast_thought(
+                                mission_id=mission_id,
+                                agent_role=agent_role,
+                                thought_chunk=chunk,
+                            )
+
                 tool_calls = msg.get("tool_calls")
                 
                 if tool_calls:
@@ -346,6 +371,8 @@ class DeepSeekProvider(LLMProvider):
                         "retries": total_retries,
                         "tool_calls": tool_calls_count
                     }
+                    if thinking_trace:
+                        result_data["_thinking_trace"] = thinking_trace
                     if compaction_history:
                         result_data["_usage"]["compaction"] = compaction_history[-1]
                         result_data["_usage"]["compaction_history"] = compaction_history

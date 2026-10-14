@@ -46,8 +46,12 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = "mock"
     ANTHROPIC_API_KEY: Optional[str] = None
     ANTHROPIC_BASE_URL: str = 'https://api.anthropic.com/v1'
-    GEMINI_API_KEY: Optional[str] = None
     ANTHROPIC_MODEL: str = "claude-3-5-sonnet-20241022"
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_MODEL: str = "gpt-4o"
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-2.5-pro"
     LLM_BASE_URL: Optional[str] = None
     DEEPSEEK_API_KEY: Optional[str] = None
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
@@ -60,6 +64,11 @@ class Settings(BaseSettings):
     REAL_AI_TEST: bool = False
     KOBITS_DEV_MODE: bool = False
     ALLOW_DEV_POSTGRES: bool = False
+
+    # Big Think / Extended Reasoning Configuration
+    BIG_THINK: bool = False
+    THINKING_BUDGET: int = 4096
+    REASONING_EFFORT: str = "medium"  # low | medium | high
 
     # OAuth Provider Configuration
     GOOGLE_CLIENT_ID: Optional[str] = None

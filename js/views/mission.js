@@ -143,6 +143,17 @@ function appendTerminalLine(payload) {
       contentHtml = `<span style="color:#a7f3d0;">${esc(payload.message || `Phase completed: ${payload.phase || ''}`)}</span>`;
       break;
 
+    case 'agent_thinking':
+    case 'thinking':
+      tagHtml = `<span style="color:#c084fc;font-weight:600;">[THINK]</span>`;
+      contentHtml = `<span style="color:#e9d5ff;font-style:italic;">${esc(payload.thought || payload.message || message)}</span>`;
+      break;
+
+    case 'provider_fallback':
+      tagHtml = `<span style="color:#fbbf24;font-weight:600;">[FALLBACK]</span>`;
+      contentHtml = `<span style="color:#fef08a;font-weight:500;">${esc(payload.message || `Switched provider from ${payload.failed_provider} to ${payload.next_provider}`)}</span>`;
+      break;
+
     case 'live_steering_injected':
       tagHtml = `<span style="color:#f97316;font-weight:600;">[STEER]</span>`;
       contentHtml = `<span style="color:#ffedd5;">${esc(payload.message || `Live directive injected: ${JSON.stringify(payload.directives || payload)}`)}</span>`;

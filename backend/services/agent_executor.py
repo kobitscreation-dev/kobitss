@@ -143,17 +143,21 @@ class AgentExecutor:
         from backend.services.llm.bedrock_provider import BedrockProvider
         from backend.services.llm.anthropic_provider import AnthropicProvider
         from backend.services.llm.gemini_provider import GeminiProvider
+        from backend.services.llm.openai_provider import OpenAIProvider
         from backend.services.llm.mock_provider import MockProvider
 
-        if isinstance(self.provider, DeepSeekProvider):
+        provider_for_type = getattr(self.provider, "primary_provider", self.provider)
+        if isinstance(provider_for_type, DeepSeekProvider):
             provider_name = "deepseek"
-        elif isinstance(self.provider, BedrockProvider):
+        elif isinstance(provider_for_type, BedrockProvider):
             provider_name = "bedrock"
-        elif isinstance(self.provider, AnthropicProvider):
+        elif isinstance(provider_for_type, AnthropicProvider):
             provider_name = "anthropic"
-        elif isinstance(self.provider, GeminiProvider):
+        elif isinstance(provider_for_type, OpenAIProvider):
+            provider_name = "openai"
+        elif isinstance(provider_for_type, GeminiProvider):
             provider_name = "gemini"
-        elif isinstance(self.provider, MockProvider):
+        elif isinstance(provider_for_type, MockProvider):
             provider_name = "mock"
         else:
             provider_name = (settings.LLM_PROVIDER or os.environ.get("LLM_PROVIDER") or "mock").lower()
@@ -162,6 +166,8 @@ class AgentExecutor:
             model_name = settings.BEDROCK_MODEL or os.environ.get("BEDROCK_MODEL") or "global.anthropic.claude-sonnet-4-6"
         elif provider_name == "anthropic":
             model_name = settings.ANTHROPIC_MODEL or os.environ.get("ANTHROPIC_MODEL") or "claude-3-7-sonnet-20250219"
+        elif provider_name == "openai":
+            model_name = getattr(settings, "OPENAI_MODEL", None) or os.environ.get("OPENAI_MODEL") or "o3-mini"
         elif provider_name == "deepseek":
             cfg_ds_model = settings.DEEPSEEK_MODEL or os.environ.get("DEEPSEEK_MODEL") or "deepseek-v4.1-flash:free"
             model_name = "deepseek-v4.1-flash:free" if cfg_ds_model == "deepseek-flash" else cfg_ds_model
@@ -474,6 +480,21 @@ class AgentExecutor:
                 
         if not skip_coder:
             try:
+                big_think = bool(
+                    input_data.get("big_think")
+                    or getattr(settings, "BIG_THINK", False)
+                    or os.environ.get("BIG_THINK") == "1"
+                    or (agent_type in (AgentType.SOLUTION_ARCHITECT, AgentType.SECURITY_ENGINEER, AgentType.BACKEND_ENGINEER) and input_data.get("complexity") in ("HIGH", "COMPLEX"))
+                )
+                thinking_budget = int(
+                    input_data.get("thinking_budget")
+                    or getattr(settings, "THINKING_BUDGET", 4096)
+                )
+                reasoning_effort = str(
+                    input_data.get("reasoning_effort")
+                    or getattr(settings, "REASONING_EFFORT", "medium")
+                )
+
                 result = await self.provider.generate_structured_output(
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
@@ -481,7 +502,12 @@ class AgentExecutor:
                     model=model_name,
                     tools=tools,
                     max_turns=30,
-                    tool_executor=execute_tool
+                    tool_executor=execute_tool,
+                    mission_id=input_data.get("mission_id"),
+                    agent_role=agent_type.value,
+                    big_think=big_think,
+                    thinking_budget=thinking_budget,
+                    reasoning_effort=reasoning_effort,
                 )
             except Exception as e:
                 is_parsing = isinstance(e, (json.JSONDecodeError, ValueError)) or any(k in str(e).lower() for k in ("json", "parse", "schema", "decode"))
@@ -732,6 +758,14 @@ class AgentExecutor:
                     "data": usage["compaction"],
                     "timestamp": datetime.now().isoformat()
                 })
+
+        if "_thinking_trace" in result and result["_thinking_trace"]:
+            trace_logs.append({
+                "type": "thinking_trace",
+                "thoughts": result["_thinking_trace"],
+                "timestamp": datetime.now().isoformat()
+            })
+            agent_run.tool_calls_json = scrub_secrets(json.dumps(trace_logs))
 
         # Attach classification telemetry to result
         result["_classification"] = {

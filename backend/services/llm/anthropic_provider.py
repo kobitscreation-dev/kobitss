@@ -38,10 +38,11 @@ class AnthropicProvider(LLMProvider):
         system_prompt: str,
         user_prompt: str,
         schema: Dict[str, Any],
-        model: str,
+        model: Optional[str] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         max_turns: int = 10,
-        tool_executor=None
+        tool_executor=None,
+        **kwargs
     ) -> Dict[str, Any]:
         """
         Executes a Claude API call, forcing structured JSON output and optionally handling tool execution.
@@ -90,6 +91,18 @@ class AnthropicProvider(LLMProvider):
         compactor = ContextCompactor(max_token_budget=context_budget, recent_turns=3)
         compaction_history = []
 
+        target_model = model or self.default_model
+        from backend.services.llm.thinking_engine import ThinkingEngine, ThinkingConfig
+        thinking_cfg: ThinkingConfig = kwargs.get("thinking_config") or ThinkingEngine.resolve_config(
+            model_name=target_model,
+            requested_budget=kwargs.get("thinking_budget"),
+            requested_effort=kwargs.get("reasoning_effort"),
+            explicit_enable=kwargs.get("big_think"),
+        )
+        mission_id = kwargs.get("mission_id")
+        agent_role = kwargs.get("agent_role", "CODER")
+        thinking_trace: List[str] = []
+
         while turn_count < max_turns:
             turn_count += 1
             
@@ -101,12 +114,20 @@ class AnthropicProvider(LLMProvider):
 
             for attempt in range(self.max_retries):
                 payload = {
-                    "model": model or self.default_model,
-                    "max_tokens": 8192,
+                    "model": target_model,
+                    "max_tokens": max(8192, thinking_cfg.budget_tokens + 4096) if thinking_cfg.enabled else 8192,
                     "system": full_system,
                     "messages": messages,
-                    "temperature": 0.0
                 }
+                if thinking_cfg.enabled and ThinkingEngine.is_reasoning_model(target_model):
+                    payload["thinking"] = {
+                        "type": "enabled",
+                        "budget_tokens": thinking_cfg.budget_tokens,
+                    }
+                    payload["temperature"] = 1.0  # Anthropic requires temperature 1.0 when thinking is enabled
+                else:
+                    payload["temperature"] = 0.0
+
                 if anthropic_tools and turn_count < max_turns:
                     payload["tools"] = anthropic_tools
 
@@ -140,6 +161,16 @@ class AnthropicProvider(LLMProvider):
                                 text_content += block["text"]
                             elif block["type"] == "tool_use":
                                 tool_calls.append(block)
+                            elif block["type"] == "thinking":
+                                t_text = block.get("thinking", "")
+                                if t_text:
+                                    thinking_trace.append(t_text)
+                                    if thinking_cfg.stream_thoughts and mission_id:
+                                        await ThinkingEngine.broadcast_thought(
+                                            mission_id=mission_id,
+                                            agent_role=agent_role,
+                                            thought_chunk=t_text,
+                                        )
 
                         # Handle intermediate tool calls if present
                         if tool_calls and tool_executor and turn_count < max_turns:
@@ -193,6 +224,8 @@ class AnthropicProvider(LLMProvider):
                                     "estimated_cost": estimated_cost,
                                     "model_used": data.get("model", model or self.default_model)
                                 }
+                                if thinking_trace:
+                                    parsed_data["_thinking_trace"] = thinking_trace
                                 if compaction_history:
                                     parsed_data["_usage"]["compaction"] = compaction_history[-1]
                                     parsed_data["_usage"]["compaction_history"] = compaction_history

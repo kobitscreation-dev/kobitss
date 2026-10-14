@@ -274,9 +274,25 @@ def init(ctx, name: Optional[str]):
 @click.option("--range", "selection_range", help="Line range (e.g. L10-L40)")
 @click.option("--branch", help="Active working branch")
 @click.option("--mode", type=click.Choice(["autopilot", "approval_required"]), default="autopilot", help="Execution mode")
+@click.option("--think", "--big-think", "big_think", is_flag=True, default=False, help="Enable Big Think extended reasoning mode")
+@click.option("--effort", "reasoning_effort", type=click.Choice(["low", "medium", "high"]), default="medium", help="Reasoning effort level")
+@click.option("--budget", "thinking_budget", type=int, default=4096, help="Thinking token budget")
+@click.option("--provider", type=click.Choice(["auto", "anthropic", "openai", "gemini", "deepseek"]), default=None, help="LLM provider override")
 @click.option("--no-wait", is_flag=True, help="Do not wait for mission to complete; return immediately")
 @click.pass_context
-def run(ctx, prompt: str, file_path: Optional[str], selection_range: Optional[str], branch: Optional[str], mode: str, no_wait: bool):
+def run(
+    ctx,
+    prompt: str,
+    file_path: Optional[str],
+    selection_range: Optional[str],
+    branch: Optional[str],
+    mode: str,
+    big_think: bool,
+    reasoning_effort: str,
+    thinking_budget: int,
+    provider: Optional[str],
+    no_wait: bool,
+):
     """Launch an autonomous engineering mission with live streaming output."""
     api_key = ctx.obj["api_key"]
     url = ctx.obj["url"]
@@ -294,6 +310,7 @@ def run(ctx, prompt: str, file_path: Optional[str], selection_range: Optional[st
         except Exception:
             pass
 
+    is_big_think = big_think or (os.environ.get("BIG_THINK", "").lower() in ("1", "true", "yes", "on"))
     payload = {
         "prompt": prompt,
         "file_path": file_path,
@@ -301,6 +318,10 @@ def run(ctx, prompt: str, file_path: Optional[str], selection_range: Optional[st
         "code_context": code_context,
         "branch": branch,
         "execution_mode": mode,
+        "big_think": is_big_think,
+        "reasoning_effort": reasoning_effort,
+        "thinking_budget": thinking_budget,
+        "provider": provider,
     }
 
     with get_client(api_key, url) as client:
@@ -323,56 +344,122 @@ def run(ctx, prompt: str, file_path: Optional[str], selection_range: Optional[st
 
     print_success(f"Mission Dispatched: [bold cyan]{mission_id[:8]}[/bold cyan] ('{data.get('title')}')")
     print_msg(f"  Branch: {data.get('active_branch')}", style="dim")
+    if is_big_think:
+        print_msg(f"  🧠 [bold magenta]Big Think Mode:[/bold magenta] Enabled (Effort: {reasoning_effort}, Budget: {thinking_budget} tokens)", style="magenta")
+    if provider:
+        print_msg(f"  Provider Override: {provider}", style="dim")
     print_msg(f"  Terminal Stream: {url}{data.get('terminal_ws_url')}", style="dim")
 
     if no_wait:
         print_msg(f"\nRun 'kobits status {mission_id[:8]}' to inspect progress.")
         return
 
-    # Live streaming polling loop
+    # Live streaming via WebSocket + HTTP status loop
     asyncio.run(_stream_mission_progress(url, api_key, mission_id))
 
 
 async def _stream_mission_progress(base_url: str, api_key: str, mission_id: str):
-    """Stream live mission status updates until terminal state."""
+    """
+    Connects to live WebSocket stream to output real-time agent thinking tokens,
+    tool executions, and phase progress, falling back gracefully to HTTP status polling.
+    """
     headers = {"X-API-Key": api_key, "Authorization": f"Bearer {api_key}"}
-    last_phase = None
-    last_stage = None
 
-    if RICH_AVAILABLE and console:
-        console.print("\n[bold cyan]Streaming Agent Execution Trajectory...[/bold cyan]")
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            console=console,
-        ) as progress:
-            task = progress.add_task("[cyan]Initiating mission...", total=100)
-            async with httpx.AsyncClient(base_url=base_url, headers=headers, timeout=10.0) as client:
-                for _ in range(60):  # poll up to ~5 minutes
-                    try:
-                        r = await client.get(f"/api/v1/extension/missions/{mission_id}/status")
-                        if r.status_code == 200:
-                            s = r.json()
-                            status_val = s.get("status", "ACTIVE")
-                            phase_val = s.get("phase", "INTAKE")
-                            stage_val = s.get("current_stage", "")
-                            prog_pct = max(0, min(100, int((s.get("progress") or 0.0) * 100)))
+    # Attempt live WebSocket streaming first
+    ws_connected = False
+    try:
+        import websockets
+        ws_url = base_url.replace("http://", "ws://").replace("https://", "wss://") + f"/ws/terminal/{mission_id}"
+        async with websockets.connect(ws_url, extra_headers=headers) as ws:
+            ws_connected = True
+            if RICH_AVAILABLE and console:
+                console.print("\n[bold cyan]● Live Terminal & Big Think Stream Connected[/bold cyan]")
+            else:
+                print("\n● Live Terminal & Big Think Stream Connected")
 
-                            progress.update(
-                                task,
-                                completed=prog_pct,
-                                description=f"[{phase_val}] {stage_val or status_val}",
-                            )
+            while True:
+                msg_raw = await ws.recv()
+                try:
+                    ev = json.loads(msg_raw)
+                except Exception:
+                    ev = {"type": "log", "message": msg_raw}
 
-                            if status_val in ("COMPLETED", "FAILED", "CANCELLED", "AWAITING_APPROVAL"):
-                                if status_val == "COMPLETED":
-                                    progress.update(task, completed=100, description="[green]✓ Mission Completed!")
-                                break
-                    except Exception:
-                        pass
-                    await asyncio.sleep(2.5)
+                ev_type = ev.get("type")
+                if ev_type == "pong":
+                    continue
+
+                if ev_type == "agent_thinking":
+                    thought = ev.get("thought", "")
+                    agent = ev.get("agent", "Agent")
+                    if RICH_AVAILABLE and console:
+                        console.print(f"[bold magenta]🤔 [{agent} Thinking][/bold magenta] [italic]{thought}[/italic]")
+                    else:
+                        print(f"🤔 [{agent} Thinking] {thought}")
+
+                elif ev_type == "provider_fallback":
+                    if RICH_AVAILABLE and console:
+                        console.print(f"[bold yellow]⚠️  {ev.get('message')}[/bold yellow]")
+                    else:
+                        print(f"⚠️  {ev.get('message')}")
+
+                elif ev_type == "task_start":
+                    if RICH_AVAILABLE and console:
+                        console.print(f"[cyan]▶ [{ev.get('agent')}] {ev.get('task_title')}[/cyan]")
+                    else:
+                        print(f"▶ [{ev.get('agent')}] {ev.get('task_title')}")
+
+                elif ev_type == "phase_start":
+                    if RICH_AVAILABLE and console:
+                        console.print(f"\n[bold blue]━━━ Phase: {ev.get('phase')} ━━━[/bold blue]")
+                    else:
+                        print(f"\n━━━ Phase: {ev.get('phase')} ━━━")
+
+                elif ev_type == "phase_complete":
+                    if RICH_AVAILABLE and console:
+                        console.print(f"[green]✓ Completed Phase: {ev.get('phase')}[/green]")
+                    else:
+                        print(f"✓ Completed Phase: {ev.get('phase')}")
+
+                elif ev_type == "mission_state":
+                    m_stat = ev.get("status")
+                    if m_stat in ("COMPLETED", "FAILED", "CANCELLED", "AWAITING_APPROVAL"):
+                        if m_stat == "COMPLETED":
+                            print_success("Mission Completed Successfully!")
+                        else:
+                            print_msg(f"Mission ended with status: {m_stat}", style="yellow")
+                        break
+                elif ev_type == "task_fail":
+                    print_err(f"Task Failed: {ev.get('message')}")
+    except Exception:
+        ws_connected = False
+
+    # HTTP Polling Fallback if WebSocket was disconnected or unavailable
+    if not ws_connected:
+        if RICH_AVAILABLE and console:
+            console.print("\n[dim]Streaming status via polling...[/dim]")
+        async with httpx.AsyncClient(base_url=base_url, headers=headers, timeout=10.0) as client:
+            for _ in range(60):
+                try:
+                    r = await client.get(f"/api/v1/extension/missions/{mission_id}/status")
+                    if r.status_code == 200:
+                        s = r.json()
+                        status_val = s.get("status", "ACTIVE")
+                        phase_val = s.get("phase", "INTAKE")
+                        stage_val = s.get("current_stage", "")
+                        prog_pct = max(0, min(100, int((s.get("progress") or 0.0) * 100)))
+
+                        if RICH_AVAILABLE and console:
+                            console.print(f"[{prog_pct}%] [{phase_val}] {stage_val or status_val}")
+                        else:
+                            print(f"[{prog_pct}%] [{phase_val}] {stage_val or status_val}")
+
+                        if status_val in ("COMPLETED", "FAILED", "CANCELLED", "AWAITING_APPROVAL"):
+                            if status_val == "COMPLETED":
+                                print_success("Mission Completed!")
+                            break
+                except Exception:
+                    pass
+                await asyncio.sleep(2.5)
     else:
         print("\nStreaming agent execution...")
         async with httpx.AsyncClient(base_url=base_url, headers=headers, timeout=10.0) as client:

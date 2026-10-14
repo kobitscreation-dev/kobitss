@@ -2303,7 +2303,11 @@ class MissionRuntime:
                 "risk_profile": (mission.risk_profile_json or "")[:600],
                 "complexity": complexity_map.get(scope_triage.get("complexity", "standard"), "DEFAULT"),
                 "scope_triage": scope_triage,
-                "human_override_comment": task_meta.get("human_override_comment")
+                "human_override_comment": task_meta.get("human_override_comment"),
+                "big_think": task_meta.get("big_think") if task_meta.get("big_think") is not None else mission_meta.get("big_think"),
+                "thinking_budget": task_meta.get("thinking_budget") or mission_meta.get("thinking_budget"),
+                "reasoning_effort": task_meta.get("reasoning_effort") or mission_meta.get("reasoning_effort"),
+                "provider": task_meta.get("provider") or mission_meta.get("provider"),
             }
             
             read_only_roles = {
