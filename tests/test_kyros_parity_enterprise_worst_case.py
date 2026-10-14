@@ -495,3 +495,183 @@ def test_cloud_sandbox_hardening_and_fallback(monkeypatch, tmp_path):
     assert verification["status"] == "PASSED"
     assert verification["pytest_summary"] is not None
     assert verification["pytest_summary"]["passed"] is True
+
+
+# ── TEST 8: Adversarial Edge Cases (URL Encoding, Contrast, File Deletions, Binary WS) ──
+
+@pytest.mark.asyncio
+async def test_browser_navigate_with_url_encoded_spaces_and_special_chars(monkeypatch, tmp_path):
+    """Verifies that browser.navigate correctly unquotes file:// URLs containing spaces (%20)."""
+    monkeypatch.setenv("KOBITS_BROWSER_FALLBACK", "1")
+    spaced_dir = tmp_path / "app with spaces"
+    spaced_dir.mkdir()
+    page_file = spaced_dir / "my app page.html"
+    page_file.write_text("<!DOCTYPE html><html><head><title>App With Spaces</title></head><body><h1>Hello</h1></body></html>", encoding="utf-8")
+
+    async with HeadlessBrowserEngine() as browser:
+        # Pass URL-encoded file URL
+        encoded_url = f"file:///{page_file.as_posix().replace(' ', '%20')}"
+        ctx = await browser.navigate(encoded_url)
+        assert ctx.status_code == 200
+        assert ctx.title == "App With Spaces"
+        assert "Hello" in ctx.html_content
+
+        # Test invalid/empty selectors guard
+        bad_click = await browser.click("")
+        assert bad_click["success"] is False
+        assert "error" in bad_click
+
+        bad_type = await browser.type("   ", "text")
+        assert bad_type["success"] is False
+        assert "error" in bad_type
+
+        # Test evaluate with document properties
+        cookie = await browser.evaluate("document.cookie")
+        assert cookie == ""
+        ready = await browser.evaluate("document.readyState")
+        assert ready == "complete"
+    monkeypatch.delenv("KOBITS_BROWSER_FALLBACK", raising=False)
+
+
+def test_visual_qa_contrast_and_empty_screenshot_adversarial():
+    """Verifies DOM color contrast inspection and empty screenshot comparison."""
+    # 1. Low contrast DOM
+    low_contrast_html = '<html><body><p style="color: #ffffff; background-color: #ffffff;">Invisible text</p></body></html>'
+    findings = VisualQAManager.inspect_dom_for_visual_defects(low_contrast_html, viewport_name="desktop")
+    contrast_findings = [f for f in findings if f.category == "CONTRAST_VIOLATION"]
+    assert len(contrast_findings) == 1
+    assert contrast_findings[0].severity == "CRITICAL"
+    assert "1.0:1" in contrast_findings[0].message
+
+    # 2. Compliant contrast DOM
+    compliant_html = '<html><body><p style="color: #000000; background-color: #ffffff;">Legible text</p></body></html>'
+    findings_good = VisualQAManager.inspect_dom_for_visual_defects(compliant_html, viewport_name="desktop")
+    assert not any(f.category == "CONTRAST_VIOLATION" for f in findings_good)
+
+    # 3. Baseline vs Empty screenshot
+    baseline_png = generate_valid_png(width=50, height=50)
+    passed, diff, diff_findings = VisualQAManager.compare_screenshots(baseline_png, b"")
+    assert passed is False
+    assert diff == 1.0
+    assert len(diff_findings) == 1
+    assert diff_findings[0].category == "VISUAL_DIFF"
+
+
+@pytest.mark.asyncio
+async def test_parallel_speculative_best_of_n_file_deletion(git_buggy_repo):
+    """
+    Verifies that when a winning candidate deletes an obsolete/buggy file,
+    the deletion is properly reflected in the main repository.
+    """
+    # Create an obsolete buggy file in base repo
+    obsolete_file = os.path.join(git_buggy_repo, "obsolete_buggy_module.py")
+    with open(obsolete_file, "w", encoding="utf-8") as f:
+        f.write("# To be deleted\n")
+    subprocess.run(["git", "add", "."], cwd=git_buggy_repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "add obsolete module"], cwd=git_buggy_repo, check=True, capture_output=True)
+
+    reproducer_code = (
+        "import os\n"
+        "from calculator import compute_tax\n"
+        "assert compute_tax(100.0, 0.15) == 15.0\n"
+        "assert not os.path.exists('obsolete_buggy_module.py'), 'Obsolete file must be deleted'\n"
+    )
+    ReproducerEngine.author_reproducer(git_buggy_repo, reproducer_code, "reproduce_deletion.py")
+
+    def candidate_1_keeps_file(cand_id, sb):
+        with open(os.path.join(sb, "calculator.py"), "w", encoding="utf-8") as f:
+            f.write("def compute_tax(amount, rate):\n    return amount * rate\n")
+
+    def candidate_2_fixes_and_deletes(cand_id, sb):
+        with open(os.path.join(sb, "calculator.py"), "w", encoding="utf-8") as f:
+            f.write("def compute_tax(amount, rate):\n    return amount * rate\n")
+        obs_p = os.path.join(sb, "obsolete_buggy_module.py")
+        if os.path.exists(obs_p):
+            os.remove(obs_p)
+
+    res = await BestOfNExplorer.explore_and_select(
+        sandbox_dir=git_buggy_repo,
+        reproducer_script="reproduce_deletion.py",
+        candidate_generators=[candidate_1_keeps_file, candidate_2_fixes_and_deletes],
+        parallel=True,
+    )
+
+    assert res.success is True
+    assert res.selected_candidate.candidate_id == 2
+    # Verify obsolete file was deleted in git_buggy_repo
+    assert not os.path.exists(obsolete_file)
+
+
+def test_spa_api_and_websocket_binary_and_location_headers(enterprise_client):
+    """Verifies WebSocket proxy tunnel handles binary frames and standby messages safely."""
+    with enterprise_client.websocket_connect("/api/v1/preview/m_preview_enterprise_01/__ws_proxy__") as ws:
+        status_msg = ws.receive_json()
+        assert status_msg.get("type") == "kobits_hmr_status"
+        # Send binary frame
+        binary_payload = bytes(b"\x00\x01\x02\x03\x04")
+        ws.send_bytes(binary_payload)
+        resp_bytes = ws.receive_bytes()
+        assert resp_bytes == binary_payload
+
+
+def test_proactive_epic_prd_decomposition_adversarial(enterprise_client):
+    """
+    Verifies that POST /api/v1/missions/epic handles payloads where 'project' is a dictionary,
+    and Jira epics with circular dependencies resolve cleanly without hanging.
+    """
+    # 1. Linear payload with project as dictionary (Previously caused AttributeError: 'dict' object has no attribute 'strip')
+    linear_dict_payload = {
+        "project": {
+            "id": "proj_kyros_parity",
+            "name": "Linear Authentication Refactor",
+            "description": "Migrate session auth to OAuth2 PKCE",
+            "issues": [
+                {"identifier": "AUTH-201", "title": "Configure OAuth2 Provider Endpoints"},
+                {"identifier": "AUTH-202", "title": "Implement PKCE Code Verifier & Challenge"},
+            ]
+        },
+        "create_mission": True,
+    }
+    res = enterprise_client.post("/api/v1/missions/epic", json=linear_dict_payload)
+    assert res.status_code == 201
+    data = res.json()
+    assert data["status"] == "INGESTED"
+    assert data["epic_title"] == "Linear Authentication Refactor"
+    assert len(data["milestones"]) == 2
+
+    # 2. Jira export with explicit cycle (INFRA-1 depends on INFRA-2, INFRA-2 depends on INFRA-1)
+    cyclic_jira_payload = {
+        "fields": {"summary": "Cyclic Epic", "description": "Resilience test"},
+        "issues": [
+            {"key": "INFRA-1", "fields": {"summary": "Node A", "dependencies": ["INFRA-2"]}},
+            {"key": "INFRA-2", "fields": {"summary": "Node B", "dependencies": ["INFRA-1"]}},
+        ]
+    }
+    dag_cyclic = EpicIngestionEngine.ingest_payload(cyclic_jira_payload)
+    assert len(dag_cyclic.milestones) == 2
+    assert len(dag_cyclic.topological_order) == 2
+    assert "INFRA-1" in dag_cyclic.topological_order
+    assert "INFRA-2" in dag_cyclic.topological_order
+
+
+def test_mission_runtime_verify_sandbox_code_catastrophic_runner_failure(monkeypatch, tmp_path):
+    """
+    Verifies that MissionRuntime._verify_sandbox_code populates pytest_summary
+    even if the test runner throws a catastrophic unexpected exception.
+    """
+    from backend.services.mission_runtime import MissionRuntime
+    sandbox_dir = tmp_path / "sandbox_catastrophe"
+    sandbox_dir.mkdir()
+    test_f = sandbox_dir / "test_catastrophe.py"
+    test_f.write_text("def test_dummy(): pass\n", encoding="utf-8")
+
+    def mock_subprocess_run(*args, **kwargs):
+        raise RuntimeError("Subprocess catastrophic failure")
+
+    monkeypatch.setattr("subprocess.run", mock_subprocess_run)
+    verification = MissionRuntime._verify_sandbox_code(str(sandbox_dir), target_files=[str(test_f)])
+    assert verification["status"] == "FAILED"
+    assert verification["pytest_summary"] is not None
+    assert verification["pytest_summary"]["passed"] is False
+    assert "catastrophic" in verification["pytest_summary"]["output"]
+

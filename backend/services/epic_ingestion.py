@@ -121,10 +121,13 @@ class EpicIngestionEngine:
                 if in_degree[neighbor] == 0:
                     queue.append(neighbor)
 
-        # If circular dependency or orphaned nodes exist, append remaining
-        for m_id in nodes:
-            if m_id not in order:
-                order.append(m_id)
+        # If circular dependency or orphaned nodes exist, append remaining safely
+        if len(order) < len(nodes):
+            missing = [m_id for m_id in nodes if m_id not in order]
+            logger.warning(f"Circular dependency detected in milestone graph: {missing}; appending safely")
+            for m_id in nodes:
+                if m_id not in order:
+                    order.append(m_id)
 
         return order
 
@@ -183,7 +186,11 @@ class EpicIngestionEngine:
                 elif current_section == "architecture":
                     arch_notes.append(item_text)
                 elif current_section == "milestone" and current_milestone:
-                    if "accept" in item_text.lower() or "criteria" in item_text.lower():
+                    if re.search(r"^(?:depends on|dependency|dependencies)\s*[:=]\s*(.+)$", item_text, re.IGNORECASE):
+                        dep_raw = re.sub(r"^(?:depends on|dependency|dependencies)\s*[:=]\s*", "", item_text, flags=re.IGNORECASE).strip()
+                        dep_candidates = [d.strip() for d in re.split(r"[,;]", dep_raw) if d.strip()]
+                        current_milestone.dependencies.extend(dep_candidates)
+                    elif "accept" in item_text.lower() or "criteria" in item_text.lower():
                         current_milestone.acceptance_criteria.append(item_text)
                     else:
                         role = "BACKEND_ENGINEER"
@@ -268,12 +275,24 @@ class EpicIngestionEngine:
                 iss_key = issue.get("key") or f"JIRA-{idx + 1}"
 
                 prev_key = issues[idx - 1].get("key", f"JIRA-{idx}") if idx > 0 else None
+                explicit_deps = issue.get("dependencies") or issue.get("depends_on") or iss_fields.get("dependencies") or iss_fields.get("depends_on") or []
+                if isinstance(explicit_deps, str):
+                    explicit_deps = [explicit_deps]
+                elif not isinstance(explicit_deps, list):
+                    explicit_deps = []
+                if not explicit_deps and "issuelinks" in iss_fields:
+                    for link in iss_fields.get("issuelinks", []):
+                        inward = link.get("inwardIssue", {}).get("key")
+                        if inward:
+                            explicit_deps.append(inward)
+                deps = list(explicit_deps) if explicit_deps else ([prev_key] if prev_key else [])
+
                 m_node = MilestoneNode(
                     milestone_id=iss_key,
                     title=iss_title,
                     description=iss_desc,
                     phase="FOUNDATION" if idx == 0 else "CORE_FEATURE",
-                    dependencies=[prev_key] if prev_key else [],
+                    dependencies=deps,
                     tasks=[
                         MilestoneTask(
                             id=f"task_{iss_key}",
@@ -326,12 +345,19 @@ class EpicIngestionEngine:
                 iss_id = iss.get("identifier") or iss.get("id") or f"LIN-{idx + 1}"
                 prev_id = milestones[-1].milestone_id if milestones else None
 
+                explicit_deps = iss.get("dependencies") or iss.get("depends_on") or iss.get("blocked_by") or iss.get("relations") or []
+                if isinstance(explicit_deps, str):
+                    explicit_deps = [explicit_deps]
+                elif not isinstance(explicit_deps, list):
+                    explicit_deps = []
+                deps = list(explicit_deps) if explicit_deps else ([prev_id] if prev_id else [])
+
                 m_node = MilestoneNode(
                     milestone_id=iss_id,
                     title=iss_title,
                     description=iss_desc,
                     phase="FOUNDATION" if idx == 0 else "CORE_FEATURE",
-                    dependencies=[prev_id] if prev_id else [],
+                    dependencies=deps,
                     tasks=[
                         MilestoneTask(
                             id=f"task_{iss_id}",

@@ -365,12 +365,26 @@ class BestOfNExplorer:
                 winner = max(passing_candidates, key=lambda c: c.score)
                 win_tmp = tmp_map.get(winner.candidate_id)
                 if win_tmp and os.path.isdir(win_tmp):
+                    if base_sha != "unknown" and SandboxRollbackManager._is_git_repo(sandbox_dir):
+                        SandboxRollbackManager.rollback(sandbox_dir, base_sha)
                     for f_rel in winner.files_changed:
                         src_f = os.path.join(win_tmp, f_rel)
                         dst_f = os.path.join(sandbox_dir, f_rel)
-                        if os.path.isfile(src_f):
-                            os.makedirs(os.path.dirname(dst_f), exist_ok=True)
-                            shutil.copy2(src_f, dst_f)
+                        if os.path.exists(src_f):
+                            if os.path.isdir(src_f):
+                                shutil.copytree(src_f, dst_f, dirs_exist_ok=True)
+                            else:
+                                os.makedirs(os.path.dirname(dst_f), exist_ok=True)
+                                shutil.copy2(src_f, dst_f)
+                        else:
+                            # File was deleted by the winning candidate
+                            if os.path.isfile(dst_f) or os.path.islink(dst_f):
+                                try:
+                                    os.remove(dst_f)
+                                except Exception:
+                                    pass
+                            elif os.path.isdir(dst_f):
+                                shutil.rmtree(dst_f, ignore_errors=True)
                     win_sha = SandboxRollbackManager.create_checkpoint(
                         sandbox_dir, step_name=f"parallel_winner_candidate_{winner.candidate_id}"
                     ) or winner.checkpoint_sha
@@ -613,6 +627,9 @@ class BestOfNExplorer:
             regression_cmd=regression_cmd,
             base_checkpoint=base_checkpoint,
             timeout_per_candidate=timeout,
+            parallel=kwargs.get("parallel"),
+            turbo=kwargs.get("turbo"),
+            concurrency_limit=kwargs.get("concurrency_limit"),
         )
 
         try:

@@ -432,10 +432,16 @@ class MissionRuntime:
                         "passed": pt_res.returncode == 0,
                         "output": (pt_res.stdout or pt_res.stderr or "").strip()[-400:],
                     }
-                    if pt_res.returncode != 0:
-                        syntax_errors.append(f"pytest failed on {', '.join(py_test_files)}: {pytest_summary['output'][:160]}")
             except Exception as e:
                 logger.warning(f"Pytest verification error: {e}")
+                if pytest_summary is None and py_test_files:
+                    pytest_summary = {
+                        "ran": len(py_test_files),
+                        "passed": False,
+                        "output": f"Pytest verification error: {e}",
+                        "error": str(e),
+                    }
+                    syntax_errors.append(f"pytest runner error on {', '.join(py_test_files)}: {str(e)[:160]}")
 
         # Stage 3B: Automated Pre-Review JS/TS Test Gate on changed *.test.{js,ts} / *.spec.{js,ts} files
         js_ts_test_files = [
@@ -524,6 +530,14 @@ class MissionRuntime:
                             )
             except Exception as e:
                 logger.warning(f"Node test verification error: {e}")
+                if node_test_summary is None and js_ts_test_files:
+                    node_test_summary = {
+                        "ran": len(js_ts_test_files),
+                        "passed": False,
+                        "output": f"Node test verification error: {e}",
+                        "error": str(e),
+                    }
+                    syntax_errors.append(f"node --test runner error on {', '.join(js_ts_test_files)}: {str(e)[:160]}")
 
         return {
             "status": "PASSED" if not syntax_errors else "FAILED",

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status, Backgrou
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, timezone
 import hashlib
 import hmac
@@ -361,8 +361,13 @@ async def get_user_default_org(db: AsyncSession, user_id: str) -> OrganizationMe
     return membership
 
 
-async def _resolve_owned_project(db: AsyncSession, project_ref: Optional[str], org_id: str, user_id: Optional[str] = None) -> Project:
-    ref = (project_ref or "default").strip()
+async def _resolve_owned_project(db: AsyncSession, project_ref: Optional[Union[str, dict]], org_id: str, user_id: Optional[str] = None) -> Project:
+    if isinstance(project_ref, dict):
+        ref = str(project_ref.get("id") or project_ref.get("name") or "default").strip()
+    elif isinstance(project_ref, str):
+        ref = project_ref.strip()
+    else:
+        ref = "default"
 
     async def _get_or_create_default_proj() -> Project:
         proj = (
@@ -575,7 +580,15 @@ async def ingest_epic_endpoint(
     dag = EpicIngestionEngine.ingest_payload(payload)
 
     membership = await get_user_default_org(db, current_user.id)
-    project_ref = payload.get("project_id") or payload.get("project") or "default"
+    project_ref = payload.get("project_id")
+    if not project_ref:
+        raw_proj = payload.get("project")
+        if isinstance(raw_proj, dict):
+            project_ref = raw_proj.get("id") or raw_proj.get("name") or "default"
+        elif isinstance(raw_proj, str):
+            project_ref = raw_proj
+        else:
+            project_ref = "default"
     project = await _resolve_owned_project(db, project_ref, membership.organization_id, current_user.id)
 
     mission = None
@@ -598,16 +611,29 @@ async def ingest_epic_endpoint(
 
         # Decompose into Tasks
         for m_node in dag.milestones:
-            for task_node in m_node.tasks:
+            if m_node.tasks:
+                for task_node in m_node.tasks:
+                    task = Task(
+                        project_id=project.id,
+                        mission_id=mission.id,
+                        title=task_node.title[:250],
+                        description=task_node.description,
+                        status=TaskStatus.PENDING,
+                        created_by=current_user.id,
+                        dependencies_json=json.dumps(task_node.dependencies),
+                        expected_output=json.dumps(task_node.acceptance_criteria),
+                    )
+                    db.add(task)
+            else:
                 task = Task(
                     project_id=project.id,
                     mission_id=mission.id,
-                    title=task_node.title,
-                    description=task_node.description,
+                    title=m_node.title[:250],
+                    description=m_node.description,
                     status=TaskStatus.PENDING,
                     created_by=current_user.id,
-                    dependencies_json=json.dumps(task_node.dependencies),
-                    expected_output=json.dumps(task_node.acceptance_criteria),
+                    dependencies_json=json.dumps(m_node.dependencies),
+                    expected_output=json.dumps(m_node.acceptance_criteria),
                 )
                 db.add(task)
         await db.commit()

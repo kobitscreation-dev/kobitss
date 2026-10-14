@@ -207,7 +207,15 @@ class HeadlessBrowserEngine:
                 html = f"<!DOCTYPE html><html><head><title>Offline Preview</title></head><body><div id='root'>Preview for {url}</div></body></html>"
                 title = "Offline Preview"
         elif url.startswith("file://") or os.path.exists(url):
-            fpath = url.replace("file://", "").lstrip("/") if os.name != "nt" else url.replace("file:///", "").replace("file://", "")
+            import urllib.parse
+            import urllib.request
+            if url.startswith("file://"):
+                parsed = urllib.parse.urlparse(url)
+                unquoted_path = urllib.parse.unquote(parsed.path)
+                fpath = urllib.request.url2pathname(unquoted_path)
+            else:
+                fpath = os.path.abspath(url)
+
             if os.path.isfile(fpath):
                 with open(fpath, "r", encoding="utf-8", errors="replace") as f:
                     html = f.read()
@@ -237,6 +245,8 @@ class HeadlessBrowserEngine:
 
     async def click(self, selector: str, timeout_ms: int = 5000) -> Dict[str, Any]:
         """Clicks an element matching the given CSS/XPath selector."""
+        if not selector or not isinstance(selector, str) or not selector.strip():
+            return {"success": False, "error": "Selector must be a non-empty string"}
         self._clicked_selectors.append(selector)
         if not self._is_fallback and self.page:
             try:
@@ -253,6 +263,8 @@ class HeadlessBrowserEngine:
 
     async def type(self, selector: str, text: str, timeout_ms: int = 5000) -> Dict[str, Any]:
         """Types text into an input element matching the given selector."""
+        if not selector or not isinstance(selector, str) or not selector.strip():
+            return {"success": False, "error": "Selector must be a non-empty string"}
         self._dom_values[selector] = text
         if not self._is_fallback and self.page:
             try:
@@ -295,6 +307,9 @@ class HeadlessBrowserEngine:
 
     async def evaluate(self, script: str) -> Any:
         """Executes a JavaScript snippet in the context of the page."""
+        if not script or not isinstance(script, str) or not script.strip():
+            return None
+
         if not self._is_fallback and self.page:
             try:
                 return await self.page.evaluate(script)
@@ -307,8 +322,12 @@ class HeadlessBrowserEngine:
             return self._current_title
         if "document.body.innerHTML" in clean or "document.documentElement.outerHTML" in clean:
             return self._current_html
-        if "window.location.href" in clean:
+        if "window.location.href" in clean or "document.URL" in clean or "document.location" in clean:
             return self._current_url
+        if "document.cookie" in clean:
+            return ""
+        if "document.readyState" in clean:
+            return "complete"
         if clean.startswith("document.querySelector"):
             sel_match = re.search(r"querySelector\(['\"](.*?)['\"]\)", clean)
             if sel_match:

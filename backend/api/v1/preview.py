@@ -340,8 +340,13 @@ async def websocket_preview_proxy(websocket: WebSocket, mission_id: str):
         try:
             await websocket.send_json({"type": "kobits_hmr_status", "status": "dev_server_standby", "mission_id": mission_id})
             while True:
-                msg = await websocket.receive_text()
-                await websocket.send_text(f"kobits_ack: {msg[:60]}")
+                msg = await websocket.receive()
+                if "text" in msg and msg["text"] is not None:
+                    await websocket.send_text(f"kobits_ack: {msg['text'][:60]}")
+                elif "bytes" in msg and msg["bytes"] is not None:
+                    await websocket.send_bytes(msg["bytes"])
+                elif msg.get("type") == "websocket.disconnect":
+                    break
         except (WebSocketDisconnect, Exception):
             pass
         return
@@ -353,19 +358,35 @@ async def websocket_preview_proxy(websocket: WebSocket, mission_id: str):
             async def _client_to_target():
                 try:
                     while True:
-                        data = await websocket.receive_text()
-                        await target_ws.send(data)
+                        msg = await websocket.receive()
+                        if "text" in msg and msg["text"] is not None:
+                            await target_ws.send(msg["text"])
+                        elif "bytes" in msg and msg["bytes"] is not None:
+                            await target_ws.send(msg["bytes"])
+                        elif msg.get("type") == "websocket.disconnect":
+                            break
                 except Exception:
                     pass
 
             async def _target_to_client():
                 try:
                     async for msg in target_ws:
-                        await websocket.send_text(msg)
+                        if isinstance(msg, bytes):
+                            await websocket.send_bytes(msg)
+                        else:
+                            await websocket.send_text(msg)
                 except Exception:
                     pass
 
-            await asyncio.gather(_client_to_target(), _target_to_client())
+            t1 = asyncio.create_task(_client_to_target())
+            t2 = asyncio.create_task(_target_to_client())
+            done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
+            for p_task in pending:
+                p_task.cancel()
+                try:
+                    await p_task
+                except (asyncio.CancelledError, Exception):
+                    pass
     except Exception as exc:
         logger.debug(f"HMR WebSocket tunnel closed: {exc}")
         try:
@@ -439,9 +460,10 @@ async def serve_preview_asset(
             req_body = await request.body() if request and request.method not in ("GET", "HEAD") else None
             query_str = str(request.url.query) if request and request.url.query else ""
             full_target = f"{proxy_url}?{query_str}" if query_str else proxy_url
+            EXCLUDE_PROXY_HEADERS = {"connection", "keep-alive", "transfer-encoding", "content-encoding", "content-length"}
             fwd_headers = {k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")} if request else {}
 
-            async with httpx.AsyncClient(timeout=6.0) as client:
+            async with httpx.AsyncClient(timeout=6.0, follow_redirects=False) as client:
                 req_method = (request.method if request else "GET").upper()
                 if req_method == "GET":
                     resp = await client.get(full_target, headers=fwd_headers)
@@ -470,8 +492,18 @@ async def serve_preview_asset(
                     "Access-Control-Allow-Headers": "*",
                     "Cache-Control": "no-cache",
                 }
-                if "content-type" in resp.headers:
-                    headers["Content-Type"] = resp.headers["content-type"]
+                for hk, hv in resp.headers.items():
+                    if hk.lower() not in EXCLUDE_PROXY_HEADERS:
+                        headers[hk] = hv
+
+                if "location" in resp.headers:
+                    loc = resp.headers["location"]
+                    if loc.startswith("/") and not loc.startswith(f"/api/v1/preview/{mission_id}"):
+                        headers["Location"] = f"/api/v1/preview/{mission_id}{loc}"
+                    elif f"127.0.0.1:{proxy_port}" in loc or f"localhost:{proxy_port}" in loc:
+                        rel = loc.split(f":{proxy_port}", 1)[1]
+                        headers["Location"] = f"/api/v1/preview/{mission_id}{rel}"
+
                 body_content = resp.content
                 if "text/html" in resp.headers.get("content-type", "").lower():
                     try:
