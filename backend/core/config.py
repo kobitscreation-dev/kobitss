@@ -119,6 +119,13 @@ class Settings(BaseSettings):
     SENTRY_ENVIRONMENT: str = "production"
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1
 
+    # Kyros Parity / Parallel Speculative Compute & Proactive Integrations
+    KOBITS_TURBO_MODE: bool = False
+    KOBITS_SPECULATIVE_EXEC: bool = False
+    KOBITS_PARALLEL_ROLLOUT_LIMIT: int = 4
+    JIRA_API_TOKEN: Optional[str] = None
+    LINEAR_API_KEY: Optional[str] = None
+
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True, extra="ignore")
 
 settings = Settings()

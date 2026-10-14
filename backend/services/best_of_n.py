@@ -14,8 +14,12 @@ import shlex
 import inspect
 import logging
 import subprocess
+import asyncio
+import shutil
+import tempfile
+import uuid
 from dataclasses import dataclass, field
-from typing import Optional, Callable, Any, Union, List
+from typing import Optional, Callable, Any, Union, List, Tuple
 
 from backend.services.sandbox_rollback import SandboxRollbackManager
 from backend.services.reproducer_engine import ReproducerEngine, ReproducerExecution
@@ -155,13 +159,16 @@ class BestOfNExplorer:
         regression_cmd: Optional[Union[str, list[str]]] = None,
         base_checkpoint: Optional[str] = None,
         timeout_per_candidate: int = 30,
+        parallel: Optional[bool] = None,
+        turbo: Optional[bool] = None,
+        concurrency_limit: Optional[int] = None,
     ) -> BestOfNResult:
         """
         Runs Best-of-N candidate exploration:
         1. Establishes base checkpoint.
-        2. Iterates across candidate generators, rolling back to base before each attempt.
-        3. Commits candidate, tests reproducer, tests regressions, and scores diff.
-        4. Selects highest-scoring passing candidate and leaves sandbox at that commit.
+        2. Supports concurrent speculative rollouts via asyncio.gather() or sequential fallback.
+        3. Commits candidates, tests reproducer, tests regressions, and scores diff.
+        4. Selects highest-scoring passing candidate (minimal parsimonious diff).
         5. If no candidate passes, rolls back to base checkpoint.
         """
         if not os.path.isdir(sandbox_dir):
@@ -180,8 +187,6 @@ class BestOfNExplorer:
         if not base_sha:
             base_sha = SandboxRollbackManager.get_current_sha(sandbox_dir) or "unknown"
 
-        candidates: list[PatchCandidate] = []
-
         # Preserve reproducer script content in case of git clean -fdx during rollbacks
         abs_repro_path = (
             reproducer_script
@@ -195,6 +200,209 @@ class BestOfNExplorer:
                     repro_content = rf.read()
             except Exception:
                 pass
+
+        # Check whether parallel speculative scaling is active
+        from backend.core.config import settings
+        use_parallel = (
+            parallel is True
+            or turbo is True
+            or getattr(settings, "KOBITS_SPECULATIVE_EXEC", False)
+            or getattr(settings, "KOBITS_TURBO_MODE", False)
+            or os.environ.get("KOBITS_SPECULATIVE_EXEC") == "1"
+            or os.environ.get("KOBITS_TURBO_MODE") == "1"
+        ) and len(candidate_generators) > 1
+
+        if use_parallel:
+            limit = concurrency_limit or getattr(settings, "KOBITS_PARALLEL_ROLLOUT_LIMIT", 4)
+            sem = asyncio.Semaphore(limit)
+
+            async def _evaluate_parallel_candidate(idx: int, generator: Callable[[int, str], Any]) -> Tuple[PatchCandidate, str]:
+                cand_id = idx + 1
+                async with sem:
+                    cand_tmp = tempfile.mkdtemp(prefix=f"kobits_spec_cand_{cand_id}_")
+                    try:
+                        shutil.copytree(
+                            sandbox_dir,
+                            cand_tmp,
+                            dirs_exist_ok=True,
+                            ignore=shutil.ignore_patterns(".venv", "venv", "node_modules", ".pytest_cache", "__pycache__"),
+                        )
+                        if base_sha != "unknown" and SandboxRollbackManager._is_git_repo(cand_tmp):
+                            SandboxRollbackManager.rollback(cand_tmp, base_sha)
+
+                        cand_repro = (
+                            reproducer_script
+                            if os.path.isabs(reproducer_script)
+                            else os.path.join(cand_tmp, reproducer_script)
+                        )
+                        if repro_content is not None and not os.path.exists(cand_repro):
+                            os.makedirs(os.path.dirname(cand_repro), exist_ok=True)
+                            with open(cand_repro, "w", encoding="utf-8") as rf:
+                                rf.write(repro_content)
+
+                        gen_error = None
+                        try:
+                            if inspect.iscoroutinefunction(generator):
+                                await generator(cand_id, cand_tmp)
+                            else:
+                                generator(cand_id, cand_tmp)
+                        except Exception as e:
+                            gen_error = str(e)
+                            logger.warning(f"Parallel candidate {cand_id} generator error: {gen_error}")
+
+                        cand_sha = SandboxRollbackManager.create_checkpoint(
+                            cand_tmp, step_name=f"candidate_{cand_id}_patch"
+                        ) or base_sha
+
+                        if gen_error:
+                            return PatchCandidate(
+                                candidate_id=cand_id,
+                                checkpoint_sha=cand_sha,
+                                reproducer_passed=False,
+                                regression_passed=False,
+                                additions=0,
+                                deletions=0,
+                                total_lines_changed=0,
+                                files_changed=[],
+                                diff_text="",
+                                score=0.0,
+                                status="GENERATION_ERROR",
+                                metadata={"error": gen_error},
+                            ), cand_tmp
+
+                        additions, deletions, files, diff_text = cls.extract_diff_stats(cand_tmp, base_sha)
+                        repro_res = ReproducerEngine.execute_script(
+                            cand_tmp, reproducer_script, timeout=timeout_per_candidate
+                        )
+                        reproducer_passed = (repro_res.exit_code == 0)
+
+                        regression_passed = True
+                        reg_output = ""
+                        if reproducer_passed and regression_cmd:
+                            if isinstance(regression_cmd, list):
+                                cmd = regression_cmd
+                            else:
+                                try:
+                                    cmd = shlex.split(regression_cmd, posix=(os.name != "nt"))
+                                except Exception:
+                                    cmd = regression_cmd.split()
+                            try:
+                                env = os.environ.copy()
+                                existing_py = env.get("PYTHONPATH", "")
+                                env["PYTHONPATH"] = f"{cand_tmp}{os.pathsep}{existing_py}" if existing_py else cand_tmp
+                                res_reg = subprocess.run(
+                                    cmd,
+                                    cwd=cand_tmp,
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=timeout_per_candidate * 2,
+                                    env=env,
+                                )
+                                regression_passed = (res_reg.returncode == 0)
+                                reg_output = res_reg.stdout + "\n" + res_reg.stderr
+                            except Exception as reg_err:
+                                regression_passed = False
+                                reg_output = str(reg_err)
+
+                        if not reproducer_passed:
+                            status = "REPRODUCER_FAILED"
+                        elif not regression_passed:
+                            status = "REGRESSION_FAILED"
+                        else:
+                            status = "PASSED"
+
+                        score = cls.score_candidate(
+                            reproducer_passed=reproducer_passed,
+                            regression_passed=regression_passed,
+                            additions=additions,
+                            deletions=deletions,
+                            files_changed_count=len(files),
+                            duration_seconds=repro_res.duration_seconds,
+                        )
+
+                        cand = PatchCandidate(
+                            candidate_id=cand_id,
+                            checkpoint_sha=cand_sha,
+                            reproducer_passed=reproducer_passed,
+                            regression_passed=regression_passed,
+                            additions=additions,
+                            deletions=deletions,
+                            total_lines_changed=additions + deletions,
+                            files_changed=files,
+                            diff_text=diff_text,
+                            score=score,
+                            status=status,
+                            reproducer_output=repro_res.stdout + "\n" + repro_res.stderr,
+                            regression_output=reg_output,
+                            metadata={"duration_seconds": repro_res.duration_seconds, "parallel": True},
+                        )
+                        return cand, cand_tmp
+                    except Exception as e:
+                        logger.error(f"Candidate {cand_id} unexpected error: {e}")
+                        return PatchCandidate(
+                            candidate_id=cand_id,
+                            checkpoint_sha=base_sha,
+                            reproducer_passed=False,
+                            regression_passed=False,
+                            additions=0,
+                            deletions=0,
+                            total_lines_changed=0,
+                            files_changed=[],
+                            diff_text="",
+                            score=0.0,
+                            status="GENERATION_ERROR",
+                            metadata={"error": str(e)},
+                        ), cand_tmp
+
+            parallel_outcomes = await asyncio.gather(
+                *[_evaluate_parallel_candidate(idx, gen) for idx, gen in enumerate(candidate_generators)]
+            )
+            candidates = [co[0] for co in parallel_outcomes]
+            tmp_map = {co[0].candidate_id: co[1] for co in parallel_outcomes}
+
+            passing_candidates = [c for c in candidates if c.status == "PASSED"]
+            if passing_candidates:
+                winner = max(passing_candidates, key=lambda c: c.score)
+                win_tmp = tmp_map.get(winner.candidate_id)
+                if win_tmp and os.path.isdir(win_tmp):
+                    for f_rel in winner.files_changed:
+                        src_f = os.path.join(win_tmp, f_rel)
+                        dst_f = os.path.join(sandbox_dir, f_rel)
+                        if os.path.isfile(src_f):
+                            os.makedirs(os.path.dirname(dst_f), exist_ok=True)
+                            shutil.copy2(src_f, dst_f)
+                    win_sha = SandboxRollbackManager.create_checkpoint(
+                        sandbox_dir, step_name=f"parallel_winner_candidate_{winner.candidate_id}"
+                    ) or winner.checkpoint_sha
+                    winner.checkpoint_sha = win_sha
+
+                for t_dir in tmp_map.values():
+                    shutil.rmtree(t_dir, ignore_errors=True)
+
+                return BestOfNResult(
+                    candidates=candidates,
+                    selected_candidate=winner,
+                    base_checkpoint_sha=base_sha,
+                    success=True,
+                    selection_reason=(
+                        f"Parallel speculative candidate {winner.candidate_id} selected: passed reproducer and regression tests with "
+                        f"cleanest diff ({winner.total_lines_changed} lines changed across {len(winner.files_changed)} files, Score: {winner.score})."
+                    ),
+                )
+            else:
+                for t_dir in tmp_map.values():
+                    shutil.rmtree(t_dir, ignore_errors=True)
+                if base_sha != "unknown":
+                    SandboxRollbackManager.rollback(sandbox_dir, base_sha)
+                return BestOfNResult(
+                    candidates=candidates,
+                    selected_candidate=None,
+                    base_checkpoint_sha=base_sha,
+                    success=False,
+                    selection_reason="All parallel candidate patches failed verification. Workspace rolled back to base.",
+                )
+
+        candidates: list[PatchCandidate] = []
 
         for idx, generator in enumerate(candidate_generators):
             cand_id = idx + 1

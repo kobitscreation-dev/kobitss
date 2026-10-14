@@ -558,6 +558,85 @@ async def list_mission_tasks(
     ]
 
 
+@router.post("/epic", status_code=201)
+async def ingest_epic_endpoint(
+    request: Request,
+    payload: Dict[str, Any],
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Proactive Jira / Linear / PRD Epic Ingestion Endpoint (Kyros Parity).
+    Ingests complex roadmap documents or epic payloads, extracts user stories,
+    acceptance criteria, and dependent tasks, and compiles them into a topologically
+    ordered Milestone DAG.
+    """
+    from backend.services.epic_ingestion import EpicIngestionEngine
+    dag = EpicIngestionEngine.ingest_payload(payload)
+
+    membership = await get_user_default_org(db, current_user.id)
+    project_ref = payload.get("project_id") or payload.get("project") or "default"
+    project = await _resolve_owned_project(db, project_ref, membership.organization_id, current_user.id)
+
+    mission = None
+    if payload.get("create_mission", True) is not False:
+        # Provision parent mission for this ingested epic
+        mission = Mission(
+            organization_id=membership.organization_id,
+            project_id=project.id,
+            title=dag.epic_title[:80],
+            objective=dag.epic_summary[:200] or dag.epic_title,
+            description=dag.epic_summary,
+            status=MissionStatus.ACTIVE,
+            approval_status=ApprovalStatus.APPROVED,
+            requires_approval=False,
+            created_by=current_user.id,
+        )
+        db.add(mission)
+        await db.commit()
+        await db.refresh(mission)
+
+        # Decompose into Tasks
+        for m_node in dag.milestones:
+            for task_node in m_node.tasks:
+                task = Task(
+                    project_id=project.id,
+                    mission_id=mission.id,
+                    title=task_node.title,
+                    description=task_node.description,
+                    status=TaskStatus.PENDING,
+                    created_by=current_user.id,
+                    dependencies_json=json.dumps(task_node.dependencies),
+                    expected_output=json.dumps(task_node.acceptance_criteria),
+                )
+                db.add(task)
+        await db.commit()
+
+        if payload.get("auto_execute", False):
+            from backend.services.durable_queue import DurableQueue
+            await DurableQueue.enqueue(
+                task_type="EXECUTE_MISSION",
+                payload={"mission_id": mission.id, "org_id": membership.organization_id, "user_id": current_user.id},
+                queue_name="missions",
+                priority=10,
+                job_id=f"job_mission_{mission.id}",
+            )
+
+    return {
+        "status": "INGESTED",
+        "mission_id": mission.id if mission else None,
+        "project_id": project.id,
+        "epic_title": dag.epic_title,
+        "epic_summary": dag.epic_summary,
+        "source_type": dag.source_type,
+        "milestones_count": len(dag.milestones),
+        "milestones": [m.to_dict() for m in dag.milestones],
+        "topological_order": dag.topological_order,
+        "security_requirements": dag.security_requirements,
+        "architecture_notes": dag.architecture_notes,
+    }
+
+
 @router.post("/projects/{project_id}/missions", status_code=201)
 async def create_mission(
     project_id: str,

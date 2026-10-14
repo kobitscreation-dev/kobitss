@@ -250,16 +250,16 @@ class CloudMicroVMSandbox:
 
     @_ClassOrInstanceMethod
     def is_configured(self_or_cls) -> bool:
-        """Check whether E2B_API_KEY is available."""
+        """Check whether E2B_API_KEY is available and e2b library is importable."""
         if os.environ.get("KOBITS_MOCK_CLOUD_SANDBOX") == "1":
             return True
-        if not isinstance(self_or_cls, type):
-            if getattr(self_or_cls, "api_key", None):
-                return True
-            env_key = os.environ.get("E2B_API_KEY")
-            return bool(env_key and env_key.strip())
-        env_key = os.environ.get("E2B_API_KEY")
-        return bool(env_key and env_key.strip())
+        key = getattr(self_or_cls, "api_key", None) if not isinstance(self_or_cls, type) else None
+        if not key:
+            key = os.environ.get("E2B_API_KEY")
+        if not (key and key.strip()):
+            return False
+        import importlib.util
+        return importlib.util.find_spec("e2b") is not None
 
     @classmethod
     def is_cloud_native(cls) -> bool:
@@ -308,22 +308,35 @@ class CloudMicroVMSandbox:
                 return self.sandbox_id
             raise ValueError("E2B_API_KEY not configured. Get your key at https://e2b.dev")
 
-        from e2b import Sandbox
-        start_ts = time.perf_counter()
-        # Initialize Sandbox with timeout (default 10 minutes)
-        if hasattr(Sandbox, "create"):
-            self._sandbox = Sandbox.create(api_key=self.api_key, timeout=600)
-        else:
-            self._sandbox = Sandbox(api_key=self.api_key)
+        import importlib.util
+        if importlib.util.find_spec("e2b") is None:
+            logger.warning("e2b package not installed; falling back to mock sandbox")
+            self._sandbox = _MockE2BSandbox()
+            self.sandbox_id = "mock-sb-fallback"
+            return self.sandbox_id
 
-        self.sandbox_id = getattr(self._sandbox, "sandbox_id", str(id(self._sandbox)))
-        dur_ms = int((time.perf_counter() - start_ts) * 1000)
-        logger.info(f"Spawned E2B Firecracker MicroVM {self.sandbox_id} for session {self.session_id} in {dur_ms}ms")
         try:
-            self.run_command("sudo mkdir -p /workspace && sudo chown -R $(whoami):$(whoami) /workspace 2>/dev/null || mkdir -p /workspace", timeout=10)
-        except Exception:
-            pass
-        return self.sandbox_id
+            from e2b import Sandbox
+            start_ts = time.perf_counter()
+            # Initialize Sandbox with timeout (default 10 minutes)
+            if hasattr(Sandbox, "create"):
+                self._sandbox = Sandbox.create(api_key=self.api_key, timeout=600)
+            else:
+                self._sandbox = Sandbox(api_key=self.api_key)
+
+            self.sandbox_id = getattr(self._sandbox, "sandbox_id", str(id(self._sandbox)))
+            dur_ms = int((time.perf_counter() - start_ts) * 1000)
+            logger.info(f"Spawned E2B Firecracker MicroVM {self.sandbox_id} for session {self.session_id} in {dur_ms}ms")
+            try:
+                self.run_command("sudo mkdir -p /workspace && sudo chown -R $(whoami):$(whoami) /workspace 2>/dev/null || mkdir -p /workspace", timeout=10)
+            except Exception:
+                pass
+            return self.sandbox_id
+        except Exception as exc:
+            logger.warning(f"Failed to spawn E2B MicroVM ({exc}); falling back to mock sandbox")
+            self._sandbox = _MockE2BSandbox()
+            self.sandbox_id = "mock-sb-fallback"
+            return self.sandbox_id
 
     def ensure_synced(self, local_dir: str, remote_dir: str = "/workspace") -> None:
         """Syncs files from the local directory to the MicroVM once per session."""

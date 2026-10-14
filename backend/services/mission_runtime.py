@@ -390,32 +390,38 @@ class MissionRuntime:
                 from backend.services.environment_bootstrapper import EnvironmentBootstrapper
                 from backend.services.cloud_sandbox import CloudMicroVMSandbox
                 driver = EnvironmentBootstrapper.detect_isolation_driver()
+                cloud_executed = False
                 if (driver == "cloud_microvm" or CloudMicroVMSandbox.is_cloud_native()) and CloudMicroVMSandbox.is_configured():
-                    sb_session_id = os.path.basename(sandbox_dir).replace("sandbox-", "")
-                    cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=sb_session_id)
-                    cloud_sb.ensure_synced(local_dir=sandbox_dir, remote_dir="/workspace")
-                    pt_cmd = f"pytest -q {' '.join(py_test_files)}"
-                    pt_res = cloud_sb.run_command(pt_cmd, timeout=30, workdir="/workspace")
-                    pytest_summary = {
-                        "ran": len(py_test_files),
-                        "passed": pt_res.get("exit_code") == 0,
-                        "output": (pt_res.get("stdout") or pt_res.get("stderr") or "").strip()[-400:],
-                        "driver": "cloud_microvm",
-                        "vm_id": pt_res.get("vm_id"),
-                    }
-                    if pt_res.get("exit_code") != 0 and os.path.isdir(sandbox_dir):
-                        env = EnvironmentBootstrapper.build_isolated_env(sandbox_dir)
-                        local_pt = subprocess.run(
-                            [sys.executable, "-m", "pytest", "-q", *py_test_files],
-                            cwd=sandbox_dir, capture_output=True, text=True, timeout=12, env=env
-                        )
-                        if local_pt.returncode == 0:
-                            pytest_summary["passed"] = True
-                            pytest_summary["output"] = (local_pt.stdout or local_pt.stderr or "").strip()[-400:]
-                            pt_res["exit_code"] = 0
-                    if pt_res.get("exit_code") != 0:
-                        syntax_errors.append(f"pytest failed on {', '.join(py_test_files)}: {pytest_summary['output'][:160]}")
-                else:
+                    try:
+                        sb_session_id = os.path.basename(sandbox_dir).replace("sandbox-", "")
+                        cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=sb_session_id)
+                        cloud_sb.ensure_synced(local_dir=sandbox_dir, remote_dir="/workspace")
+                        pt_cmd = f"pytest -q {' '.join(py_test_files)}"
+                        pt_res = cloud_sb.run_command(pt_cmd, timeout=30, workdir="/workspace")
+                        pytest_summary = {
+                            "ran": len(py_test_files),
+                            "passed": pt_res.get("exit_code") == 0,
+                            "output": (pt_res.get("stdout") or pt_res.get("stderr") or "").strip()[-400:],
+                            "driver": "cloud_microvm",
+                            "vm_id": pt_res.get("vm_id"),
+                        }
+                        cloud_executed = True
+                        if pt_res.get("exit_code") != 0 and os.path.isdir(sandbox_dir):
+                            env = EnvironmentBootstrapper.build_isolated_env(sandbox_dir)
+                            local_pt = subprocess.run(
+                                [sys.executable, "-m", "pytest", "-q", *py_test_files],
+                                cwd=sandbox_dir, capture_output=True, text=True, timeout=12, env=env
+                            )
+                            if local_pt.returncode == 0:
+                                pytest_summary["passed"] = True
+                                pytest_summary["output"] = (local_pt.stdout or local_pt.stderr or "").strip()[-400:]
+                                pt_res["exit_code"] = 0
+                        if pt_res.get("exit_code") != 0:
+                            syntax_errors.append(f"pytest failed on {', '.join(py_test_files)}: {pytest_summary['output'][:160]}")
+                    except Exception as cloud_err:
+                        logger.warning(f"Cloud MicroVM pytest failed ({cloud_err}); falling back to local runner")
+                        cloud_executed = False
+                if not cloud_executed:
                     env = EnvironmentBootstrapper.build_isolated_env(sandbox_dir)
                     pt_res = subprocess.run(
                         [sys.executable, "-m", "pytest", "-q", *py_test_files],
@@ -428,8 +434,8 @@ class MissionRuntime:
                     }
                     if pt_res.returncode != 0:
                         syntax_errors.append(f"pytest failed on {', '.join(py_test_files)}: {pytest_summary['output'][:160]}")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Pytest verification error: {e}")
 
         # Stage 3B: Automated Pre-Review JS/TS Test Gate on changed *.test.{js,ts} / *.spec.{js,ts} files
         js_ts_test_files = [
@@ -463,58 +469,43 @@ class MissionRuntime:
                 )
                 import urllib.parse
                 shim_data_url = "data:text/javascript," + urllib.parse.quote(shim_js)
+                cloud_executed = False
                 if (driver == "cloud_microvm" or CloudMicroVMSandbox.is_cloud_native()) and CloudMicroVMSandbox.is_configured():
-                    sb_session_id = os.path.basename(sandbox_dir).replace("sandbox-", "")
-                    cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=sb_session_id)
-                    cloud_sb.ensure_synced(local_dir=sandbox_dir, remote_dir="/workspace")
-                    nt_cmd = f"node --no-warnings '--import={shim_data_url}' --test {' '.join(js_ts_test_files)}"
-                    nt_res = cloud_sb.run_command(nt_cmd, timeout=30, workdir="/workspace")
-                    node_test_summary = {
-                        "ran": len(js_ts_test_files),
-                        "passed": nt_res.get("exit_code") == 0,
-                        "output": (nt_res.get("stdout") or nt_res.get("stderr") or "").strip()[-400:],
-                        "driver": "cloud_microvm",
-                        "vm_id": nt_res.get("vm_id"),
-                    }
-                    if nt_res.get("exit_code") != 0 and os.path.isdir(sandbox_dir):
-                        node_bin = shutil.which("node")
-                        if node_bin:
-                            local_res = subprocess.run(
-                                [node_bin, "--no-warnings", f"--import={shim_data_url}", "--test", *js_ts_test_files],
-                                cwd=sandbox_dir, capture_output=True, text=True, timeout=15
+                    try:
+                        sb_session_id = os.path.basename(sandbox_dir).replace("sandbox-", "")
+                        cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=sb_session_id)
+                        cloud_sb.ensure_synced(local_dir=sandbox_dir, remote_dir="/workspace")
+                        nt_cmd = f"node --no-warnings '--import={shim_data_url}' --test {' '.join(js_ts_test_files)}"
+                        nt_res = cloud_sb.run_command(nt_cmd, timeout=30, workdir="/workspace")
+                        node_test_summary = {
+                            "ran": len(js_ts_test_files),
+                            "passed": nt_res.get("exit_code") == 0,
+                            "output": (nt_res.get("stdout") or nt_res.get("stderr") or "").strip()[-400:],
+                            "driver": "cloud_microvm",
+                            "vm_id": nt_res.get("vm_id"),
+                        }
+                        cloud_executed = True
+                        if nt_res.get("exit_code") != 0 and os.path.isdir(sandbox_dir):
+                            node_bin = shutil.which("node")
+                            if node_bin:
+                                local_res = subprocess.run(
+                                    [node_bin, "--no-warnings", f"--import={shim_data_url}", "--test", *js_ts_test_files],
+                                    cwd=sandbox_dir, capture_output=True, text=True, timeout=15
+                                )
+                                if local_res.returncode == 0:
+                                    node_test_summary["passed"] = True
+                                    node_test_summary["output"] = (local_res.stdout or local_res.stderr or "").strip()[-400:]
+                                    nt_res["exit_code"] = 0
+                        if nt_res.get("exit_code") != 0:
+                            syntax_errors.append(
+                                f"node --test failed on {', '.join(js_ts_test_files)}: {node_test_summary['output'][:160]}"
                             )
-                            if local_res.returncode == 0:
-                                node_test_summary["passed"] = True
-                                node_test_summary["output"] = (local_res.stdout or local_res.stderr or "").strip()[-400:]
-                                nt_res["exit_code"] = 0
-                    if nt_res.get("exit_code") != 0:
-                        syntax_errors.append(
-                            f"node --test failed on {', '.join(js_ts_test_files)}: {node_test_summary['output'][:160]}"
-                        )
-                else:
+                    except Exception as cloud_err:
+                        logger.warning(f"Cloud MicroVM node test failed ({cloud_err}); falling back to local runner")
+                        cloud_executed = False
+                if not cloud_executed:
                     node_bin = shutil.which("node")
                     if node_bin:
-                        # Inject a lightweight Jest/Vitest compatibility shim via Data URL `--import` so both
-                        # standard `node:test` and `describe/it/expect` unit tests execute natively in Node!
-                        shim_js = (
-                            "import * as nt from 'node:test';"
-                            "import assert from 'node:assert';"
-                            "globalThis.describe ??= nt.describe;"
-                            "globalThis.it ??= nt.it;"
-                            "globalThis.test ??= nt.test;"
-                            "globalThis.beforeEach ??= nt.beforeEach;"
-                            "globalThis.afterEach ??= nt.afterEach;"
-                            "globalThis.expect ??= (actual) => ({"
-                            "  toBe: (exp) => assert.strictEqual(actual, exp),"
-                            "  toEqual: (exp) => assert.deepStrictEqual(actual, exp),"
-                            "  toBeTruthy: () => assert.ok(actual),"
-                            "  toBeFalsy: () => assert.ok(!actual),"
-                            "  toContain: (item) => assert.ok(actual && actual.includes(item)),"
-                            "  toThrow: () => assert.throws(actual),"
-                            "});"
-                        )
-                        import urllib.parse
-                        shim_data_url = "data:text/javascript," + urllib.parse.quote(shim_js)
                         nt_res = subprocess.run(
                             [node_bin, "--no-warnings", f"--import={shim_data_url}", "--test", *js_ts_test_files],
                             cwd=sandbox_dir,
@@ -531,8 +522,8 @@ class MissionRuntime:
                             syntax_errors.append(
                                 f"node --test failed on {', '.join(js_ts_test_files)}: {node_test_summary['output'][:160]}"
                             )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Node test verification error: {e}")
 
         return {
             "status": "PASSED" if not syntax_errors else "FAILED",

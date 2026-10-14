@@ -1426,4 +1426,154 @@ ToolRegistry.register(ToolDefinition(
 ))
 
 
+# ── Kyros Parity: Headless Browser Automation & Multi-Modal Visual QA Tools ──
+
+_active_browser_instances: Dict[str, Any] = {}
+
+async def _get_or_create_browser(context: dict = None):
+    session_id = (context or {}).get("session_id") or "global_browser"
+    if session_id in _active_browser_instances:
+        return _active_browser_instances[session_id]
+    from backend.services.browser_engine import HeadlessBrowserEngine
+    engine = HeadlessBrowserEngine()
+    await engine.start()
+    _active_browser_instances[session_id] = engine
+    return engine
+
+
+async def handle_browser_navigate(url: str, wait_until: str = "networkidle", context: dict = None) -> dict:
+    browser = await _get_or_create_browser(context)
+    ctx = await browser.navigate(url, wait_until=wait_until)
+    return ctx.to_dict()
+
+
+async def handle_browser_click(selector: str, context: dict = None) -> dict:
+    browser = await _get_or_create_browser(context)
+    return await browser.click(selector)
+
+
+async def handle_browser_type(selector: str, text: str = "", value: str = "", context: dict = None) -> dict:
+    browser = await _get_or_create_browser(context)
+    return await browser.type(selector, text or value)
+
+
+async def handle_browser_screenshot(full_page: bool = True, context: dict = None) -> dict:
+    browser = await _get_or_create_browser(context)
+    b64 = await browser.screenshot_base64(full_page=full_page)
+    return {"format": "png", "data_base64": b64, "length": len(b64)}
+
+
+async def handle_browser_console_logs(context: dict = None) -> dict:
+    browser = await _get_or_create_browser(context)
+    logs = await browser.get_console_logs()
+    return {"logs": logs, "count": len(logs)}
+
+
+async def handle_browser_evaluate(script: str, context: dict = None) -> dict:
+    browser = await _get_or_create_browser(context)
+    res = await browser.evaluate(script)
+    return {"result": res}
+
+
+async def handle_visual_qa_inspect(url: str, viewports: list = None, context: dict = None) -> dict:
+    from backend.services.visual_qa import VisualQAManager
+    rep = await VisualQAManager.inspect_url(url=url, viewports=viewports)
+    return rep.to_dict()
+
+
+ToolRegistry.register(ToolDefinition(
+    name="browser.navigate",
+    description="Navigate headless Chromium browser to a web URL, returning page title, status, and DOM context.",
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "url": {"type": "string", "description": "Target HTTP/HTTPS or local file URL to load."},
+            "wait_until": {"type": "string", "description": "When to consider navigation succeeded: networkidle, load, domcontentloaded."}
+        },
+        "required": ["url"]
+    },
+    handler=handle_browser_navigate
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="browser.click",
+    description="Clicks an interactive DOM element matching the CSS or XPath selector in headless browser.",
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "selector": {"type": "string", "description": "CSS or XPath selector of the element to click."}
+        },
+        "required": ["selector"]
+    },
+    handler=handle_browser_click
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="browser.type",
+    description="Types text into an input field or textarea matching the selector in headless browser.",
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "selector": {"type": "string", "description": "Target CSS selector."},
+            "text": {"type": "string", "description": "Text to enter into the input."}
+        },
+        "required": ["selector", "text"]
+    },
+    handler=handle_browser_type
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="browser.screenshot",
+    description="Captures a PNG screenshot of the current page in headless Chromium.",
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "full_page": {"type": "boolean", "description": "Whether to capture the entire scrollable page."}
+        }
+    },
+    handler=handle_browser_screenshot
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="browser.console_logs",
+    description="Retrieves browser console logs, warnings, and uncaught JavaScript runtime exceptions.",
+    risk_level=RiskLevel.LOW,
+    input_schema={"type": "object", "properties": {}},
+    handler=handle_browser_console_logs
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="browser.evaluate",
+    description="Executes arbitrary JavaScript snippet inside the active browser page and returns evaluation result.",
+    risk_level=RiskLevel.MEDIUM,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "script": {"type": "string", "description": "JavaScript code snippet to execute."}
+        },
+        "required": ["script"]
+    },
+    handler=handle_browser_evaluate
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="visual_qa.inspect",
+    description="Performs multi-modal visual inspection across Desktop, Tablet, and Mobile viewports for layout overlap, contrast, and broken assets.",
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "url": {"type": "string", "description": "Target preview URL to inspect visually."},
+            "viewports": {"type": "array", "items": {"type": "string"}, "description": "List of viewports: desktop, tablet, mobile."}
+        },
+        "required": ["url"]
+    },
+    handler=handle_visual_qa_inspect
+))
+
+
 

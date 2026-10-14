@@ -4,8 +4,9 @@ import mimetypes
 import logging
 import json
 import httpx
+import asyncio
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -311,9 +312,71 @@ async def configure_preview_port(
     }
 
 
-@router.get("/{mission_id}")
-@router.get("/{mission_id}/")
-@router.get("/{mission_id}/{file_path:path}")
+ALL_PREVIEW_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"]
+
+
+@router.websocket("/{mission_id}/__ws_proxy__")
+async def websocket_preview_proxy(websocket: WebSocket, mission_id: str):
+    """
+    WebSocket Dev Server Tunnel for Hot Module Replacement (HMR, Vite, Next.js).
+    Proxies live WebSocket traffic directly between browser client and sandbox dev server port.
+    """
+    await websocket.accept()
+    proxy_port = None
+    try:
+        from backend.models.mission import Mission
+        from backend.core.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
+            mission = await db.get(Mission, mission_id)
+            if mission:
+                sdir = find_sandbox_directory(mission)
+                if sdir:
+                    cfg = get_preview_config(sdir)
+                    proxy_port = cfg.get("port")
+    except Exception as e:
+        logger.debug(f"Error resolving preview config for websocket proxy: {e}")
+
+    if not proxy_port:
+        try:
+            await websocket.send_json({"type": "kobits_hmr_status", "status": "dev_server_standby", "mission_id": mission_id})
+            while True:
+                msg = await websocket.receive_text()
+                await websocket.send_text(f"kobits_ack: {msg[:60]}")
+        except (WebSocketDisconnect, Exception):
+            pass
+        return
+
+    try:
+        import websockets
+        ws_target = f"ws://127.0.0.1:{proxy_port}/"
+        async with websockets.connect(ws_target) as target_ws:
+            async def _client_to_target():
+                try:
+                    while True:
+                        data = await websocket.receive_text()
+                        await target_ws.send(data)
+                except Exception:
+                    pass
+
+            async def _target_to_client():
+                try:
+                    async for msg in target_ws:
+                        await websocket.send_text(msg)
+                except Exception:
+                    pass
+
+            await asyncio.gather(_client_to_target(), _target_to_client())
+    except Exception as exc:
+        logger.debug(f"HMR WebSocket tunnel closed: {exc}")
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
+
+@router.api_route("/{mission_id}", methods=ALL_PREVIEW_METHODS)
+@router.api_route("/{mission_id}/", methods=ALL_PREVIEW_METHODS)
+@router.api_route("/{mission_id}/{file_path:path}", methods=ALL_PREVIEW_METHODS)
 async def serve_preview_asset(
     mission_id: str,
     file_path: str = "",
@@ -322,7 +385,7 @@ async def serve_preview_asset(
 ):
     """
     Serve an ephemeral web preview for the given mission.
-    1. Proxies to local dev server (e.g. Vite/Next.js/Webpack) if port is active.
+    1. Proxies to local dev server (e.g. Vite/Next.js/Webpack) with full HTTP method & body forwarding.
     2. Serves static files directly from the sandbox directory with correct MIME types.
     3. Provides Single-Page Application (SPA) index.html fallback for client-side routing.
     """
@@ -355,7 +418,7 @@ async def serve_preview_asset(
             return Response(content=content, media_type=mime or "text/plain")
 
     # Redirect root requests without trailing slash to ensure relative browser assets resolve correctly
-    if request is not None and not file_path and not request.url.path.endswith("/"):
+    if request is not None and not file_path and not request.url.path.endswith("/") and request.method == "GET":
         from fastapi.responses import RedirectResponse
         return RedirectResponse(url=f"{request.url.path}/", status_code=307)
 
@@ -373,15 +436,38 @@ async def serve_preview_asset(
     if proxy_port and preview_cfg.get("active", True):
         proxy_url = f"http://127.0.0.1:{proxy_port}/{clean_path}"
         try:
-            async with httpx.AsyncClient(timeout=4.0) as client:
-                query_str = str(request.url.query) if request and request.url.query else ""
-                full_target = f"{proxy_url}?{query_str}" if query_str else proxy_url
-                resp = await client.get(
-                    full_target,
-                    headers={k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")},
-                )
+            req_body = await request.body() if request and request.method not in ("GET", "HEAD") else None
+            query_str = str(request.url.query) if request and request.url.query else ""
+            full_target = f"{proxy_url}?{query_str}" if query_str else proxy_url
+            fwd_headers = {k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")} if request else {}
+
+            async with httpx.AsyncClient(timeout=6.0) as client:
+                req_method = (request.method if request else "GET").upper()
+                if req_method == "GET":
+                    resp = await client.get(full_target, headers=fwd_headers)
+                elif req_method == "POST":
+                    resp = await client.post(full_target, content=req_body, headers=fwd_headers)
+                elif req_method == "PUT":
+                    resp = await client.put(full_target, content=req_body, headers=fwd_headers)
+                elif req_method == "DELETE":
+                    resp = await client.delete(full_target, headers=fwd_headers)
+                elif req_method == "PATCH":
+                    resp = await client.patch(full_target, content=req_body, headers=fwd_headers)
+                elif req_method == "HEAD":
+                    resp = await client.head(full_target, headers=fwd_headers)
+                elif req_method == "OPTIONS":
+                    resp = await client.options(full_target, headers=fwd_headers)
+                else:
+                    resp = await client.request(
+                        method=req_method,
+                        url=full_target,
+                        content=req_body,
+                        headers=fwd_headers,
+                    )
                 headers = {
                     "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "*",
+                    "Access-Control-Allow-Headers": "*",
                     "Cache-Control": "no-cache",
                 }
                 if "content-type" in resp.headers:
