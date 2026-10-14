@@ -213,7 +213,10 @@ async def get_preview_info(
         raise HTTPException(status_code=404, detail="Mission not found")
 
     sandbox_dir = find_sandbox_directory(mission)
-    if not sandbox_dir or not os.path.isdir(sandbox_dir):
+    from backend.services.cloud_sandbox import CloudMicroVMSandbox
+    cloud_sb = CloudMicroVMSandbox._active_sandboxes.get(mission_id)
+
+    if not sandbox_dir and not cloud_sb:
         return {
             "mission_id": mission_id,
             "sandbox_found": False,
@@ -223,40 +226,56 @@ async def get_preview_info(
             "preview_url": f"/api/v1/preview/{mission_id}/",
         }
 
-    preview_cfg = get_preview_config(sandbox_dir)
-    entry_file = find_entry_file(sandbox_dir)
-    entry_rel = os.path.relpath(entry_file, sandbox_dir).replace("\\", "/") if entry_file else None
+    preview_cfg = get_preview_config(sandbox_dir) if sandbox_dir else {}
+    entry_file = find_entry_file(sandbox_dir) if sandbox_dir else None
+    entry_rel = os.path.relpath(entry_file, sandbox_dir).replace("\\", "/") if (entry_file and sandbox_dir) else None
+
+    remote_data = {}
+    if cloud_sb and cloud_sb.sandbox_id:
+        remote_data = {
+            "driver": "cloud_microvm",
+            "vm_id": f"e2b-{cloud_sb.sandbox_id}",
+            "remote_preview_url": cloud_sb.get_preview_url(preview_cfg.get("port") or 3000),
+            "is_cloud": True,
+        }
 
     # Collect up to 50 files for inspector
     files = []
-    try:
-        for root, _, filenames in os.walk(sandbox_dir):
-            if ".git" in root or "node_modules" in root or "__pycache__" in root:
-                continue
-            for fn in filenames:
-                full_p = os.path.join(root, fn)
-                rel_p = os.path.relpath(full_p, sandbox_dir).replace("\\", "/")
-                files.append(rel_p)
+    if sandbox_dir:
+        try:
+            for root, _, filenames in os.walk(sandbox_dir):
+                if ".git" in root or "node_modules" in root or "__pycache__" in root:
+                    continue
+                for fn in filenames:
+                    full_p = os.path.join(root, fn)
+                    rel_p = os.path.relpath(full_p, sandbox_dir).replace("\\", "/")
+                    files.append(rel_p)
+                    if len(files) >= 50:
+                        break
                 if len(files) >= 50:
                     break
-            if len(files) >= 50:
-                break
-    except Exception:
-        pass
+        except Exception:
+            pass
+    elif cloud_sb:
+        try:
+            files = cloud_sb.list_remote_files()[:50]
+        except Exception:
+            files = []
 
     return {
         "mission_id": mission_id,
         "sandbox_found": True,
-        "status": "ready" if entry_file or preview_cfg.get("port") else "waiting_for_assets",
-        "sandbox_dir": sandbox_dir,
-        "entry_point": entry_rel,
+        "status": "ready" if (entry_file or preview_cfg.get("port") or remote_data) else "waiting_for_assets",
+        "sandbox_dir": sandbox_dir or f"/workspace (e2b-{cloud_sb.sandbox_id if cloud_sb else 'cloud'})",
+        "entry_point": entry_rel or "index.html",
         "files_count": len(files),
         "files_sample": files[:20],
-        "preview_url": f"/api/v1/preview/{mission_id}/",
+        "preview_url": remote_data.get("remote_preview_url") or f"/api/v1/preview/{mission_id}/",
         "dev_server": {
-            "active": bool(preview_cfg.get("active")),
-            "port": preview_cfg.get("port"),
+            "active": bool(preview_cfg.get("active") or remote_data),
+            "port": preview_cfg.get("port") or 3000,
         },
+        "cloud_microvm": remote_data or None,
     }
 
 
@@ -312,12 +331,28 @@ async def serve_preview_asset(
         raise HTTPException(status_code=404, detail="Mission not found")
 
     sandbox_dir = find_sandbox_directory(mission)
-    if not sandbox_dir or not os.path.isdir(sandbox_dir):
+    from backend.services.cloud_sandbox import CloudMicroVMSandbox
+    cloud_sb = CloudMicroVMSandbox._active_sandboxes.get(mission_id)
+
+    if not sandbox_dir and not cloud_sb:
         return render_placeholder_html(
             mission_id=mission_id,
             status=str(mission.status.value if hasattr(mission.status, "value") else mission.status),
             phase=str(mission.phase.value if hasattr(mission.phase, "value") else mission.phase),
         )
+
+    # If running in Cloud MicroVM and no local disk sandbox, serve directly from MicroVM
+    if not sandbox_dir and cloud_sb:
+        remote_url = cloud_sb.get_preview_url()
+        if remote_url and remote_url.startswith("http") and not remote_url.startswith("/api/v1/preview"):
+            from fastapi.responses import RedirectResponse
+            target = f"{remote_url.rstrip('/')}/{file_path.lstrip('/')}" if file_path else remote_url
+            return RedirectResponse(url=target, status_code=302)
+        remote_file = f"/workspace/{file_path or 'index.html'}"
+        content = cloud_sb.read_file(remote_file)
+        if content:
+            mime, _ = mimetypes.guess_type(file_path or "index.html")
+            return Response(content=content, media_type=mime or "text/plain")
 
     # Redirect root requests without trailing slash to ensure relative browser assets resolve correctly
     if request is not None and not file_path and not request.url.path.endswith("/"):

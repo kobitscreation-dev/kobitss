@@ -103,6 +103,9 @@ class Settings(BaseSettings):
     E2B_API_KEY: Optional[str] = None
     KOBITS_MICROVM_ENDPOINT: Optional[str] = None
     KOBITS_SANDBOX_DRIVER: str = "auto"  # auto | cloud_microvm | docker | virtual_rootfs_jail
+    KOBITS_EXECUTION_MODE: str = "cloud_native"  # cloud_native | local_dev
+    KOBITS_CLOUD_PREVIEW_BASE_URL: Optional[str] = None
+    KOBITS_DEFAULT_VM_TIMEOUT: int = 900  # 15 minutes
     KOBITS_MAX_FLUID_ITERATIONS: int = 15
 
     # Remote Docker Daemon Configuration (For Docker-in-Cloud execution)

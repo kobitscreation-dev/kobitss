@@ -691,7 +691,7 @@ function renderPreview() {
   return `
     <div class="card" id="mission-preview-card" style="margin-bottom: 24px;">
       <div class="card-head" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--border, #222226); padding: 10px 16px;">
-        <div style="display: flex; align-items: center; gap: 8px; flex: 1; max-width: 650px;">
+        <div style="display: flex; align-items: center; gap: 8px; flex: 1; max-width: 720px;">
           <button class="btn btn-ghost btn-sm" id="btn-preview-refresh" title="Reload Preview" style="padding: 4px 8px; font-size: 13px;">&#8635;</button>
           <div style="display: flex; align-items: center; background: #09090b; border: 1px solid var(--border, #27272a); border-radius: 6px; padding: 3px 10px; flex: 1;">
             <span style="color: #38bdf8; font-size: 11px; margin-right: 6px; user-select: none;">&#128279;</span>
@@ -704,6 +704,7 @@ function renderPreview() {
             />
             <button class="btn btn-ghost btn-sm" id="btn-preview-go" style="padding: 2px 8px; font-size: 11px; margin-left: 4px;">Go</button>
           </div>
+          <div id="preview-cloud-badge"></div>
         </div>
         <div class="row" style="gap: 8px; align-items: center;">
           <div class="btn-group" style="display: inline-flex; border: 1px solid var(--border, #27272a); border-radius: 6px; overflow: hidden;">
@@ -810,6 +811,24 @@ function wirePreview() {
       setTimeout(() => { iframe.src = cur; }, 50);
     }
   });
+
+  // Query remote preview info & cloud microVM telemetry
+  fetch(`/api/v1/preview/${encodeURIComponent(missionId)}/info`)
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.cloud_microvm) {
+        const badge = document.getElementById('preview-cloud-badge');
+        if (badge) {
+          badge.innerHTML = `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;background:rgba(56,189,248,0.12);color:#38bdf8;font-size:11px;font-family:monospace;border:1px solid rgba(56,189,248,0.25);">&#9729; Cloud MicroVM: ${data.cloud_microvm.vm_id}</span>`;
+        }
+        if (data.preview_url && data.preview_url.startsWith('http')) {
+          addressInput.value = data.preview_url;
+          iframe.src = data.preview_url;
+          if (btnNewtab) btnNewtab.href = data.preview_url;
+        }
+      }
+    })
+    .catch(() => {});
 }
 
 function wireTabs() {

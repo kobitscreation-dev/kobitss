@@ -53,6 +53,7 @@ class SandboxSession:
         }
         self.command_history: list[dict] = []
         self.installed_packages: list[str] = []
+        self.remote_preview_url: Optional[str] = None
 
     def to_dict(self):
         return {
@@ -66,6 +67,7 @@ class SandboxSession:
             "created_at": self.created_at.isoformat(),
             "vm_id": self.vm_id,
             "isolation_driver": self.isolation_driver,
+            "remote_preview_url": self.remote_preview_url,
             "resource_limits": self.resource_limits,
             "command_history": self.command_history[-100:],
             "installed_packages": self.installed_packages,
@@ -356,13 +358,28 @@ class SandboxManager:
         from backend.services.environment_bootstrapper import EnvironmentBootstrapper
         EnvironmentBootstrapper.ensure_virtual_rootfs(sandbox_dir)
 
+        cloud_sb = None
+        driver_detected = EnvironmentBootstrapper.detect_isolation_driver()
+        if driver_detected == "cloud_microvm":
+            try:
+                from backend.services.cloud_sandbox import CloudMicroVMSandbox
+                if CloudMicroVMSandbox.is_configured():
+                    cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=session_id)
+            except Exception as e:
+                logger.warning(f"Cloud MicroVM auto-attach deferred: {e}")
+
         session = SandboxSession(
             session_id=session_id,
             project_root=sandbox_dir,
             branch_name=branch_name,
             sandbox_dir=sandbox_dir,
             base_commit_sha=resolved_base_sha,
+            vm_id=f"e2b-{cloud_sb.sandbox_id}" if cloud_sb else None,
+            isolation_driver="cloud_microvm" if cloud_sb else None,
         )
+        if cloud_sb:
+            session.remote_preview_url = cloud_sb.get_preview_url()
+
         cls._sessions[session_id] = session
         cls._persist_session(session)
             

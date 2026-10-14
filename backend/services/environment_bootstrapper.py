@@ -620,7 +620,7 @@ WORKDIR /workspace
         vm_id = f"kobits-vm-{session_id}"
 
         # 0. Cloud MicroVM Execution (E2B Firecracker MicroVM on AWS/GCP)
-        if driver == "cloud_microvm" and os.environ.get("E2B_API_KEY"):
+        if driver == "cloud_microvm" and (os.environ.get("E2B_API_KEY") or os.environ.get("KOBITS_MOCK_CLOUD_SANDBOX") == "1"):
             try:
                 from backend.services.cloud_sandbox import CloudMicroVMSandbox
                 cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=session_id)

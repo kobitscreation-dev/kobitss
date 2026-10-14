@@ -29,6 +29,46 @@ class _ClassOrInstanceMethod:
         return wrapper
 
 
+class _MockE2BCommands:
+    def run(self, cmd: str, timeout: int = 120):
+        class _Result:
+            def __init__(self, cmd):
+                self.cmd = cmd
+                self.stdout = f"Mock cloud execution: {cmd[:60]}"
+                self.stderr = ""
+                self.exit_code = 0
+                self.error = None
+        return _Result(cmd)
+
+
+class _MockE2BFiles:
+    def __init__(self):
+        self._storage: Dict[str, str] = {}
+
+    def write(self, path: str, content: str):
+        self._storage[path] = content
+
+    def read(self, path: str) -> str:
+        return self._storage.get(path, "")
+
+
+class _MockE2BSandbox:
+    def __init__(self):
+        self.sandbox_id = "mock-sb-01"
+        self.commands = _MockE2BCommands()
+        self.files = _MockE2BFiles()
+        self._running = True
+
+    def is_running(self) -> bool:
+        return self._running
+
+    def get_host(self, port: int) -> str:
+        return f"{port}-{self.sandbox_id}.e2b.dev"
+
+    def kill(self):
+        self._running = False
+
+
 class CloudMicroVMSandbox:
     """
     E2B Firecracker MicroVM Sandbox Manager.
@@ -48,7 +88,7 @@ class CloudMicroVMSandbox:
     def is_configured(self_or_cls) -> bool:
         """Check whether E2B_API_KEY is available."""
         api_key = getattr(self_or_cls, "api_key", None)
-        return bool(api_key or os.environ.get("E2B_API_KEY"))
+        return bool(api_key or os.environ.get("E2B_API_KEY") or os.environ.get("KOBITS_MOCK_CLOUD_SANDBOX") == "1")
 
     @classmethod
     def get_or_create(cls, session_id: str, api_key: Optional[str] = None) -> "CloudMicroVMSandbox":
@@ -84,6 +124,10 @@ class CloudMicroVMSandbox:
     def start(self) -> str:
         """Spawns a fresh Firecracker Linux MicroVM in the E2B cloud."""
         if not self.api_key:
+            if os.environ.get("KOBITS_MOCK_CLOUD_SANDBOX") == "1":
+                self._sandbox = _MockE2BSandbox()
+                self.sandbox_id = "mock-sb-01"
+                return self.sandbox_id
             raise ValueError("E2B_API_KEY not configured. Get your key at https://e2b.dev")
 
         from e2b import Sandbox
@@ -208,6 +252,117 @@ class CloudMicroVMSandbox:
                 "duration_ms": dur_ms,
                 "isolated": True,
             }
+
+    def clone_repo(
+        self,
+        repo_url: str,
+        branch: Optional[str] = None,
+        auth_token: Optional[str] = None,
+        workdir: str = "/workspace",
+    ) -> Dict[str, Any]:
+        """
+        Directly clones a git repository into the remote Linux MicroVM.
+        Zero files touch the host or local filesystem.
+        """
+        if not self._sandbox:
+            self.start()
+
+        auth_url = repo_url
+        if auth_token and "github.com" in repo_url:
+            if "https://" in repo_url:
+                auth_url = repo_url.replace("https://", f"https://x-access-token:{auth_token}@")
+
+        branch_flag = f"--branch {branch}" if branch else ""
+        cmd = (
+            f"mkdir -p {workdir} && "
+            "git config --global user.name 'Kobits Autonomous Agent' && "
+            "git config --global user.email 'agent@kobits.ai' && "
+            f"git clone --depth 50 {branch_flag} '{auth_url}' {workdir} || "
+            f"(cd {workdir} && git status)"
+        )
+        return self.run_command(cmd, timeout=180, workdir=workdir)
+
+    def start_dev_server(
+        self,
+        command: str = "npm run dev",
+        port: int = 3000,
+        workdir: str = "/workspace",
+    ) -> Dict[str, Any]:
+        """
+        Launches an ephemeral web development server inside the remote MicroVM
+        and exposes its port for the live web preview.
+        """
+        if not self._sandbox:
+            self.start()
+
+        bg_cmd = f"cd {workdir} && nohup {command} > /tmp/dev_server.log 2>&1 & echo $!"
+        res = self.run_command(bg_cmd, timeout=30, workdir=workdir)
+        pid = (res.get("stdout") or "").strip()
+
+        preview_url = self.get_preview_url(port=port)
+        return {
+            "status": "RUNNING",
+            "pid": pid,
+            "port": port,
+            "preview_url": preview_url,
+            "driver": "cloud_microvm",
+            "vm_id": f"e2b-{self.sandbox_id}",
+        }
+
+    def get_preview_url(self, port: int = 3000) -> str:
+        """Computes the live interactive preview URL for a given port."""
+        if self._sandbox and hasattr(self._sandbox, "get_host"):
+            try:
+                host = self._sandbox.get_host(port)
+                return f"https://{host}"
+            except Exception:
+                pass
+
+        preview_base = os.environ.get("KOBITS_CLOUD_PREVIEW_BASE_URL")
+        if preview_base:
+            return f"{preview_base.rstrip('/')}/preview/{self.session_id}/"
+
+        return f"/api/v1/preview/{self.session_id}/"
+
+    def list_remote_files(self, workdir: str = "/workspace", max_files: int = 500) -> List[str]:
+        """Returns the remote repository file tree directly from the MicroVM."""
+        cmd = f"find {workdir} -maxdepth 5 -not -path '*/.*' -not -path '*/node_modules*' -not -path '*/venv*' | head -n {max_files}"
+        res = self.run_command(cmd, timeout=20, workdir=workdir)
+        stdout = res.get("stdout", "")
+        lines = [line.strip() for line in stdout.splitlines() if line.strip()]
+        prefix = workdir.rstrip("/") + "/"
+        return [l[len(prefix):] if l.startswith(prefix) else l for l in lines]
+
+    def search_remote_code(self, query: str, workdir: str = "/workspace") -> Dict[str, Any]:
+        """Executes full-text code search directly inside the remote MicroVM."""
+        safe_q = query.replace("'", "'\\''")
+        cmd = f"grep -rnI --exclude-dir='.git' --exclude-dir='node_modules' --exclude-dir='venv' --exclude-dir='__pycache__' '{safe_q}' {workdir} | head -n 100"
+        return self.run_command(cmd, timeout=30, workdir=workdir)
+
+    def git_commit_and_push(
+        self,
+        branch: str,
+        message: str,
+        repo_url: Optional[str] = None,
+        auth_token: Optional[str] = None,
+        workdir: str = "/workspace",
+    ) -> Dict[str, Any]:
+        """Commits changes and pushes directly from the remote MicroVM back to GitHub."""
+        safe_msg = message.replace("'", "'\\''")
+        set_remote_cmd = ""
+        if repo_url and auth_token and "github.com" in repo_url:
+            authed_url = repo_url.replace("https://", f"https://x-access-token:{auth_token}@")
+            set_remote_cmd = f"git remote set-url origin '{authed_url}' && "
+
+        cmd = (
+            f"cd {workdir} && "
+            f"git checkout -B {branch} && "
+            "git add -A && "
+            f"git commit -m '{safe_msg}' && "
+            f"{set_remote_cmd}"
+            f"git push -u origin {branch} --force"
+        )
+        return self.run_command(cmd, timeout=120, workdir=workdir)
 
     def close(self) -> None:
         """Kills and destroys the ephemeral cloud microVM."""
