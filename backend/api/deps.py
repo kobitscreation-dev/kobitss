@@ -12,13 +12,34 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login", auto_error=Fa
 
 
 async def get_current_user(token: str = None, db: AsyncSession = Depends(get_db)) -> User:
-    """Resolve the current user from a JWT token.
+    """Resolve the current user from an API Key, JWT token, or dev bypass.
     
     Token sources (checked in order):
-    1. KOBITS_DEV_MODE bypass
-    2. Explicitly passed token (from cookie or header)
-    3. OAuth2 Bearer header (auto-injected by FastAPI)
+    1. Cryptographic API Key ('kb_live_...')
+    2. Explicitly passed JWT token (from cookie or header)
+    3. KOBITS_DEV_MODE bypass
     """
+    if token and token.strip().startswith("kb_live_"):
+        from backend.services.auth_service import verify_api_key
+        api_key = await verify_api_key(db, token.strip())
+        if not api_key:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or revoked API key",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        result = await db.execute(select(User).filter(User.id == api_key.user_id))
+        user = result.scalar_one_or_none()
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User associated with API key is inactive or not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        setattr(user, "_active_org_id", api_key.organization_id)
+        setattr(user, "_api_key", api_key)
+        return user
+
     if not token:
         if settings.KOBITS_DEV_MODE:
             result = await db.execute(select(User).limit(1))
@@ -101,16 +122,23 @@ async def get_current_user(token: str = None, db: AsyncSession = Depends(get_db)
 
 
 async def get_current_user_from_request(request: Request, db: AsyncSession = Depends(get_db)) -> User:
-    """Extract the JWT from cookie or Authorization header, then resolve the user."""
-    # Try cookie first (web sessions)
-    token = request.cookies.get(settings.SESSION_COOKIE_NAME)
+    """Extract the API key, JWT Bearer, or cookie, then resolve the user."""
+    # 1. High-priority API Key header (CLI, VS Code extension, CI/CD)
+    api_key_header = request.headers.get("X-API-Key") or request.headers.get("x-api-key")
+    if api_key_header and api_key_header.strip():
+        return await get_current_user(token=api_key_header.strip(), db=db)
 
-    # Fallback to Authorization header (API clients)
-    if not token:
-        auth_header = request.headers.get("Authorization", "")
+    # 2. Authorization header (Bearer token or Bearer kb_live_...)
+    auth_header = request.headers.get("Authorization", "").strip()
+    if auth_header:
         if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
+            token = auth_header[7:].strip()
+        else:
+            token = auth_header
+        return await get_current_user(token=token, db=db)
 
+    # 3. Cookie fallback (Browser sessions)
+    token = request.cookies.get(settings.SESSION_COOKIE_NAME)
     return await get_current_user(token=token, db=db)
 
 

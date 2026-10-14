@@ -608,4 +608,94 @@ async def github_callback(
     response = RedirectResponse(url=f"/web/index.html?session_token={session_token}#overview", status_code=302)
     _set_session_cookie(response, session_token)
     return response
-get_current_active_user = get_current_user_info
+
+
+# ════════════════════════════════════════════════════════════
+#  API KEY MANAGEMENT (CLI / VS CODE EXTENSION / CI/CD)
+# ════════════════════════════════════════════════════════════
+from pydantic import BaseModel, Field
+from typing import Optional
+
+class ApiKeyCreateRequest(BaseModel):
+    name: str = Field(default="CLI Key", max_length=128)
+    scopes: str = Field(default="read,write,cli,extension", max_length=256)
+    expires_in_days: Optional[int] = Field(default=None, ge=1, le=365)
+
+
+@router.post("/api-keys")
+async def create_api_key_endpoint(
+    req: ApiKeyCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    request: Request = None,
+):
+    from backend.api.deps import get_current_active_user
+    from backend.services.auth_service import get_user_default_org, create_api_key
+    user = await get_current_active_user(request=request, db=db)
+    membership = await get_user_default_org(db, user.id, preferred_org_id=getattr(user, "_active_org_id", None))
+
+    api_key_obj, raw_key = await create_api_key(
+        db=db,
+        user_id=user.id,
+        organization_id=membership.organization_id,
+        name=req.name,
+        scopes=req.scopes,
+        expires_in_days=req.expires_in_days,
+    )
+
+    return {
+        "id": api_key_obj.id,
+        "name": api_key_obj.name,
+        "key": raw_key,
+        "key_prefix": api_key_obj.key_prefix,
+        "scopes": api_key_obj.scopes,
+        "created_at": api_key_obj.created_at.isoformat() if api_key_obj.created_at else None,
+        "expires_at": api_key_obj.expires_at.isoformat() if api_key_obj.expires_at else None,
+    }
+
+
+@router.get("/api-keys")
+async def list_api_keys_endpoint(
+    db: AsyncSession = Depends(get_db),
+    request: Request = None,
+):
+    from backend.api.deps import get_current_active_user
+    from backend.services.auth_service import get_user_default_org, list_api_keys
+    user = await get_current_active_user(request=request, db=db)
+    membership = await get_user_default_org(db, user.id, preferred_org_id=getattr(user, "_active_org_id", None))
+
+    keys = await list_api_keys(db=db, organization_id=membership.organization_id)
+    return [
+        {
+            "id": k.id,
+            "name": k.name,
+            "key_prefix": k.key_prefix,
+            "scopes": k.scopes,
+            "is_active": k.is_active,
+            "created_at": k.created_at.isoformat() if k.created_at else None,
+            "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
+            "expires_at": k.expires_at.isoformat() if k.expires_at else None,
+        }
+        for k in keys
+    ]
+
+
+@router.delete("/api-keys/{key_id}")
+async def revoke_api_key_endpoint(
+    key_id: str,
+    db: AsyncSession = Depends(get_db),
+    request: Request = None,
+):
+    from backend.api.deps import get_current_active_user
+    from backend.services.auth_service import get_user_default_org, revoke_api_key
+    user = await get_current_active_user(request=request, db=db)
+    membership = await get_user_default_org(db, user.id, preferred_org_id=getattr(user, "_active_org_id", None))
+
+    success = await revoke_api_key(db=db, key_id=key_id, organization_id=membership.organization_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="API key not found")
+    return {"status": "success", "message": "API key revoked"}
+
+
+from backend.api.deps import get_current_active_user
+
+

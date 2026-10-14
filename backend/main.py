@@ -821,6 +821,9 @@ app.include_router(telemetry.router, prefix="/api/v1/telemetry", tags=["Observab
 from backend.api.v1 import waitlist
 app.include_router(waitlist.router, prefix="/api/v1", tags=["Waitlist"])
 
+from backend.api.v1 import extension
+app.include_router(extension.router, prefix="/api/v1/extension", tags=["VS Code & IDE Extension"])
+
 
 
 # ══════════════════════════════════════════

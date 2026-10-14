@@ -33,7 +33,8 @@ __all__ = [
     "AgentArtifact",
     "AgentDecision",
     "AgentLesson",
-    "LedgerTransaction"
+    "LedgerTransaction",
+    "ApiKey",
 ]
 
 from backend.models.intelligence import TaskContract, ProcessMemory, IntelligenceTrace, MemoryUsefulness, HumanFeedback
@@ -44,3 +45,5 @@ from backend.models.audit_log import AuditLog, AuditEvent
 from backend.models.password_reset import PasswordResetToken
 from backend.models.waitlist import WaitlistLead
 from backend.models.durable_job import DurableJob, JobStatus
+from backend.models.api_key import ApiKey
+
