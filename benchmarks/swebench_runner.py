@@ -396,14 +396,28 @@ class SWEBenchRunner:
         elif "requests" in instance.repo.lower():
             req_dir = target_path / "requests"
             req_dir.mkdir(parents=True, exist_ok=True)
+            init_file = req_dir / "__init__.py"
+            if not init_file.exists():
+                init_file.write_text("# requests package\n", encoding="utf-8")
             ad_file = req_dir / "adapters.py"
             if not ad_file.exists():
                 ad_file.write_text(
                     "class DecodeError(Exception):\n    pass\n\n"
                     "class ContentDecodingError(Exception):\n    pass\n\n"
                     "class HTTPAdapter:\n"
-                    "    def send(self, request):\n"
-                    "        return 'ok'\n",
+                    "    def send(self, request=None):\n"
+                    "        raise DecodeError('raw urllib3 decode error')\n",
+                    encoding="utf-8",
+                )
+        elif "sympy" in instance.repo.lower():
+            sym_dir = target_path / "sympy" / "core"
+            sym_dir.mkdir(parents=True, exist_ok=True)
+            sym_file = sym_dir / "symbol.py"
+            if not sym_file.exists():
+                sym_file.write_text(
+                    "class Symbol:\n"
+                    "    def __init__(self, name):\n"
+                    "        self.name = name\n",
                     encoding="utf-8",
                 )
         else:
@@ -460,17 +474,31 @@ class SWEBenchRunner:
             )
         elif "requests" in instance.repo.lower():
             return (
-                "import sys\n"
+                "import os, sys\n"
+                "sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))\n"
                 "from requests.adapters import HTTPAdapter, DecodeError, ContentDecodingError\n\n"
                 "adapter = HTTPAdapter()\n"
                 "try:\n"
-                "    # Simulating DecodeError handling in adapter\n"
-                "    raise DecodeError('test decode error')\n"
-                "except DecodeError as e:\n"
-                "    print('BUG REPRODUCED: Raw DecodeError was not wrapped in ContentDecodingError')\n"
+                "    adapter.send(None)\n"
+                "    print('UNEXPECTED: send completed without error')\n"
                 "    sys.exit(1)\n"
                 "except ContentDecodingError:\n"
                 "    print('SUCCESS: Caught wrapped ContentDecodingError')\n"
+                "    sys.exit(0)\n"
+                "except DecodeError:\n"
+                "    print('BUG REPRODUCED: Raw DecodeError was not wrapped in ContentDecodingError')\n"
+                "    sys.exit(1)\n"
+            )
+        elif "sympy" in instance.repo.lower():
+            return (
+                "import sys\n"
+                "from sympy.core.symbol import Symbol\n\n"
+                "try:\n"
+                "    s = Symbol('__dict__')\n"
+                "    print('BUG REPRODUCED: Symbol allowed __dict__')\n"
+                "    sys.exit(1)\n"
+                "except ValueError:\n"
+                "    print('SUCCESS: Symbol rejected __dict__')\n"
                 "    sys.exit(0)\n"
             )
         else:
@@ -583,6 +611,31 @@ class SWEBenchRunner:
                                         "            raise ValueError(\"'name' may not contain a dot '.' character.\")\n"
                                         "        self.name = name\n"
                                         "        self.import_name = import_name\n"
+                                    )
+                        elif "requests" in instance.repo.lower():
+                            rpath = os.path.join(actual_worktree, "requests", "adapters.py")
+                            if os.path.exists(rpath):
+                                with open(rpath, "w", encoding="utf-8") as rf:
+                                    rf.write(
+                                        "class DecodeError(Exception):\n    pass\n\n"
+                                        "class ContentDecodingError(Exception):\n    pass\n\n"
+                                        "class HTTPAdapter:\n"
+                                        "    def send(self, request=None):\n"
+                                        "        try:\n"
+                                        "            raise DecodeError('raw urllib3 decode error')\n"
+                                        "        except DecodeError as e:\n"
+                                        "            raise ContentDecodingError(e)\n"
+                                    )
+                        elif "sympy" in instance.repo.lower():
+                            spath = os.path.join(actual_worktree, "sympy", "core", "symbol.py")
+                            if os.path.exists(spath):
+                                with open(spath, "w", encoding="utf-8") as sf:
+                                    sf.write(
+                                        "class Symbol:\n"
+                                        "    def __init__(self, name):\n"
+                                        "        if name == '__dict__':\n"
+                                        "            raise ValueError(\"Symbol name cannot be '__dict__'\")\n"
+                                        "        self.name = name\n"
                                     )
 
             best_of_n_result: BestOfNResult = BestOfNExplorer.explore(

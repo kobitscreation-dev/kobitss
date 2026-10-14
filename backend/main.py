@@ -241,46 +241,47 @@ async def lifespan(app: FastAPI):
             _startup_logger.info(f"Agents already seeded by peer worker: {_agent_err}")
 
     # Resume ACTIVE missions and clear dangling locks
-    from backend.models.mission import Mission, MissionStatus
-    from backend.services.mission_runtime import MissionRuntime
-    from sqlalchemy import update
-    
-    async with AsyncSessionLocal() as db:
-        try:
-            from datetime import datetime, timezone
-            # Clear any dangling locks that have expired
-            stmt = (
-                update(Mission)
-                .where(Mission.execution_lock_id != None)
-                .where(
-                    (Mission.execution_lock_expires_at == None) | 
-                    (Mission.execution_lock_expires_at < datetime.now(timezone.utc))
+    if os.environ.get("KOBITS_NO_RESUME") != "1" and os.environ.get("KOBITS_NO_AUTO_EXECUTE") != "1":
+        from backend.models.mission import Mission, MissionStatus
+        from backend.services.mission_runtime import MissionRuntime
+        from sqlalchemy import update
+        
+        async with AsyncSessionLocal() as db:
+            try:
+                from datetime import datetime, timezone
+                # Clear any dangling locks that have expired
+                stmt = (
+                    update(Mission)
+                    .where(Mission.execution_lock_id != None)
+                    .where(
+                        (Mission.execution_lock_expires_at == None) | 
+                        (Mission.execution_lock_expires_at < datetime.now(timezone.utc))
+                    )
+                    .values(execution_lock_id=None, execution_lock_expires_at=None)
                 )
-                .values(execution_lock_id=None, execution_lock_expires_at=None)
-            )
-            await db.execute(stmt)
-            await db.commit()
-            
-            # Resume active missions that aren't currently locked
-            stmt = (
-                select(Mission)
-                .where(Mission.status == MissionStatus.ACTIVE)
-                .where(Mission.execution_lock_id == None)
-            )
-            res = await db.execute(stmt)
-            for m in res.scalars().all():
-                print(f"Resuming active mission {m.id} via durable queue")
-                from backend.services.durable_queue import DurableQueue
-                await DurableQueue.enqueue(
-                    task_type="EXECUTE_MISSION",
-                    payload={"mission_id": m.id, "org_id": m.organization_id, "user_id": m.created_by},
-                    queue_name="missions",
-                    priority=20,
-                    job_id=f"resume_mission_{m.id}",
+                await db.execute(stmt)
+                await db.commit()
+                
+                # Resume active missions that aren't currently locked
+                stmt = (
+                    select(Mission)
+                    .where(Mission.status == MissionStatus.ACTIVE)
+                    .where(Mission.execution_lock_id == None)
                 )
-        except Exception as _resume_err:
-            await db.rollback()
-            _startup_logger.warning(f"Mission recovery warning: {_resume_err}")
+                res = await db.execute(stmt)
+                for m in res.scalars().all():
+                    print(f"Resuming active mission {m.id} via durable queue")
+                    from backend.services.durable_queue import DurableQueue
+                    await DurableQueue.enqueue(
+                        task_type="EXECUTE_MISSION",
+                        payload={"mission_id": m.id, "org_id": m.organization_id, "user_id": m.created_by},
+                        queue_name="missions",
+                        priority=20,
+                        job_id=f"resume_mission_{m.id}",
+                    )
+            except Exception as _resume_err:
+                await db.rollback()
+                _startup_logger.warning(f"Mission recovery warning: {_resume_err}")
 
     # Load custom tools from database into ToolRegistry
     try:

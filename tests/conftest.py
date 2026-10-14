@@ -50,7 +50,8 @@ def isolate_test_state():
     orig_anthropic_key = settings.ANTHROPIC_API_KEY
     orig_deepseek_key = settings.DEEPSEEK_API_KEY
 
-    SandboxManager._sessions.clear()
+    from backend.main import app
+    orig_overrides = dict(app.dependency_overrides)
 
     yield
     os.environ.clear()
@@ -59,6 +60,8 @@ def isolate_test_state():
     settings.ANTHROPIC_API_KEY = orig_anthropic_key
     settings.DEEPSEEK_API_KEY = orig_deepseek_key
     SandboxManager._sessions.clear()
+    app.dependency_overrides.clear()
+    app.dependency_overrides.update(orig_overrides)
 
 @pytest_asyncio.fixture
 async def db_session():

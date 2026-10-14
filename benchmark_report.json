@@ -1,7 +1,7 @@
 {
-  "provider": "bedrock",
+  "provider": "mock",
   "model": "mock-model",
-  "start_time": "2026-10-14T02:14:59.212583",
+  "start_time": "2026-10-14T23:13:47.304814",
   "tasks": [],
   "metrics": {
     "token_usage": 0,

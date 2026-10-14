@@ -30,7 +30,7 @@ async def override_get_current_user():
 from backend.models.project import Project
 from backend.models.organization import Organization, OrganizationMember
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="module", autouse=True)
 def setup_db():
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_get_current_user

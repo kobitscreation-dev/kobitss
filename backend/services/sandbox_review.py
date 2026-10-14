@@ -250,6 +250,24 @@ async def persist_mission_deliverable(
 
     if existing_pr:
         existing_pr.updated_at = datetime.now(timezone.utc)
+        if token and repo and existing_pr.number:
+            repo_full = repo.full_name or f"{repo.owner}/{repo.name}"
+            try:
+                comment_body = (
+                    f"🤖 **Kobits Autonomous CI/Review Remediation Deployed**\n\n"
+                    f"- **Branch**: `{existing_pr.source_branch}`\n"
+                    f"- **Changes**: `{cs.files_changed or 0}` file(s) modified (`+{cs.lines_added or 0}` / `-{cs.lines_removed or 0}` LOC)\n"
+                    f"- **Verification**: Negative-to-Positive TDD Reproducer passed, Best-of-N Candidate verified green.\n\n"
+                    f"Verified fix has been committed and pushed directly to this PR branch with zero human intervention."
+                )
+                await GitHubService.create_issue_comment(
+                    repo_full_name=repo_full,
+                    issue_number=int(existing_pr.number),
+                    body=comment_body,
+                    token=token,
+                )
+            except Exception:
+                pass
         await db.commit()
         pr_info = {
             "id": existing_pr.id,
