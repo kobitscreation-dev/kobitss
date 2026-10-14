@@ -258,10 +258,10 @@ class SandboxManager:
         from backend.services.environment_bootstrapper import EnvironmentBootstrapper
         cloud_sb = None
         driver_detected = isolation_driver or EnvironmentBootstrapper.detect_isolation_driver()
-        if driver_detected == "cloud_microvm":
+        if driver_detected == "cloud_microvm" or CloudMicroVMSandbox.is_cloud_native():
             try:
                 from backend.services.cloud_sandbox import CloudMicroVMSandbox
-                if CloudMicroVMSandbox.is_configured():
+                if CloudMicroVMSandbox.is_configured() or CloudMicroVMSandbox.is_cloud_native():
                     cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=session_id)
             except Exception as e:
                 logger.warning(f"Cloud MicroVM auto-attach deferred: {e}")
@@ -383,10 +383,10 @@ class SandboxManager:
 
         EnvironmentBootstrapper.ensure_virtual_rootfs(sandbox_dir)
 
-        if not cloud_sb and driver_detected == "cloud_microvm":
+        if not cloud_sb and (driver_detected == "cloud_microvm" or CloudMicroVMSandbox.is_cloud_native()):
             try:
                 from backend.services.cloud_sandbox import CloudMicroVMSandbox
-                if CloudMicroVMSandbox.is_configured():
+                if CloudMicroVMSandbox.is_configured() or CloudMicroVMSandbox.is_cloud_native():
                     cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=session_id)
             except Exception as e:
                 logger.warning(f"Cloud MicroVM auto-attach deferred: {e}")
@@ -403,7 +403,7 @@ class SandboxManager:
             branch_name=branch_name,
             sandbox_dir=sandbox_dir,
             base_commit_sha=resolved_base_sha,
-            vm_id=vm_id or (f"e2b-{cloud_sb.sandbox_id}" if cloud_sb else None),
+            vm_id=vm_id or f"kobits-vm-{session_id}",
             isolation_driver=isolation_driver or ("cloud_microvm" if cloud_sb else driver_detected),
         )
         if cloud_sb:
@@ -1769,7 +1769,7 @@ class SandboxManager:
             or CloudMicroVMSandbox.is_configured()
             or CloudMicroVMSandbox.is_cloud_native()
         )
-        if is_cloud and CloudMicroVMSandbox.is_configured():
+        if is_cloud and (CloudMicroVMSandbox.is_configured() or CloudMicroVMSandbox.is_cloud_native()):
             try:
                 cloud_sb = CloudMicroVMSandbox.get_or_create(session_id)
                 clean_rel = rel_path.lstrip("/\\")
@@ -1994,7 +1994,7 @@ class SandboxManager:
         if not (abs_path == sandbox_abs or abs_path.startswith(sandbox_abs + os.sep)):
             return {"error": "Security Block: Path traversal attempt detected."}
 
-        if is_cloud and CloudMicroVMSandbox.is_configured():
+        if is_cloud and (CloudMicroVMSandbox.is_configured() or CloudMicroVMSandbox.is_cloud_native()):
             try:
                 cloud_sb = CloudMicroVMSandbox.get_or_create(session_id)
                 clean_rel = rel_path.lstrip("/\\")

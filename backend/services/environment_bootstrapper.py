@@ -110,6 +110,12 @@ class EnvironmentBootstrapper:
     def detect_isolation_driver(cls) -> str:
         """Select the strongest available isolation driver for the sprint sandbox."""
         forced = (os.environ.get("KOBITS_SANDBOX_DRIVER") or "").strip().lower()
+        if not forced:
+            try:
+                from backend.core.config import settings
+                forced = (getattr(settings, "KOBITS_SANDBOX_DRIVER", "") or "").strip().lower()
+            except Exception:
+                pass
         if forced in ("microvm", "cloud_microvm", "firecracker"):
             return "cloud_microvm"
         if forced == "docker":
@@ -121,7 +127,7 @@ class EnvironmentBootstrapper:
             return "cloud_microvm"
         try:
             from backend.services.cloud_sandbox import CloudMicroVMSandbox
-            if CloudMicroVMSandbox.is_configured():
+            if CloudMicroVMSandbox.is_cloud_native() or CloudMicroVMSandbox.is_configured():
                 return "cloud_microvm"
         except Exception:
             pass

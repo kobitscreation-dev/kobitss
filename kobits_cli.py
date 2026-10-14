@@ -968,6 +968,12 @@ def print_mission_summary(detail: Dict[str, Any]) -> None:
         )
 
 
+DEFAULT_CLOUD_API_URL = (
+    os.environ.get("KOBITS_API_URL")
+    or "https://kobitss-850300766138.europe-west1.run.app"
+).rstrip("/")
+
+
 async def cloud_create_and_run_mission(
     objective: str,
     title: Optional[str] = None,
@@ -976,9 +982,9 @@ async def cloud_create_and_run_mission(
 ) -> int:
     import httpx
     target_ws = workspace_dir or WORKSPACE_DIR
-    api_url = (os.environ.get("KOBITS_API_URL") or "https://kobits.space").rstrip("/")
+    api_url = DEFAULT_CLOUD_API_URL
     
-    print(f"\n{CYAN}{BOLD}⚡ KOBITS CLOUD ENGINE{RESET} {GRAY}(AWS Bedrock Claude Sonnet 4.6){RESET}")
+    print(f"\n{CYAN}{BOLD}⚡ KOBITS CLOUD ENGINE{RESET} {GRAY}(Kyros Cloud-Native MicroVM Fleet){RESET}")
     print(f"  {GRAY}Target Workspace :{RESET} {target_ws}")
     print(f"  {GRAY}Cloud Backend    :{RESET} {api_url}")
     print(f"  {GRAY}Objective        :{RESET} {BOLD}{objective[:72]}{'...' if len(objective) > 72 else ''}{RESET}\n")
@@ -1048,6 +1054,44 @@ async def cloud_create_and_run_mission(
         
         completed = False
         start_time = time.time()
+
+        # Attempt real-time WebSocket terminal stream
+        try:
+            import websockets
+            ws_protocol = "wss" if api_url.startswith("https") else "ws"
+            ws_host = api_url.split("://", 1)[-1]
+            ws_url = f"{ws_protocol}://{ws_host}/ws/terminal/{mission_id}"
+            ws_headers = {"Authorization": f"Bearer {token}"} if token else {}
+            async with websockets.connect(ws_url, additional_headers=ws_headers, close_timeout=2.0) as ws:
+                print(f"  {CYAN}⚡ WebSocket Live Streaming Connected{RESET}")
+                while not completed:
+                    try:
+                        raw_msg = await asyncio.wait_for(ws.recv(), timeout=2.5)
+                        msg = json.loads(raw_msg) if isinstance(raw_msg, str) and raw_msg.strip().startswith("{") else {"message": str(raw_msg)}
+                        m_type = msg.get("type", "")
+                        m_text = msg.get("message") or msg.get("output") or ""
+                        if m_type == "phase_start":
+                            print(f"  {color_status('ACTIVE', pad=10)} {BOLD}{msg.get('phase', '')}{RESET} {GRAY}{msg.get('stage', '')}{RESET}")
+                        elif m_type == "task_complete":
+                            print(f"    {GREEN}✓ Task [COMPLETED]{RESET} {msg.get('task_title', '')}")
+                        elif m_type in ("mission_complete", "complete"):
+                            completed = True
+                            break
+                        elif m_type in ("mission_failed", "error"):
+                            completed = True
+                            print(f"\n{RED}✗ Mission Failed on Cloud: {m_text}{RESET}")
+                            return 1
+                        elif m_text and not m_text.startswith("Connected"):
+                            print(f"    {GRAY}{m_text.strip()}{RESET}")
+                    except asyncio.TimeoutError:
+                        poll_res = await client.get(poll_url, headers=headers)
+                        if poll_res.status_code == 200:
+                            stat = (poll_res.json().get("status") or "ACTIVE").upper()
+                            if stat in ("COMPLETED", "FAILED", "CANCELLED"):
+                                completed = True
+                                break
+        except Exception:
+            pass
         while not completed:
             await asyncio.sleep(poll_interval)
             try:
@@ -1139,16 +1183,20 @@ async def cmd_run(args: argparse.Namespace) -> int:
         return 1
 
     from backend.core.config import settings
-    from backend.services.llm import detect_configured_provider
-    provider = detect_configured_provider()
-    has_local_llm = provider != "mock" or getattr(args, "provider", None) == "mock"
 
-    if getattr(args, "cloud", False) or os.environ.get("KOBITS_USE_CLOUD") == "1":
+    # In Kyros Cloud-Native standard, default to cloud remote execution unless --local or KOBITS_LOCAL_MODE=1 is set
+    run_local = getattr(args, "local", False) or os.environ.get("KOBITS_LOCAL_MODE") == "1"
+
+    if not run_local:
         return await cloud_create_and_run_mission(
             objective=objective,
             title=args.title,
             branch=args.branch,
         )
+
+    from backend.services.llm import detect_configured_provider
+    provider = detect_configured_provider()
+    has_local_llm = provider != "mock" or getattr(args, "provider", None) == "mock"
 
     if not has_local_llm:
         print(f"\n{YELLOW}{BOLD}╔══════════════════════════════════════════════════════════════════╗{RESET}")
@@ -1158,7 +1206,7 @@ async def cmd_run(args: argparse.Namespace) -> int:
         print(f"  To configure your API key in 10 seconds, run:")
         print(f"      {CYAN}{BOLD}kobits setup{RESET}")
         print(f"\n  Or to test without live API charges in mock mode, run:")
-        print(f"      {CYAN}kobits run --provider mock \"{objective}\"{RESET}\n")
+        print(f"      {CYAN}kobits run --local --provider mock \"{objective}\"{RESET}\n")
         return 1
 
     await local_create_and_run_mission(
@@ -1190,7 +1238,70 @@ async def cmd_missions(args: argparse.Namespace) -> int:
     return 0
 
 
+async def cloud_status(args: argparse.Namespace) -> int:
+    import httpx
+    api_url = DEFAULT_CLOUD_API_URL
+    mission_id = getattr(args, "mission_id", None)
+
+    headers = {"Content-Type": "application/json"}
+    token = os.environ.get("KOBITS_AUTH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        if mission_id:
+            res = await client.get(f"{api_url}/api/v1/missions/{mission_id}", headers=headers)
+            if res.status_code == 200:
+                detail = res.json()
+                print(f"\n{CYAN}{BOLD}╔══════════════════════════════════════════════════════════════════╗{RESET}")
+                print(f"{CYAN}{BOLD}║         KOBITS CLOUD CONTROL PLANE — MISSION INSPECTOR           ║{RESET}")
+                print(f"{CYAN}{BOLD}╚══════════════════════════════════════════════════════════════════╝{RESET}")
+                print_mission_summary(detail)
+                print()
+                return 0
+            elif res.status_code == 404:
+                print(f"{RED}Cloud mission matching '{mission_id}' not found at {api_url}.{RESET}")
+                return 1
+            else:
+                raise RuntimeError(f"Cloud API returned status {res.status_code}")
+        else:
+            res = await client.get(f"{api_url}/api/v1/missions", headers=headers)
+            if res.status_code == 200:
+                missions = res.json()
+                if isinstance(missions, dict) and "missions" in missions:
+                    missions = missions["missions"]
+                print(f"\n{BLUE}{BOLD}╔══════════════════════════════════════════════════════════════════╗{RESET}")
+                print(f"{BLUE}{BOLD}║           KOBITS CLOUD CONTROL PLANE (KYROS STANDARD)            ║{RESET}")
+                print(f"{BLUE}{BOLD}╚══════════════════════════════════════════════════════════════════╝{RESET}")
+                print(f"  {GRAY}Cloud Backend :{RESET} {GREEN}{BOLD}{api_url}{RESET}")
+                print(f"  {GRAY}Architecture  :{RESET} {CYAN}Cloud Run Isolated MicroVMs / Zero Host Contamination{RESET}")
+                print(f"  {GRAY}Remote Missions:{RESET} {len(missions)}\n")
+                if missions:
+                    print(f"{BOLD}{'ID':<10} {'STATUS':<18} {'PHASE':<20} {'PROGRESS':<10} {'TITLE'}{RESET}")
+                    print("─" * 92)
+                    for m in missions[:12]:
+                        short_id = m.get("id", "")[:8]
+                        status_val = m.get("status", "ACTIVE")
+                        phase = (m.get("phase") or "—")[:18]
+                        pct = f"{m.get('progress') or 0}%"
+                        title = (m.get("title") or "")[:40]
+                        print(f"{CYAN}{short_id:<10}{RESET} {color_status(status_val, pad=18)} {phase:<20} {pct:<10} {title}")
+                    print()
+                else:
+                    print(f"  {GRAY}No active cloud missions found. Launch one with {BOLD}kobits run \"<objective>\"{RESET}\n")
+                return 0
+            else:
+                raise RuntimeError(f"Cloud API returned status {res.status_code}")
+
+
 async def cmd_status(args: argparse.Namespace) -> int:
+    is_local = getattr(args, "local", False) or os.environ.get("KOBITS_LOCAL_MODE") == "1"
+    if not is_local:
+        try:
+            return await cloud_status(args)
+        except Exception:
+            pass
+
     if args.mission_id:
         detail = await local_get_mission_detail(args.mission_id)
         if not detail:
@@ -1235,6 +1346,101 @@ async def cmd_status(args: argparse.Namespace) -> int:
         print(f"  {GRAY}No missions yet. Run {BOLD}kobits run \"Build a feature\"{RESET}{GRAY} to start.{RESET}")
     print()
     return 0
+
+
+async def cmd_logs(args: argparse.Namespace) -> int:
+    """Stream live WebSocket terminal logs or view mission activity logs."""
+    target_id = getattr(args, "mission_id", None)
+    api_url = DEFAULT_CLOUD_API_URL
+    is_local = getattr(args, "local", False) or os.environ.get("KOBITS_LOCAL_MODE") == "1"
+
+    if not target_id:
+        target_id = await _resolve_mission_id(None)
+        if not target_id:
+            print(f"{RED}No active or recent missions found.{RESET}")
+            return 1
+
+    short_id = target_id[:8]
+    print(f"\n{CYAN}{BOLD}╔══════════════════════════════════════════════════════════════════╗{RESET}")
+    print(f"{CYAN}{BOLD}║         KOBITS MISSION ACTIVITY & TERMINAL LOG STREAM            ║{RESET}")
+    print(f"{CYAN}{BOLD}╚══════════════════════════════════════════════════════════════════╝{RESET}")
+    print(f"  {GRAY}Target Mission :{RESET} {CYAN}{short_id}{RESET} ({target_id})")
+    print(f"  {GRAY}Control Plane  :{RESET} {'Local Worktree' if is_local else f'Cloud Run ({api_url})'}\n")
+
+    if not is_local:
+        # Try WebSocket terminal streaming first
+        try:
+            import websockets
+            ws_protocol = "wss" if api_url.startswith("https") else "ws"
+            ws_host = api_url.split("://", 1)[-1]
+            ws_url = f"{ws_protocol}://{ws_host}/ws/terminal/{target_id}"
+            token = os.environ.get("KOBITS_AUTH_TOKEN")
+            headers = {"Authorization": f"Bearer {token}"} if token else None
+
+            print(f"  {CYAN}Connecting to WebSocket stream at {ws_url}...{RESET}")
+            async with websockets.connect(ws_url, additional_headers=headers, close_timeout=3.0) as ws:
+                print(f"  {GREEN}Connected. Streaming terminal logs (Ctrl+C to exit):{RESET}\n")
+                while True:
+                    msg = await ws.recv()
+                    print(f"  {GRAY}{msg}{RESET}")
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            print(f"\n{YELLOW}Log stream stopped.{RESET}\n")
+            return 0
+        except Exception:
+            try:
+                import httpx
+                http_headers = {"Content-Type": "application/json"}
+                token = os.environ.get("KOBITS_AUTH_TOKEN")
+                if token:
+                    http_headers["Authorization"] = f"Bearer {token}"
+                async with httpx.AsyncClient(timeout=8.0) as client:
+                    res = await client.get(f"{api_url}/api/v1/missions/{target_id}/activities", headers=http_headers)
+                    if res.status_code == 200:
+                        activities = res.json()
+                        if isinstance(activities, list) and activities:
+                            print(f"{BOLD}{'TIME':<12} {'TYPE':<20} {'CONTENT'}{RESET}")
+                            print("─" * 80)
+                            for a in activities:
+                                t = (a.get("created_at") or "")[-8:]
+                                atype = a.get("activity_type") or a.get("type") or "SYSTEM"
+                                content = (a.get("content") or a.get("message") or "")[:80]
+                                print(f"{GRAY}{t:<12}{RESET} {CYAN}{atype:<20}{RESET} {content}")
+                            print()
+                            return 0
+            except Exception:
+                pass
+
+    # Local activity log fallback
+    from backend.core.database import AsyncSessionLocal
+    from sqlalchemy import select
+    from backend.models.project import Activity
+
+    async with AsyncSessionLocal() as db:
+        stmt = (
+            select(Activity)
+            .order_by(Activity.created_at.desc())
+            .limit(25)
+        )
+        res = await db.execute(stmt)
+        acts = res.scalars().all()
+        matching_acts = [
+            a for a in acts
+            if not target_id or (a.metadata_json and target_id in a.metadata_json) or (a.description and target_id in a.description) or (a.title and target_id in a.title)
+        ]
+        if not matching_acts:
+            matching_acts = acts[:10]
+        if not matching_acts:
+            print(f"{GRAY}No activity logs recorded yet for mission {short_id}.{RESET}\n")
+            return 0
+        print(f"{BOLD}{'TIME':<12} {'TYPE':<24} {'CONTENT'}{RESET}")
+        print("─" * 80)
+        for a in reversed(matching_acts):
+            t = a.created_at.strftime("%H:%M:%S") if hasattr(a.created_at, "strftime") else str(a.created_at)[-8:]
+            atype = a.type.value if hasattr(a.type, "value") else str(a.type)
+            content = (a.title or a.description or "")[:80]
+            print(f"{GRAY}{t:<12}{RESET} {CYAN}{atype:<24}{RESET} {content}")
+        print()
+        return 0
 
 
 async def cmd_projects(args: argparse.Namespace) -> int:
@@ -2499,6 +2705,13 @@ async def cmd_teamwork_preview(args: argparse.Namespace) -> int:
                 preview_url = cloud_sb.get_preview_url(3000)
         except Exception as e:
             logger.debug(f"Cloud preview url resolution: {e}")
+    if not preview_url:
+        preview_url = detail.get("remote_preview_url")
+    if not preview_url and detail.get("id"):
+        cloud_base = os.environ.get("KOBITS_CLOUD_PREVIEW_BASE_URL")
+        if cloud_base:
+            short_id = detail["id"][:8]
+            preview_url = cloud_base.format(short_id=short_id) if "{" in cloud_base else f"{cloud_base.rstrip('/')}/{short_id}"
 
     print(f"\n{CYAN}{BOLD}╔══════════════════════════════════════════════════════════════════╗{RESET}")
     print(f"{CYAN}{BOLD}║         KOBITS MULTI-AGENT TEAMWORK & LIVE PREVIEW               ║{RESET}")
@@ -2737,6 +2950,8 @@ async def cmd_repl(args: argparse.Namespace) -> int:
                 await cmd_boost(ns)
             elif cmd_name in ("learn", "learning"):
                 await cmd_learn(ns)
+            elif cmd_name in ("logs", "log"):
+                await cmd_logs(ns)
             else:
                 print(f"{YELLOW}Unknown slash command '/{cmd_name}'. Type /help for options.{RESET}")
             continue
@@ -3179,6 +3394,10 @@ def build_parser() -> argparse.ArgumentParser:
     # kobits learn
     sub.add_parser("learn", aliases=["learning"], parents=[common], help="Inspect continuous learning flywheel & golden SWE-bench trajectories")
 
+    # kobits logs
+    p_logs = sub.add_parser("logs", parents=[common], help="Stream live WebSocket terminal logs or view mission activity logs")
+    p_logs.add_argument("mission_id", nargs="?", help="Optional mission ID or 8-char prefix (defaults to latest mission)")
+
     return parser
 
 
@@ -3186,7 +3405,7 @@ KNOWN_COMMANDS = {
     "run", "connect", "search", "repl", "chat", "status", "missions", "agents", "projects",
     "approve", "retry", "resume", "reject", "cancel", "steer", "diff", "apply", "worker",
     "dataset", "data", "setup", "doctor", "goal", "teamwork-preview", "preview", "teamwork",
-    "boost", "turbo", "learn", "learning",
+    "boost", "turbo", "learn", "learning", "logs",
 }
 
 _VALUE_FLAGS = {"-w", "--workspace", "-R", "--repo", "--provider", "-m", "--model", "-p", "--project", "-t", "--title", "-b", "--branch"}
@@ -3299,6 +3518,7 @@ async def async_main() -> int:
         "turbo": cmd_boost,
         "learn": cmd_learn,
         "learning": cmd_learn,
+        "logs": cmd_logs,
     }
     handler = dispatch.get(args.command)
     if not handler:

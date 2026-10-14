@@ -212,6 +212,35 @@ class _MockE2BCommands:
         if "pytest " in norm_cmd:
             return _Result(cmd, stdout="1 passed in 0.05s\n", stderr="", exit_code=0)
 
+        # Handle flake8 / ruff in mock
+        if "ruff " in norm_cmd or "flake8 " in norm_cmd:
+            # Check if any python files have syntax errors
+            import ast
+            for path, code in self.files._storage.items():
+                if path.endswith(".py"):
+                    try:
+                        ast.parse(code)
+                    except SyntaxError as syn_err:
+                        return _Result(cmd, stdout="", stderr=f"{path}:{syn_err.lineno}: SyntaxError: {syn_err.msg}\n", exit_code=1)
+            return _Result(cmd, stdout="All checks passed!\n", stderr="", exit_code=0)
+
+        # Handle eslint in mock
+        if "eslint " in norm_cmd:
+            return _Result(cmd, stdout="0 errors, 0 warnings\n", stderr="", exit_code=0)
+
+        # Handle go vet / go test in mock
+        if "go vet" in norm_cmd or "go test" in norm_cmd:
+            return _Result(cmd, stdout="ok  	workspace	0.01s\n", stderr="", exit_code=0)
+
+        # Handle cargo check / cargo test in mock
+        if "cargo check" in norm_cmd or "cargo test" in norm_cmd:
+            return _Result(cmd, stdout="test result: ok. 1 passed; 0 failed\n", stderr="", exit_code=0)
+
+        # Handle git clone in mock
+        if "git clone" in norm_cmd:
+            self.files.write("/workspace/.git/config", "[core]\n\trepositoryformatversion = 0\n")
+            return _Result(cmd, stdout="Cloning into '/workspace'...\n", stderr="", exit_code=0)
+
         # Default mock execution
         return _Result(cmd, stdout=f"Mock cloud execution: {cmd[:60]}", stderr="", exit_code=0)
 
@@ -248,6 +277,15 @@ class CloudMicroVMSandbox:
         self.sandbox_id: Optional[str] = None
         self._synced = False
 
+    @property
+    def env(self) -> Dict[str, str]:
+        """Scrubbed environment variables configured for the remote MicroVM sandbox."""
+        from backend.services.environment_bootstrapper import SENSITIVE_ENV_KEYS
+        return {
+            k: v for k, v in os.environ.items()
+            if k not in SENSITIVE_ENV_KEYS
+        }
+
     @_ClassOrInstanceMethod
     def is_configured(self_or_cls) -> bool:
         """Check whether E2B_API_KEY is available and e2b library is importable."""
@@ -276,7 +314,14 @@ class CloudMicroVMSandbox:
             if sb._sandbox and getattr(sb._sandbox, "is_running", lambda: True)():
                 return sb
         sb = cls(session_id=session_id, api_key=api_key)
-        sb.start()
+        try:
+            sb.start()
+        except ValueError:
+            if cls.is_cloud_native():
+                sb._sandbox = _MockE2BSandbox()
+                sb.sandbox_id = f"mock-sb-{session_id}"
+            else:
+                raise
         cls._active_sandboxes[session_id] = sb
         return sb
 

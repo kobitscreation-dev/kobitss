@@ -103,7 +103,7 @@ class Settings(BaseSettings):
     # MicroVM & Sandbox Driver Configuration
     E2B_API_KEY: Optional[str] = None
     KOBITS_MICROVM_ENDPOINT: Optional[str] = None
-    KOBITS_SANDBOX_DRIVER: str = "auto"  # auto | cloud_microvm | docker | virtual_rootfs_jail
+    KOBITS_SANDBOX_DRIVER: str = "cloud_microvm"  # cloud_microvm | auto | docker | virtual_rootfs_jail
     KOBITS_EXECUTION_MODE: str = "cloud_native"  # cloud_native | local_dev
     KOBITS_CLOUD_PREVIEW_BASE_URL: Optional[str] = None
     KOBITS_DEFAULT_VM_TIMEOUT: int = 900  # 15 minutes

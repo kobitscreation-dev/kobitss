@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any, Union
 from sqlalchemy.ext.asyncio import AsyncSession
 import json
 
@@ -517,3 +517,257 @@ class MemoryService:
             "outgoing_edges": [{"edge_type": e.edge_type, "target": {"id": e.target.id, "type": e.target.node_type, "name": e.target.name, "file": e.target.file_path}} for e in edges_out if e.target],
             "incoming_edges": [{"edge_type": e.edge_type, "source": {"id": e.source.id, "type": e.source.node_type, "name": e.source.name, "file": e.source.file_path}} for e in edges_in if e.source]
         }
+
+    # =========================================================================
+    # Enterprise Cross-Session Episodic Memory & Knowledge Graph (Kyros Standard)
+    # =========================================================================
+
+    @classmethod
+    async def record_merge_event(
+        cls,
+        project_id: str,
+        mission_id: str,
+        mission_title: str,
+        merge_commit_sha: str,
+        db: Optional[AsyncSession] = None,
+    ) -> ProjectMemory:
+        """Records a successful PR merge event into cross-session persistent project memory."""
+        import uuid
+        from backend.core.database import AsyncSessionLocal
+
+        async def _do_record(session: AsyncSession):
+            key = f"merge_event_{mission_id[:8]}"
+            val = json.dumps({
+                "mission_id": mission_id,
+                "title": mission_title,
+                "merge_commit_sha": merge_commit_sha,
+                "status": "MERGED",
+            })
+            mem = ProjectMemory(
+                id=str(uuid.uuid4()),
+                project_id=project_id,
+                organization_id="default_org",
+                category="merge_history",
+                key=key,
+                value=val,
+                source_agent_id="KyrosMergeAgent",
+                confidence=1.0,
+                evidence=f"Merged commit {merge_commit_sha}",
+                version=1,
+                memory_status=ProjectMemoryStatus.ACTIVE,
+            )
+            session.add(mem)
+            await session.commit()
+            await session.refresh(mem)
+            return mem
+
+        if db is not None:
+            return await _do_record(db)
+        async with AsyncSessionLocal() as session:
+            return await _do_record(session)
+
+    @classmethod
+    async def index_mission_outcome(
+        cls,
+        db: AsyncSession,
+        mission_id: str,
+        project_id: str,
+        organization_id: str = "default_org",
+        outcome: str = "SUCCESS",
+        decisions: Optional[List[Dict[str, str]]] = None,
+        lessons: Optional[List[Dict[str, str]]] = None,
+        bug_fixes: Optional[List[Dict[str, str]]] = None,
+        architectural_notes: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Kyros Enterprise Episodic Memory Flywheel:
+        Automatically indexes mission outcomes, architectural decisions, and bug-fix patterns
+        into an episodic vector knowledge store for dynamic querying during future mission planning.
+        """
+        import uuid
+        from datetime import datetime, timezone
+
+        indexed_records = []
+
+        # 1. Index high-level mission outcome & architectural notes
+        outcome_key = f"outcome_{mission_id[:8]}"
+        outcome_payload = {
+            "mission_id": mission_id,
+            "project_id": project_id,
+            "outcome": outcome,
+            "architectural_notes": architectural_notes or "",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        pm_outcome = ProjectMemory(
+            id=str(uuid.uuid4()),
+            project_id=project_id,
+            organization_id=organization_id,
+            category="episodic_outcome",
+            key=outcome_key,
+            value=json.dumps(outcome_payload),
+            source_agent_id="EpisodicMemoryIndexer",
+            confidence=1.0,
+            evidence=f"Mission {mission_id} finished with {outcome}",
+            version=1,
+            memory_status=ProjectMemoryStatus.ACTIVE,
+        )
+        db.add(pm_outcome)
+        indexed_records.append(pm_outcome.id)
+
+        # 2. Index architectural decisions
+        for d in (decisions or []):
+            dec = AgentDecision(
+                organization_id=organization_id,
+                project_id=project_id,
+                mission_id=mission_id,
+                agent_id=d.get("agent_id") or "SolutionArchitect",
+                decision=d.get("decision", ""),
+                reason=d.get("reason", ""),
+                evidence=d.get("evidence"),
+                alternatives=d.get("alternatives"),
+            )
+            db.add(dec)
+            # Also mirror as searchable ProjectMemory
+            pm_dec = ProjectMemory(
+                id=str(uuid.uuid4()),
+                project_id=project_id,
+                organization_id=organization_id,
+                category="episodic_architecture",
+                key=f"decision_{mission_id[:8]}_{str(uuid.uuid4())[:6]}",
+                value=f"Decision: {dec.decision} | Reason: {dec.reason}",
+                source_agent_id=dec.agent_id,
+                confidence=0.95,
+                version=1,
+                memory_status=ProjectMemoryStatus.ACTIVE,
+            )
+            db.add(pm_dec)
+            indexed_records.append(pm_dec.id)
+
+        # 3. Index defect remediations & bug-fix patterns
+        for b in (bug_fixes or []):
+            pm_fix = ProjectMemory(
+                id=str(uuid.uuid4()),
+                project_id=project_id,
+                organization_id=organization_id,
+                category="episodic_defect_remediation",
+                key=f"bugfix_{mission_id[:8]}_{str(uuid.uuid4())[:6]}",
+                value=f"Defect: {b.get('defect', '')} | Fix: {b.get('fix', '')} | Root Cause: {b.get('root_cause', '')}",
+                source_agent_id="SentinelQA",
+                confidence=1.0,
+                evidence=b.get("reproducer", ""),
+                version=1,
+                memory_status=ProjectMemoryStatus.ACTIVE,
+            )
+            db.add(pm_fix)
+            indexed_records.append(pm_fix.id)
+
+        # 4. Index retrospectives & lessons learned
+        for l in (lessons or []):
+            les = AgentLesson(
+                organization_id=organization_id,
+                project_id=project_id,
+                mission_id=mission_id,
+                agent_id=l.get("agent_id") or "LearningLoopAgent",
+                type=AgentLessonType.REVIEW_REJECTION if str(l.get("type", "")).upper() == "REVIEW_REJECTION" else AgentLessonType.FAILURE,
+                cause=l.get("cause", ""),
+                lesson=l.get("lesson", ""),
+            )
+            db.add(les)
+            pm_les = ProjectMemory(
+                id=str(uuid.uuid4()),
+                project_id=project_id,
+                organization_id=organization_id,
+                category="episodic_convention",
+                key=f"lesson_{mission_id[:8]}_{str(uuid.uuid4())[:6]}",
+                value=f"Cause: {les.cause} | Lesson: {les.lesson}",
+                source_agent_id=les.agent_id,
+                confidence=0.9,
+                version=1,
+                memory_status=ProjectMemoryStatus.ACTIVE,
+            )
+            db.add(pm_les)
+            indexed_records.append(pm_les.id)
+
+        await db.commit()
+        return {
+            "indexed_count": len(indexed_records),
+            "mission_id": mission_id,
+            "project_id": project_id,
+            "status": "INDEXED",
+        }
+
+    @classmethod
+    async def query_episodic_memory(
+        cls,
+        db: AsyncSession,
+        project_id: str,
+        query: str,
+        limit: int = 5,
+        threshold: float = 0.05,
+    ) -> List[Dict[str, Any]]:
+        """
+        Dynamically queries cross-session episodic knowledge (architecture decisions,
+        defect remediations, conventions) for a project using vector & lexical similarity.
+        """
+        import numpy as np
+        from backend.services.embedding import EmbeddingUtils, tokenize_code_identifiers
+
+        if not query or not query.strip():
+            return []
+
+        stmt = select(ProjectMemory).where(
+            ProjectMemory.project_id == project_id,
+            ProjectMemory.memory_status == ProjectMemoryStatus.ACTIVE,
+        )
+        res = await db.execute(stmt)
+        memories = res.scalars().all()
+        if not memories:
+            return []
+
+        query_vec = np.array(EmbeddingUtils.generate_embedding(query), dtype=np.float64)
+        q_tokens = set(tokenize_code_identifiers(query))
+        scored = []
+
+        for m in memories:
+            content = f"{m.key} {m.value}"
+            mem_vec = np.array(EmbeddingUtils.generate_embedding(content), dtype=np.float64)
+            sim = 0.0
+            if mem_vec.shape == query_vec.shape:
+                dot = float(np.dot(query_vec, mem_vec))
+                sim = max(0.0, dot)
+
+            # Lexical identifier overlap bonus
+            m_tokens = set(tokenize_code_identifiers(content))
+            lex_overlap = len(q_tokens & m_tokens) / (len(q_tokens) or 1)
+            hybrid_score = (0.7 * sim) + (0.3 * lex_overlap)
+
+            if hybrid_score >= threshold:
+                scored.append({
+                    "id": m.id,
+                    "category": m.category,
+                    "key": m.key,
+                    "content": m.value,
+                    "confidence": m.confidence,
+                    "evidence": m.evidence,
+                    "similarity": round(hybrid_score, 4),
+                    "created_at": m.created_at.isoformat() if hasattr(m.created_at, "isoformat") else str(m.created_at),
+                })
+
+        scored.sort(key=lambda x: x["similarity"], reverse=True)
+        return scored[:limit]
+
+    @classmethod
+    async def get_episodic_context(cls, db: AsyncSession, project_id: str, query: str) -> str:
+        """Formats episodic memories into a prompt block for mission planning."""
+        memories = await cls.query_episodic_memory(db, project_id, query, limit=5)
+        if not memories:
+            return ""
+
+        lines = [
+            "### Cross-Session Episodic Knowledge Graph (Kyros Standard):",
+            "The following past architectural decisions, defect remediations, and conventions were retrieved:",
+        ]
+        for m in memories:
+            lines.append(f"- **[{m['category'].upper()}]** {m['content']} *(score: {m['similarity']})*")
+        return "\n".join(lines)
+

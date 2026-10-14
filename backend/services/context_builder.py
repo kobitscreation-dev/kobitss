@@ -230,6 +230,18 @@ async def build_agent_context(
         except Exception:
             pass
 
+        # 8B. Enterprise Cross-Session Episodic Memory Context (Kyros Standard)
+        try:
+            from backend.services.memory_service import MemoryService
+            episodic_ctx = await MemoryService.get_episodic_context(db, project.id, search_query)
+            if episodic_ctx:
+                context_parts.append("\n==================================================")
+                context_parts.append("ENTERPRISE EPISODIC MEMORY (REMEDIATIONS & ARCHITECTURE)")
+                context_parts.append("==================================================")
+                context_parts.append(episodic_ctx)
+        except Exception:
+            pass
+
     # 9. Task Context
     context_parts.append("\n==================================================")
     context_parts.append("CURRENT TASK OBJECTIVE")

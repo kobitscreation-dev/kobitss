@@ -380,6 +380,69 @@ class MissionRuntime:
                 except Exception:
                     pass
 
+        # Stage 2F: Containerized In-Sandbox Pre-Review & Linting Gate (Kyros Standard)
+        container_verification = None
+        from backend.services.environment_bootstrapper import EnvironmentBootstrapper
+        from backend.services.cloud_sandbox import CloudMicroVMSandbox
+        driver = EnvironmentBootstrapper.detect_isolation_driver()
+        is_cloud_env = (driver == "cloud_microvm" or CloudMicroVMSandbox.is_cloud_native()) and (
+            CloudMicroVMSandbox.is_configured() or CloudMicroVMSandbox.is_cloud_native()
+        )
+
+        if is_cloud_env and not syntax_errors:
+            try:
+                sb_session_id = os.path.basename(sandbox_dir).replace("sandbox-", "")
+                cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=sb_session_id)
+                cloud_sb.ensure_synced(local_dir=sandbox_dir, remote_dir="/workspace")
+                linters_ran = []
+
+                # Containerized Python Linting Gate (ruff / flake8)
+                if py_candidates:
+                    linters_ran.append("ruff/flake8")
+                    c_lint = cloud_sb.run_command(f"ruff check {' '.join(py_candidates)} || flake8 {' '.join(py_candidates)}", timeout=30, workdir="/workspace")
+                    if c_lint.get("exit_code") != 0:
+                        err_msg = (c_lint.get("stderr") or c_lint.get("stdout") or "").strip()
+                        if err_msg:
+                            syntax_errors.append(f"Container lint (ruff/flake8): {err_msg[:200]}")
+
+                # Containerized JS/TS Linting Gate (eslint)
+                if js_ts_candidates:
+                    linters_ran.append("eslint")
+                    js_lint = cloud_sb.run_command(f"npx eslint {' '.join(js_ts_candidates)} || eslint {' '.join(js_ts_candidates)}", timeout=30, workdir="/workspace")
+                    if js_lint.get("exit_code") != 0:
+                        err_msg = (js_lint.get("stderr") or js_lint.get("stdout") or "").strip()
+                        if err_msg:
+                            syntax_errors.append(f"Container lint (eslint): {err_msg[:200]}")
+
+                # Containerized Go Vet / Test Gate
+                if verified_by_language.get("go") or go_module_name:
+                    linters_ran.append("go vet")
+                    go_res = cloud_sb.run_command("go vet ./...", timeout=30, workdir="/workspace")
+                    if go_res.get("exit_code") != 0:
+                        err_msg = (go_res.get("stderr") or go_res.get("stdout") or "").strip()
+                        if err_msg:
+                            syntax_errors.append(f"Container go vet: {err_msg[:200]}")
+
+                # Containerized Rust Check / Test Gate
+                if verified_by_language.get("rust") or os.path.isfile(os.path.join(sandbox_dir, "Cargo.toml")):
+                    linters_ran.append("cargo check")
+                    rust_res = cloud_sb.run_command("cargo check --quiet", timeout=30, workdir="/workspace")
+                    if rust_res.get("exit_code") != 0:
+                        err_msg = (rust_res.get("stderr") or rust_res.get("stdout") or "").strip()
+                        if err_msg:
+                            syntax_errors.append(f"Container cargo check: {err_msg[:200]}")
+
+                container_verification = {
+                    "driver": "cloud_microvm",
+                    "executed_in_sandbox": True,
+                    "container_isolated": True,
+                    "status": "PASSED" if not syntax_errors else "FAILED",
+                    "linters_ran": linters_ran,
+                    "passed": not bool(syntax_errors),
+                }
+            except Exception as e:
+                logger.warning(f"In-sandbox container verification error: {e}")
+
         # Stage 3A: Automated Pre-Review Python Pytest Gate on changed Python test files
         py_test_files = [
             f for f in py_candidates
@@ -546,6 +609,7 @@ class MissionRuntime:
             "verified_files": verified_files,
             "verified_by_language": verified_by_language,
             "verified_imports": list(dict.fromkeys(verified_imports)),
+            "container_verification": container_verification,
             "pytest_summary": pytest_summary,
             "node_test_summary": node_test_summary,
             "errors": syntax_errors,
@@ -1827,6 +1891,24 @@ class MissionRuntime:
                 TrajectoryCollector.harvest_from_db()
             except Exception:
                 pass
+            try:
+                from backend.services.memory_service import MemoryService
+                await MemoryService.index_mission_outcome(
+                    db=db,
+                    mission_id=mission.id,
+                    project_id=mission.project_id or "default_project",
+                    organization_id=mission.organization_id or "default_org",
+                    outcome="SUCCESS",
+                    decisions=[
+                        {"decision": f"Phase {mission.phase.value if hasattr(mission.phase, 'value') else mission.phase} completed", "reason": mission.current_stage or "Completed in fluid loop"}
+                    ] if mission.phase else [],
+                    lessons=[
+                        {"cause": "Fluid Verification", "lesson": f"Fluid loop verified mission: {mission.title or mission.id}"}
+                    ],
+                    architectural_notes=f"Mission {mission.id}: {mission.title or 'Completed'} successfully in fluid loop.",
+                )
+            except Exception as mem_err:
+                logger.warning(f"Failed to index mission outcome in episodic memory: {mem_err}")
             await db.commit()
             return "HALT"
 
@@ -2190,6 +2272,24 @@ class MissionRuntime:
                     TrajectoryCollector.harvest_from_db()
                 except Exception:
                     pass
+                try:
+                    from backend.services.memory_service import MemoryService
+                    await MemoryService.index_mission_outcome(
+                        db=db,
+                        mission_id=mission.id,
+                        project_id=mission.project_id or "default_project",
+                        organization_id=mission.organization_id or "default_org",
+                        outcome="SUCCESS",
+                        decisions=[
+                            {"decision": f"Phase {mission.phase.value if hasattr(mission.phase, 'value') else mission.phase} completed", "reason": mission.current_stage or "Completed"}
+                        ] if mission.phase else [],
+                        lessons=[
+                            {"cause": "Mission Execution", "lesson": f"Mission {mission.title or mission.id} completed successfully"}
+                        ],
+                        architectural_notes=f"Mission {mission.id}: {mission.title or 'Completed'} successfully.",
+                    )
+                except Exception as mem_err:
+                    logger.warning(f"Failed to index mission outcome in episodic memory: {mem_err}")
             else:
                 await self._broadcast("phase_complete", {
                     "phase": current_phase.value,
