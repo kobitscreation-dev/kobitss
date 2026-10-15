@@ -83,30 +83,35 @@ async def dashboard_agents(
     org_id = await _org_id(db, current_user.id)
     stats: Dict[str, Dict[str, Any]] = {}
     if org_id:
-        role_expr = func.json_extract(Task.metadata_json, "$.agent_role")
         q = (
             select(
-                role_expr.label("role"),
+                Task.metadata_json,
                 AgentRun.status,
-                func.count(AgentRun.id),
-                func.sum(AgentRun.tokens_input + AgentRun.tokens_output),
-                func.max(AgentRun.started_at),
+                AgentRun.tokens_input,
+                AgentRun.tokens_output,
+                AgentRun.started_at,
             )
             .join(Task, AgentRun.task_id == Task.id)
             .where(AgentRun.organization_id == org_id)
-            .group_by(role_expr, AgentRun.status)
         )
-        for role, status, count, tokens, last in (await db.execute(q)).all():
+        for meta_raw, status, t_in, t_out, last in (await db.execute(q)).all():
+            role = None
+            if meta_raw:
+                try:
+                    meta = json.loads(meta_raw)
+                    role = meta.get("agent_role") or meta.get("agent_name")
+                except Exception:
+                    pass
             if not role:
                 continue
             s = stats.setdefault(role, {"runs": 0, "completed": 0, "failed": 0, "tokens": 0, "last_run_at": None})
-            s["runs"] += count
+            s["runs"] += 1
             status_val = status.value if hasattr(status, "value") else str(status)
             if status_val == "COMPLETED":
-                s["completed"] += count
+                s["completed"] += 1
             elif status_val == "FAILED":
-                s["failed"] += count
-            s["tokens"] += tokens or 0
+                s["failed"] += 1
+            s["tokens"] += int((t_in or 0) + (t_out or 0))
             if last and (s["last_run_at"] is None or last > s["last_run_at"]):
                 s["last_run_at"] = last
 

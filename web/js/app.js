@@ -163,6 +163,10 @@ async function fetchDashboard(silent = false) {
   }
   state._fetching = true;
   try {
+    if (state.projectId && state.projectId.startsWith('demo-')) {
+      state.projectId = '';
+      localStorage.removeItem('kobits.projectId');
+    }
     let data;
     const hasSpecificProject = state.projectId && state.projectId !== 'default' && state.projectId !== '__new__';
     const q = hasSpecificProject ? `?project_id=${encodeURIComponent(state.projectId)}` : '';
@@ -601,6 +605,12 @@ function renderOverviewTab(d, milestones) {
         </div>
       </div>
       <textarea id="ky-mission-prompt" class="ky-prompt-textarea" placeholder="What should Kobits build, refactor, or test? (e.g. 'Add Stripe webhook verification with HMAC-SHA256 and pytest assertions')"></textarea>
+      <div class="ky-prompt-suggestions" style="display:flex;align-items:center;gap:6px;padding:6px 14px 4px;flex-wrap:wrap">
+        <span style="font-size:10.5px;color:var(--text-3);font-family:var(--font-mono)">SUGGESTIONS:</span>
+        <button type="button" class="ky-btn ky-btn-ghost ky-btn-xs" style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border)" onclick="window.kySetPrompt?.('Audit repository for OWASP Top 10 security vulnerabilities and exposed secrets')">🔍 Security Audit</button>
+        <button type="button" class="ky-btn ky-btn-ghost ky-btn-xs" style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border)" onclick="window.kySetPrompt?.('Synthesize comprehensive pytest test suite with regression edge cases')">🧪 Pytest Suite</button>
+        <button type="button" class="ky-btn ky-btn-ghost ky-btn-xs" style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border)" onclick="window.kySetPrompt?.('Implement production health check endpoint with database ping and telemetry')">⚡ Health Check</button>
+      </div>
       <div class="ky-prompt-footer">
         <div class="ky-prompt-hints">
           <span><span>↵</span> Enter to submit</span>
@@ -1159,7 +1169,9 @@ function wireTabEvents() {
 
       try {
         const title = text.length > 60 ? text.slice(0, 60) + '…' : text;
-        const targetPid = (state.projectId && state.projectId !== '__new__') ? state.projectId : 'default';
+        const targetPid = (state.projectId && state.projectId !== '__new__' && !state.projectId.startsWith('demo-'))
+          ? state.projectId
+          : (state.dashboard?.project?.id || 'default');
         const res = await post(`/missions/projects/${encodeURIComponent(targetPid)}/missions`, {
           title: title,
           objective: text,
@@ -1796,9 +1808,13 @@ function openCreateMissionModal() {
   const host = document.getElementById('ky-modal-host');
   if (!host) return;
 
+  if (state.projectId && state.projectId.startsWith('demo-')) {
+    state.projectId = '';
+    localStorage.removeItem('kobits.projectId');
+  }
   const d = state.dashboard;
   const projects = d?.projects || [];
-  const curPid = state.projectId || (projects[0]?.id) || 'default';
+  const curPid = (state.projectId && !state.projectId.startsWith('demo-')) ? state.projectId : ((projects[0]?.id) || 'default');
 
   let projectOptionsHtml = '';
   if (projects.length > 0) {
@@ -1934,7 +1950,9 @@ function openCreateMissionModal() {
 
     try {
       const title = text.length > 60 ? text.slice(0, 60) + '…' : text;
-      const targetPid = (selectedPid && selectedPid !== '__new__') ? selectedPid : 'default';
+      const targetPid = (selectedPid && selectedPid !== '__new__' && !selectedPid.startsWith('demo-'))
+        ? selectedPid
+        : (state.dashboard?.project?.id || 'default');
       const res = await post(`/missions/projects/${encodeURIComponent(targetPid)}/missions`, {
         title: title,
         objective: text,
@@ -2990,3 +3008,12 @@ setInterval(() => {
   fetchDashboard(true);
 }, 8000);
 
+
+
+window.kySetPrompt = function(txt) {
+  const el = document.getElementById('ky-mission-prompt');
+  if (el) {
+    el.value = txt;
+    el.focus();
+  }
+};

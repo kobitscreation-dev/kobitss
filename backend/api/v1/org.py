@@ -171,13 +171,15 @@ async def get_dashboard(
     }
 
     project = None
-    if not project_id or project_id.lower() in ("default", "latest", "active", "", "null", "undefined"):
+    if not project_id or project_id.lower() in ("default", "latest", "active", "", "null", "undefined") or project_id.startswith("demo-"):
         project = projects[0]
     else:
-        project = next((p for p in projects if p.id == project_id or p.name == project_id), None)
-
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+        project = next((p for p in projects if p.id == project_id or p.name == project_id or p.id.startswith(project_id)), None)
+        if project is None:
+            if project_id.startswith("demo-"):
+                project = projects[0]
+            else:
+                raise HTTPException(status_code=404, detail="Project not found")
     pid = project.id
 
     # ── Tasks → progress ─────────────────────────────────────────────
@@ -369,31 +371,30 @@ async def get_dashboard(
     from backend.services.agent_registry import AGENT_REGISTRY
     role_By_Type = {adef.type.value: adef for adef in AGENT_REGISTRY.values()}
     role_stats: Dict[str, Dict[str, Any]] = {}
-    role_expr = func.json_extract(Task.metadata_json, "$.agent_role")
     role_q = (
         select(
-            role_expr.label("role"),
+            Task.metadata_json,
             AgentRun.status,
-            func.count(AgentRun.id),
-            func.coalesce(func.sum(AgentRun.tokens_input + AgentRun.tokens_output), 0),
-            func.coalesce(func.sum(AgentRun.estimated_cost), 0.0),
-            func.max(AgentRun.started_at),
+            AgentRun.tokens_input,
+            AgentRun.tokens_output,
+            AgentRun.estimated_cost,
+            AgentRun.started_at,
         )
         .join(Task, AgentRun.task_id == Task.id)
         .where(AgentRun.organization_id == org_id, AgentRun.project_id == pid)
-        .group_by(role_expr, AgentRun.status)
     )
-    for r_role, r_status, r_cnt, r_tok, r_cost, r_last in (await db.execute(role_q)).all():
+    for meta_raw, r_status, r_in, r_out, r_cost, r_last in (await db.execute(role_q)).all():
+        r_role = _agent_from_meta(meta_raw)
         if not r_role:
             continue
         st = role_stats.setdefault(r_role, {"runs": 0, "completed": 0, "failed": 0, "tokens": 0, "cost_usd": 0.0, "last_run_at": None})
-        st["runs"] += r_cnt
+        st["runs"] += 1
         sv = _enum(r_status)
         if sv == "COMPLETED":
-            st["completed"] += r_cnt
+            st["completed"] += 1
         elif sv == "FAILED":
-            st["failed"] += r_cnt
-        st["tokens"] += int(r_tok or 0)
+            st["failed"] += 1
+        st["tokens"] += int((r_in or 0) + (r_out or 0))
         st["cost_usd"] += float(r_cost or 0.0)
         if r_last and (st["last_run_at"] is None or r_last > st["last_run_at"]):
             st["last_run_at"] = r_last
