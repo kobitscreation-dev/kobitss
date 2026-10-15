@@ -142,15 +142,43 @@ class DurableQueue:
         )
 
         async with db_core.AsyncSessionLocal() as db:
+            existing = await db.get(DurableJob, jid)
+            if existing:
+                existing.queue_name = queue_name
+                existing.task_type = task_type
+                existing.payload_json = json.dumps(payload)
+                existing.priority = priority
+                existing.status = JobStatus.PENDING.value
+                existing.worker_id = None
+                existing.lease_timeout_at = None
+                existing.heartbeat_at = None
+                existing.attempt_count = 0
+                existing.max_retries = max_retries
+                existing.backoff_seconds = backoff_seconds
+                existing.scheduled_at = scheduled_at
+                existing.result_json = None
+                existing.error_trace = None
+                existing.updated_at = now
+                await db.commit()
+                logger.info(f"Re-enqueued existing durable job {jid[:8]} (type={task_type}, queue={queue_name}) as PENDING")
+                return jid
+
             db.add(job)
             try:
                 await db.commit()
             except Exception:
                 await db.rollback()
-                await cls.init_schema()
                 async with db_core.AsyncSessionLocal() as retry_db:
-                    retry_db.add(job)
-                    await retry_db.commit()
+                    concurrent_job = await retry_db.get(DurableJob, jid)
+                    if concurrent_job:
+                        concurrent_job.status = JobStatus.PENDING.value
+                        concurrent_job.payload_json = json.dumps(payload)
+                        concurrent_job.updated_at = now
+                        await retry_db.commit()
+                    else:
+                        await cls.init_schema()
+                        retry_db.add(job)
+                        await retry_db.commit()
 
         logger.info(f"Enqueued durable job {jid[:8]} (type={task_type}, queue={queue_name}, priority={priority})")
         return jid

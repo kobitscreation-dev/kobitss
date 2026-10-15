@@ -165,9 +165,6 @@ class BedrockProvider(LLMProvider):
                             "type": "enabled",
                             "budget_tokens": thinking_cfg.budget_tokens,
                         }
-                        call_kwargs["temperature"] = 1.0
-                    else:
-                        call_kwargs["temperature"] = 0.0
 
                     if anthropic_tools and turn_count < max_turns:
                         call_kwargs["tools"] = anthropic_tools
