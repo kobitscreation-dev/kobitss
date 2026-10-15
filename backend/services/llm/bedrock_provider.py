@@ -71,10 +71,16 @@ class BedrockProvider(LLMProvider):
         system_prompt: str,
         user_prompt: str,
         schema: Dict[str, Any],
-        model: str,
+        model: Optional[str] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         max_turns: int = 30,
-        tool_executor=None
+        tool_executor=None,
+        mission_id: Optional[str] = None,
+        agent_role: Optional[str] = None,
+        big_think: Optional[bool] = None,
+        thinking_budget: Optional[int] = None,
+        reasoning_effort: Optional[str] = None,
+        **extra_kwargs,
     ) -> Dict[str, Any]:
         """
         Executes an AWS Bedrock Claude invocation with 30-turn autonomous ReAct tool calling.
@@ -129,6 +135,14 @@ class BedrockProvider(LLMProvider):
         compactor = ContextCompactor(max_token_budget=context_budget, recent_turns=3)
         compaction_history = []
 
+        from backend.services.llm.thinking_engine import ThinkingEngine, ThinkingConfig
+        thinking_cfg: ThinkingConfig = extra_kwargs.get("thinking_config") or ThinkingEngine.resolve_config(
+            model_name=resolved_model,
+            requested_budget=thinking_budget,
+            requested_effort=reasoning_effort,
+            explicit_enable=big_think,
+        )
+
         while turn_count < max_turns:
             turn_count += 1
 
@@ -140,16 +154,25 @@ class BedrockProvider(LLMProvider):
 
             for attempt in range(self.max_retries):
                 try:
-                    kwargs = {
+                    call_kwargs = {
                         "model": resolved_model,
-                        "max_tokens": 8192,
+                        "max_tokens": max(8192, thinking_cfg.budget_tokens + 4096) if thinking_cfg.enabled else 8192,
                         "system": full_system,
                         "messages": messages,
                     }
-                    if anthropic_tools and turn_count < max_turns:
-                        kwargs["tools"] = anthropic_tools
+                    if thinking_cfg.enabled and ThinkingEngine.is_reasoning_model(resolved_model):
+                        call_kwargs["thinking"] = {
+                            "type": "enabled",
+                            "budget_tokens": thinking_cfg.budget_tokens,
+                        }
+                        call_kwargs["temperature"] = 1.0
+                    else:
+                        call_kwargs["temperature"] = 0.0
 
-                    response = await client.messages.create(**kwargs)
+                    if anthropic_tools and turn_count < max_turns:
+                        call_kwargs["tools"] = anthropic_tools
+
+                    response = await client.messages.create(**call_kwargs)
 
                     if response.usage:
                         total_input_tokens += getattr(response.usage, "input_tokens", 0)
@@ -164,6 +187,14 @@ class BedrockProvider(LLMProvider):
                             text_content += block.text
                         elif block.type == "tool_use":
                             tool_calls.append(block)
+                        elif block.type == "thinking":
+                            t_text = getattr(block, "thinking", "")
+                            if t_text and mission_id:
+                                await ThinkingEngine.broadcast_thought(
+                                    mission_id=mission_id,
+                                    agent_role=agent_role or "CODER",
+                                    thought_chunk=t_text,
+                                )
 
                     # Handle intermediate tool calls if present
                     if tool_calls and tool_executor and turn_count < max_turns:

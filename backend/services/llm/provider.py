@@ -11,7 +11,8 @@ class LLMProvider(ABC):
         model: str,
         tools: Optional[List[Dict[str, Any]]] = None,
         max_turns: int = 10,
-        tool_executor=None
+        tool_executor=None,
+        **kwargs,
     ) -> Dict[str, Any]:
         """
         Generates structured output. Can support multi-turn tool calling internally.
