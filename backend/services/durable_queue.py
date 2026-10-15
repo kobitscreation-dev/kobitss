@@ -362,7 +362,7 @@ class DurableQueue:
                 return False
 
     @classmethod
-    async def reap_stale_leases(cls) -> int:
+    async def reap_stale_leases(cls, grace_period_seconds: int = 0) -> int:
         """
         Background cleanup: Find LEASED jobs whose workers died (lease_timeout_at < NOW()).
         Automatically resurrect them or move to DEAD_LETTER if max_retries exceeded.
@@ -393,7 +393,7 @@ class DurableQueue:
                         job.status = JobStatus.PENDING.value
                         job.worker_id = None
                         job.lease_timeout_at = None
-                        job.scheduled_at = now + timedelta(seconds=5)  # 5s grace period
+                        job.scheduled_at = (now + timedelta(seconds=grace_period_seconds)) if grace_period_seconds > 0 else now
                         job.error_trace = f"Worker lease expired ({job.worker_id} died). Automatically re-queued by reaper."
                         job.updated_at = now
                     reaped_count += 1

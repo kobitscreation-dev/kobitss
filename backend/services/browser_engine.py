@@ -296,10 +296,13 @@ class HeadlessBrowserEngine:
         # In-process Fallback Screenshot Generation (100% valid PNG)
         return generate_valid_png(width=self.viewport["width"], height=self.viewport["height"])
 
-    async def screenshot_base64(self, full_page: bool = True) -> str:
-        """Captures a screenshot and encodes it as a base64 string."""
+    async def screenshot_base64(self, full_page: bool = True, data_uri: bool = False) -> str:
+        """Captures a screenshot and encodes it as a base64 string (or data URI if requested)."""
         raw_bytes = await self.screenshot(full_page=full_page)
-        return base64.b64encode(raw_bytes).decode("ascii")
+        b64 = base64.b64encode(raw_bytes).decode("ascii")
+        if data_uri:
+            return f"data:image/png;base64,{b64}"
+        return b64
 
     async def get_console_logs(self) -> List[Dict[str, Any]]:
         """Returns captured console logs and errors."""

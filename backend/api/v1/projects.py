@@ -519,7 +519,7 @@ async def plan_project(
                 id=str(uuid.uuid4()),
                 organization_id=project.organization_id,
                 project_id=project.id,
-                repository_id=project.repository_id,
+                repository_id=getattr(project, "repository_id", None),
                 created_by=current_user.id,
                 title=f"[{sprint_title}] {d.get('title')}",
                 objective=d.get('description'),

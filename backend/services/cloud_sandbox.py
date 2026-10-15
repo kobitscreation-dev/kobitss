@@ -5,6 +5,7 @@ with full root access, dedicated filesystem, and zero host blast radius.
 """
 
 import os
+import re
 import time
 import logging
 from pathlib import Path
@@ -521,11 +522,19 @@ class CloudMicroVMSandbox:
         except Exception as exc:
             dur_ms = int((time.perf_counter() - start_ts) * 1000)
             logger.error(f"E2B MicroVM command execution error: {exc}")
+            exit_code = 1
+            exc_str = str(exc)
+            m_code = re.search(r"exited with code (\d+)", exc_str)
+            if m_code:
+                try:
+                    exit_code = int(m_code.group(1))
+                except ValueError:
+                    exit_code = 1
             return {
                 "stdout": "",
-                "stderr": str(exc),
-                "exit_code": 1,
-                "error": str(exc),
+                "stderr": exc_str,
+                "exit_code": exit_code,
+                "error": exc_str,
                 "driver": "cloud_microvm",
                 "vm_id": f"e2b-{self.sandbox_id}",
                 "duration_ms": dur_ms,

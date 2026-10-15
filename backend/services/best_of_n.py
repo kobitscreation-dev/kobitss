@@ -643,4 +643,8 @@ class BestOfNExplorer:
         else:
             return asyncio.run(coro)
 
+    # Developer convenience alias
+    explore_best_of_n = explore_and_select
+
+
 

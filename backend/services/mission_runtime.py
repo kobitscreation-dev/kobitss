@@ -398,39 +398,47 @@ class MissionRuntime:
 
                 # Containerized Python Linting Gate (ruff / flake8)
                 if py_candidates:
-                    linters_ran.append("ruff/flake8")
                     c_lint = cloud_sb.run_command(f"ruff check {' '.join(py_candidates)} || flake8 {' '.join(py_candidates)}", timeout=30, workdir="/workspace")
-                    if c_lint.get("exit_code") != 0:
-                        err_msg = (c_lint.get("stderr") or c_lint.get("stdout") or "").strip()
+                    err_msg = (c_lint.get("stderr") or c_lint.get("stdout") or c_lint.get("error") or "").strip()
+                    is_missing = c_lint.get("exit_code") == 127 or "command not found" in err_msg.lower() or "not found" in err_msg.lower()
+                    if c_lint.get("exit_code") != 0 and not is_missing:
                         if err_msg:
                             syntax_errors.append(f"Container lint (ruff/flake8): {err_msg[:200]}")
+                    elif not is_missing:
+                        linters_ran.append("ruff/flake8")
 
                 # Containerized JS/TS Linting Gate (eslint)
                 if js_ts_candidates:
-                    linters_ran.append("eslint")
                     js_lint = cloud_sb.run_command(f"npx eslint {' '.join(js_ts_candidates)} || eslint {' '.join(js_ts_candidates)}", timeout=30, workdir="/workspace")
-                    if js_lint.get("exit_code") != 0:
-                        err_msg = (js_lint.get("stderr") or js_lint.get("stdout") or "").strip()
+                    err_msg = (js_lint.get("stderr") or js_lint.get("stdout") or js_lint.get("error") or "").strip()
+                    is_missing = js_lint.get("exit_code") == 127 or "command not found" in err_msg.lower() or "not found" in err_msg.lower()
+                    if js_lint.get("exit_code") != 0 and not is_missing:
                         if err_msg:
                             syntax_errors.append(f"Container lint (eslint): {err_msg[:200]}")
+                    elif not is_missing:
+                        linters_ran.append("eslint")
 
                 # Containerized Go Vet / Test Gate
                 if verified_by_language.get("go") or go_module_name:
-                    linters_ran.append("go vet")
                     go_res = cloud_sb.run_command("go vet ./...", timeout=30, workdir="/workspace")
-                    if go_res.get("exit_code") != 0:
-                        err_msg = (go_res.get("stderr") or go_res.get("stdout") or "").strip()
+                    err_msg = (go_res.get("stderr") or go_res.get("stdout") or go_res.get("error") or "").strip()
+                    is_missing = go_res.get("exit_code") == 127 or "command not found" in err_msg.lower() or "not found" in err_msg.lower()
+                    if go_res.get("exit_code") != 0 and not is_missing:
                         if err_msg:
                             syntax_errors.append(f"Container go vet: {err_msg[:200]}")
+                    elif not is_missing:
+                        linters_ran.append("go vet")
 
                 # Containerized Rust Check / Test Gate
                 if verified_by_language.get("rust") or os.path.isfile(os.path.join(sandbox_dir, "Cargo.toml")):
-                    linters_ran.append("cargo check")
                     rust_res = cloud_sb.run_command("cargo check --quiet", timeout=30, workdir="/workspace")
-                    if rust_res.get("exit_code") != 0:
-                        err_msg = (rust_res.get("stderr") or rust_res.get("stdout") or "").strip()
+                    err_msg = (rust_res.get("stderr") or rust_res.get("stdout") or rust_res.get("error") or "").strip()
+                    is_missing = rust_res.get("exit_code") == 127 or "command not found" in err_msg.lower() or "not found" in err_msg.lower()
+                    if rust_res.get("exit_code") != 0 and not is_missing:
                         if err_msg:
                             syntax_errors.append(f"Container cargo check: {err_msg[:200]}")
+                    elif not is_missing:
+                        linters_ran.append("cargo check")
 
                 container_verification = {
                     "driver": "cloud_microvm",
@@ -562,7 +570,7 @@ class MissionRuntime:
                             "vm_id": nt_res.get("vm_id"),
                         }
                         cloud_executed = True
-                        if nt_res.get("exit_code") != 0 and not CloudMicroVMSandbox.is_cloud_native() and os.path.isdir(sandbox_dir):
+                        if nt_res.get("exit_code") != 0 and os.path.isdir(sandbox_dir):
                             node_bin = shutil.which("node")
                             if node_bin:
                                 local_res = subprocess.run(
@@ -579,9 +587,8 @@ class MissionRuntime:
                             )
                     except Exception as cloud_err:
                         logger.warning(f"Cloud MicroVM node test failed ({cloud_err})")
-                        if not CloudMicroVMSandbox.is_cloud_native():
-                            cloud_executed = False
-                if not cloud_executed and not CloudMicroVMSandbox.is_cloud_native():
+                        cloud_executed = False
+                if not cloud_executed:
                     node_bin = shutil.which("node")
                     if node_bin:
                         nt_res = subprocess.run(

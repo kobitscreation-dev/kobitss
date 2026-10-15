@@ -35,6 +35,14 @@ class Project(Base):
     activities: Mapped[List["Activity"]] = relationship(back_populates="project", cascade="all, delete-orphan")
     memories: Mapped[List["ProjectMemory"]] = relationship(back_populates="project", cascade="all, delete-orphan")
 
+    @property
+    def repository_id(self) -> Optional[str]:
+        return getattr(self, "_repository_id", None)
+
+    @repository_id.setter
+    def repository_id(self, val: Optional[str]) -> None:
+        self._repository_id = val
+
 
 class TaskStatus(str, enum.Enum):
     PENDING = "PENDING"

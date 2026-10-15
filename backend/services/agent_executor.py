@@ -1,5 +1,6 @@
 from backend.services.memory_service import store_agent_memory, publish_project_knowledge, send_agent_message, publish_artifact, record_decision, record_lesson
 from backend.models.communication import MessageType, AgentLessonType
+from typing import Optional, Dict, List, Any, Union
 import os
 import json
 import uuid
@@ -29,18 +30,38 @@ class AgentExecutor:
 
     async def _inject_mid_turn_steering(
         self,
-        result,
-        context: dict,
-        db,
-        agent_type: AgentType,
-        agent_run_id: str,
-        trace_logs: list,
+        result=None,
+        context: Optional[dict] = None,
+        db=None,
+        agent_type: Optional[AgentType] = None,
+        agent_run_id: Optional[str] = None,
+        trace_logs: Optional[list] = None,
+        **kwargs,
     ):
         """Poll SQLite for pending HUMAN_STEERING_OVERRIDE tasks and inject into the active LLM tool turn."""
-        miss_id = (context or {}).get("mission_id") or self.mission_id
-        active_db = db or self.db
-        if active_db is None or not miss_id:
+        if result is None and "result" in kwargs:
+            result = kwargs["result"]
+        miss_id = kwargs.get("mission_id") or (context or {}).get("mission_id") or self.mission_id
+        active_db = db or kwargs.get("db") or self.db
+        close_db_when_done = False
+        if active_db is None:
+            from backend.core.database import AsyncSessionLocal
+            active_db = AsyncSessionLocal()
+            close_db_when_done = True
+
+        if not miss_id:
+            if close_db_when_done:
+                await active_db.close()
             return result
+
+        if agent_type is None:
+            agent_type = AgentType.BACKEND_ENGINEER
+        if agent_run_id is None:
+            agent_run_id = kwargs.get("agent_run_id", "run_steer")
+        if trace_logs is None:
+            trace_logs = []
+
+        injected = False
         try:
             from sqlalchemy import select
             from backend.models.project import Task, TaskStatus
@@ -72,15 +93,23 @@ class AgentExecutor:
                         st.status = TaskStatus.COMPLETED
             if injected_directives:
                 await active_db.commit()
+                injected = True
                 joined_dir = " | ".join(injected_directives)
                 if isinstance(result, dict):
-                    result = dict(result)
+                    result["_LIVE_HUMAN_STEERING_DIRECTIVE"] = (
+                        f"URGENT MID-FLIGHT STEERING FROM OPERATOR: {joined_dir}. "
+                        "You MUST immediately adapt your current implementation and subsequent tool calls to obey this directive."
+                    )
+                    result["type"] = "mid_turn_steering_injected"
                 else:
-                    result = {"output": result}
-                result["_LIVE_HUMAN_STEERING_DIRECTIVE"] = (
-                    f"URGENT MID-FLIGHT STEERING FROM OPERATOR: {joined_dir}. "
-                    "You MUST immediately adapt your current implementation and subsequent tool calls to obey this directive."
-                )
+                    result = {
+                        "output": result,
+                        "_LIVE_HUMAN_STEERING_DIRECTIVE": (
+                            f"URGENT MID-FLIGHT STEERING FROM OPERATOR: {joined_dir}. "
+                            "You MUST immediately adapt your current implementation and subsequent tool calls to obey this directive."
+                        ),
+                        "type": "mid_turn_steering_injected",
+                    }
                 entry = {
                     "type": "mid_turn_steering_injected",
                     "action": "mid_turn_steering_injected",
@@ -103,6 +132,12 @@ class AgentExecutor:
         except Exception as steer_err:
             if os.environ.get("KOBITS_VERBOSE") == "1":
                 print(f"[AgentExecutor] Mid-turn steering check error: {steer_err}")
+        finally:
+            if close_db_when_done:
+                await active_db.close()
+
+        if "current_turn" in kwargs:
+            return injected
         return result
 
     async def execute_tool(self, name: str, args: dict, context: dict = None) -> dict:
