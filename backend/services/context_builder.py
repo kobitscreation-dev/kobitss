@@ -259,6 +259,26 @@ async def build_agent_context(
         except Exception:
             pass
 
+        # 8D. AST Blast Radius & Impact Analysis (Recursive Graph Engine)
+        try:
+            from backend.services.graph_service import GraphService
+            target_candidates = []
+            if graph_hits:
+                target_candidates.extend([gh.get("name") for gh in graph_hits[:2] if gh.get("name")])
+            for target_sym in target_candidates:
+                blast = await GraphService.compute_impact_blast_radius(db, project.id, target_sym, max_depth=3)
+                if blast.get("total_impacted_symbols", 0) > 0:
+                    context_parts.append("\n==================================================")
+                    context_parts.append(f"AST BLAST RADIUS & IMPACT ANALYSIS ({target_sym})")
+                    context_parts.append("==================================================")
+                    context_parts.append(f"Risk Level: {blast.get('risk_level')}")
+                    context_parts.append(f"Direct Callers/Dependents: {blast.get('direct_impact_count')} | Transitive: {blast.get('transitive_impact_count')}")
+                    files_str = ', '.join(blast.get('impacted_files', [])[:6])
+                    context_parts.append(f"Impacted Files ({blast.get('impacted_files_count')}): {files_str}")
+                    break
+        except Exception:
+            pass
+
     # 9. Task Context
     context_parts.append("\n==================================================")
     context_parts.append("CURRENT TASK OBJECTIVE")

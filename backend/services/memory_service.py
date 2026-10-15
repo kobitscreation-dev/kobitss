@@ -489,7 +489,13 @@ class MemoryService:
         return [item[1] for item in scored_nodes[:limit]]
 
     @staticmethod
-    async def get_graph_node_details(db: AsyncSession, project_id: str, node_id: str):
+    async def get_graph_node_details(
+        db: AsyncSession,
+        project_id: str,
+        node_id: str,
+        include_blast_radius: bool = False,
+        max_depth: int = 3,
+    ):
         from backend.models.graph import GraphNode, GraphEdge
         from sqlalchemy.orm import selectinload
         
@@ -512,11 +518,74 @@ class MemoryService:
         result_in = await db.execute(stmt_in)
         edges_in = result_in.scalars().all()
         
-        return {
+        payload = {
             "node": {"id": node.id, "type": node.node_type, "name": node.name, "file": node.file_path, "content": node.content},
             "outgoing_edges": [{"edge_type": e.edge_type, "target": {"id": e.target.id, "type": e.target.node_type, "name": e.target.name, "file": e.target.file_path}} for e in edges_out if e.target],
             "incoming_edges": [{"edge_type": e.edge_type, "source": {"id": e.source.id, "type": e.source.node_type, "name": e.source.name, "file": e.source.file_path}} for e in edges_in if e.source]
         }
+
+        if include_blast_radius:
+            from backend.services.graph_service import GraphService
+            blast = await GraphService.compute_impact_blast_radius(
+                db=db,
+                project_id=project_id,
+                target_symbol_or_path=node.name,
+                max_depth=max_depth,
+            )
+            payload["blast_radius"] = blast
+
+        return payload
+
+    @classmethod
+    async def compute_symbol_blast_radius(
+        cls,
+        db: AsyncSession,
+        project_id: str,
+        symbol_or_path: str,
+        max_depth: int = 4,
+    ) -> Dict[str, Any]:
+        """Computes the full recursive impact blast radius for a symbol or file."""
+        from backend.services.graph_service import GraphService
+        return await GraphService.compute_impact_blast_radius(
+            db=db,
+            project_id=project_id,
+            target_symbol_or_path=symbol_or_path,
+            max_depth=max_depth,
+        )
+
+    @classmethod
+    async def find_transitive_dependencies(
+        cls,
+        db: AsyncSession,
+        project_id: str,
+        symbol_name: str,
+        max_depth: int = 4,
+    ) -> List[Dict[str, Any]]:
+        """Finds all transitive downstream dependencies for a symbol."""
+        from backend.services.graph_service import GraphService
+        return await GraphService.find_downstream_dependencies(
+            db=db,
+            project_id=project_id,
+            start_id_or_name=symbol_name,
+            max_depth=max_depth,
+        )
+
+    @classmethod
+    async def find_transitive_callers(
+        cls,
+        db: AsyncSession,
+        project_id: str,
+        symbol_name: str,
+        max_depth: int = 4,
+    ) -> List[Dict[str, Any]]:
+        """Finds all transitive upstream callers for a symbol."""
+        from backend.services.graph_service import GraphService
+        return await GraphService.find_upstream_callers(
+            db=db,
+            project_id=project_id,
+            target_id_or_name=symbol_name,
+            max_depth=max_depth,
+        )
 
     # =========================================================================
     # Enterprise Cross-Session Episodic Memory & Knowledge Graph (Kyros Standard)

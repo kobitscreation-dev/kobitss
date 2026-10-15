@@ -301,6 +301,24 @@ class TeamMemoryManager:
             return cls._stores[project_id]
 
     @classmethod
+    def scrub_secrets(cls, text: Optional[str]) -> Optional[str]:
+        """Scrubs AWS access keys, secret keys, passwords, bearer tokens, and private keys."""
+        if not text:
+            return text
+        cleaned = text
+        # AWS Access Key ID (AKIA/ASIA)
+        cleaned = re.sub(r'\b(AKIA|ASIA)[0-9A-Z]{16}\b', '<SCRUBBED_AWS_KEY_ID>', cleaned)
+        # AWS Secret Access Key / Bedrock API key assignments
+        cleaned = re.sub(r'(?i)(aws[_-]?secret[_-]?access[_-]?key|aws[_-]?bedrock[_-]?api[_-]?key)\s*[:=]\s*["\']?[^"\'\s]+["\']?', r'\1: <SCRUBBED_SECRET>', cleaned)
+        # Passwords and API keys assignments
+        cleaned = re.sub(r'(?i)(api[_-]?key|password|secret)\s*[:=]\s*["\']?[^"\'\s]+["\']?', r'\1: <SCRUBBED_SECRET>', cleaned)
+        # Bearer tokens
+        cleaned = re.sub(r'(?i)\bbearer\s+[a-zA-Z0-9_\-\.]{8,}\b', 'Bearer <SCRUBBED_BEARER_TOKEN>', cleaned)
+        # Private Keys
+        cleaned = re.sub(r'-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]+?-----END [A-Z ]+PRIVATE KEY-----', '<SCRUBBED_PRIVATE_KEY>', cleaned)
+        return cleaned
+
+    @classmethod
     def store_memory(
         cls,
         project_id: str,
@@ -318,9 +336,9 @@ class TeamMemoryManager:
         entry_id: Optional[str] = None,
     ) -> TeamMemoryEntry:
         """Stores a structured memory entry in the team memory store."""
-        # Sanitize sensitive tokens
-        if "api_key" in content.lower() or "password" in content.lower() or "secret" in content.lower():
-            content = re.sub(r'(?i)(api[_-]?key|password|secret)\s*[:=]\s*["\']?[^"\'\s]+["\']?', r'\1: <SCRUBBED_SECRET>', content)
+        # Sanitize sensitive tokens and credentials
+        content = cls.scrub_secrets(content) or ""
+        evidence = cls.scrub_secrets(evidence)
 
         ns = MemoryNamespace.normalize(namespace)
         eid = entry_id or str(uuid.uuid4())
@@ -661,12 +679,105 @@ class TeamMemoryManager:
             source_agent_id=entry.source_agent,
             confidence=entry.confidence,
             evidence=entry.evidence,
+            embedding_json=json.dumps(entry.embedding) if entry.embedding else None,
             version=1,
             memory_status=ProjectMemoryStatus.ACTIVE,
         )
         db.add(pm)
         await db.commit()
         return pm
+
+    @classmethod
+    async def load_from_db(cls, db, project_id: str) -> int:
+        """
+        Hydrates TeamMemoryManager registry from persistent ProjectMemory rows in database.
+        Loads all active memories for the project.
+        """
+        from backend.models.project import ProjectMemory, ProjectMemoryStatus
+        from sqlalchemy import select
+
+        stmt = select(ProjectMemory).where(
+            ProjectMemory.project_id == project_id,
+            ProjectMemory.memory_status == ProjectMemoryStatus.ACTIVE
+        )
+        res = await db.execute(stmt)
+        memories = res.scalars().all()
+        loaded = 0
+
+        with cls._lock:
+            store = cls._get_project_store(project_id)
+            for m in memories:
+                if m.id in store:
+                    continue
+
+                content = m.value
+                target_agents = []
+                decay_factor = 0.05
+                ttl_seconds = None
+                metadata = {}
+
+                if m.value and m.value.startswith("{") and m.value.endswith("}"):
+                    try:
+                        parsed = json.loads(m.value)
+                        content = parsed.get("content", m.value)
+                        target_agents = parsed.get("target_agents", [])
+                        decay_factor = float(parsed.get("decay_factor", 0.05))
+                        ttl_seconds = parsed.get("ttl_seconds")
+                        metadata = parsed.get("metadata", {})
+                    except Exception:
+                        pass
+
+                raw_ns = m.category.split(":")[-1] if ":" in m.category else m.category
+                ns = MemoryNamespace.normalize(raw_ns)
+
+                emb = None
+                if m.embedding_json:
+                    try:
+                        emb = json.loads(m.embedding_json)
+                    except Exception:
+                        pass
+                if not emb:
+                    full_text = f"{m.key} {content} {m.evidence or ''}"
+                    emb = EmbeddingUtils.generate_embedding(full_text)
+
+                entry = TeamMemoryEntry(
+                    id=m.id,
+                    project_id=m.project_id,
+                    organization_id=m.organization_id,
+                    namespace=ns,
+                    key=m.key,
+                    content=content,
+                    source_agent=m.source_agent_id or "System",
+                    target_agents=target_agents,
+                    confidence=m.confidence,
+                    decay_factor=decay_factor,
+                    ttl_seconds=ttl_seconds,
+                    created_at=m.created_at if hasattr(m, "created_at") and m.created_at else datetime.now(timezone.utc),
+                    updated_at=m.updated_at if hasattr(m, "updated_at") and m.updated_at else datetime.now(timezone.utc),
+                    evidence=m.evidence,
+                    metadata=metadata,
+                    embedding=emb,
+                )
+                store[entry.id] = entry
+                loaded += 1
+
+        return loaded
+
+    @classmethod
+    async def persist_all_to_db(cls, db, project_id: str) -> int:
+        """Persists all in-memory entries for a project into the database."""
+        with cls._lock:
+            store = cls._get_project_store(project_id)
+            entries = list(store.values())
+
+        synced = 0
+        for entry in entries:
+            try:
+                await cls.sync_to_db(db, entry)
+                synced += 1
+            except Exception:
+                pass
+        return synced
 
     @classmethod
     def clear(cls, project_id: Optional[str] = None):
