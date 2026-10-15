@@ -22,3 +22,4 @@ dist/
 predictions*.json
 benchmark_report*.json
 
+frontend/
