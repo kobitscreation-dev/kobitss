@@ -1,0 +1,242 @@
+name: OWASP Security Gate
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+  schedule:
+    # Run nightly at 02:00 UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 1: Bandit SAST — Python static analysis
+  # ────────────────────────────────────────────────────────────────────────────
+  bandit-sast:
+    name: Bandit SAST (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install bandit
+        run: pip install bandit[toml]
+
+      - name: Run Bandit SAST
+        id: bandit
+        run: |
+          mkdir -p security/reports
+          bandit -r . \
+            --exclude ./.venv,./venv,./security,./node_modules \
+            -f json \
+            -o security/reports/bandit_report.json \
+            --severity-level medium \
+            --confidence-level medium \
+            -ll || BANDIT_EXIT=$?
+
+          # Extract HIGH count
+          HIGH_COUNT=$(python3 -c "
+          import json, sys
+          try:
+              r = json.load(open('security/reports/bandit_report.json'))
+              highs = [i for i in r.get('results', []) if i.get('issue_severity') == 'HIGH']
+              print(len(highs))
+          except:
+              print(0)
+          ")
+          echo "high_count=$HIGH_COUNT" >> $GITHUB_OUTPUT
+          echo "Bandit HIGH findings: $HIGH_COUNT"
+
+          if [ "$HIGH_COUNT" -gt "0" ]; then
+            echo "::error::Bandit found $HIGH_COUNT HIGH severity security issues. Build blocked."
+            exit 1
+          fi
+
+      - name: Upload Bandit Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-report
+          path: security/reports/bandit_report.json
+          retention-days: 30
+
+      - name: Comment PR with Bandit Summary
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '## 🔒 Bandit SAST Security Report\n\n';
+            try {
+              const report = JSON.parse(fs.readFileSync('security/reports/bandit_report.json'));
+              const results = report.results || [];
+              const high = results.filter(r => r.issue_severity === 'HIGH').length;
+              const medium = results.filter(r => r.issue_severity === 'MEDIUM').length;
+              const low = results.filter(r => r.issue_severity === 'LOW').length;
+              const status = high > 0 ? '❌ FAILED' : '✅ PASSED';
+              body += `**Gate Status**: ${status}\n`;
+              body += `| Severity | Count |\n|---|---|\n`;
+              body += `| 🔴 HIGH | ${high} |\n| 🟡 MEDIUM | ${medium} |\n| 🟢 LOW | ${low} |\n\n`;
+              if (high > 0) {
+                body += '> ⚠️ **Build blocked**: HIGH severity findings must be remediated before merge.\n';
+              }
+            } catch(e) {
+              body += 'Report generation failed.\n';
+            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 2: Safety — Dependency CVE scan
+  # ────────────────────────────────────────────────────────────────────────────
+  dependency-safety:
+    name: Safety Dependency CVE Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install safety
+        run: pip install safety
+
+      - name: Run Safety check
+        run: |
+          mkdir -p security/reports
+          if [ -f requirements.txt ]; then
+            safety check -r requirements.txt \
+              --output json \
+              --save-json security/reports/safety_report.json || true
+          else
+            echo '{"vulnerabilities": []}' > security/reports/safety_report.json
+            echo "No requirements.txt found, creating empty report"
+          fi
+
+      - name: Upload Safety Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: safety-report
+          path: security/reports/safety_report.json
+          retention-days: 30
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 3: OWASP Pattern Audit — Custom checks
+  # ────────────────────────────────────────────────────────────────────────────
+  owasp-pattern-audit:
+    name: OWASP Top 10 Pattern Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run OWASP Audit Checks
+        id: owasp
+        run: |
+          mkdir -p security/reports
+          python3 security/audit_scripts/owasp_audit_checks.py
+          OWASP_EXIT=$?
+
+          # Parse gate status
+          GATE=$(python3 -c "
+          import json
+          r = json.load(open('security/reports/owasp_audit_report.json'))
+          print(r.get('gate_status','FAIL'))
+          ")
+          echo "gate_status=$GATE" >> $GITHUB_OUTPUT
+
+          if [ "$OWASP_EXIT" -ne 0 ]; then
+            echo "::error::OWASP audit found HIGH severity findings. Build blocked."
+            exit 1
+          fi
+
+      - name: Upload OWASP Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owasp-audit-report
+          path: security/reports/owasp_audit_report.json
+          retention-days: 30
+
+      - name: Comment PR with OWASP Summary
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '## 🛡️ OWASP Top 10 Security Audit Report\n\n';
+            try {
+              const report = JSON.parse(fs.readFileSync('security/reports/owasp_audit_report.json'));
+              const s = report.summary || {};
+              const gate = report.gate_status || 'FAIL';
+              const statusIcon = gate === 'PASS' ? '✅' : '❌';
+              body += `**Gate Status**: ${statusIcon} ${gate}\n\n`;
+              body += `| Severity | Count |\n|---|---|\n`;
+              body += `| 🔴 HIGH | ${s.HIGH || 0} |\n`;
+              body += `| 🟡 MEDIUM | ${s.MEDIUM || 0} |\n`;
+              body += `| 🟢 LOW | ${s.LOW || 0} |\n`;
+              body += `| ℹ️ INFO | ${s.INFO || 0} |\n\n`;
+              if (gate !== 'PASS') {
+                body += '> ⚠️ **Build blocked**: Remediate all HIGH findings before merging.\n';
+                body += '> See `security/reports/owasp_audit_report.json` for details.\n';
+              }
+            } catch(e) {
+              body += `Report unavailable: ${e.message}\n`;
+            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 4: Security Gate — Final aggregated pass/fail
+  # ────────────────────────────────────────────────────────────────────────────
+  security-gate:
+    name: "✅ Security Gate (Required)"
+    runs-on: ubuntu-latest
+    needs: [bandit-sast, dependency-safety, owasp-pattern-audit]
+    if: always()
+    steps:
+      - name: Evaluate Gate
+        run: |
+          BANDIT_STATUS="${{ needs.bandit-sast.result }}"
+          OWASP_STATUS="${{ needs.owasp-pattern-audit.result }}"
+
+          echo "Bandit SAST: $BANDIT_STATUS"
+          echo "OWASP Audit: $OWASP_STATUS"
+
+          if [ "$BANDIT_STATUS" != "success" ] || [ "$OWASP_STATUS" != "success" ]; then
+            echo "::error::Security gate FAILED. One or more security checks did not pass."
+            exit 1
+          fi
+
+          echo "✅ All security checks passed. Build cleared."
