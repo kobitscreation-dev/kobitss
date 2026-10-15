@@ -197,7 +197,7 @@ class AgentExecutor:
         else:
             provider_name = (settings.LLM_PROVIDER or os.environ.get("LLM_PROVIDER") or "mock").lower()
 
-        if provider_name in ["bedrock", "aws", "aws_bedrock"]:
+        if provider_name in ["bedrock", "aws", "aws_bedrock", "claude"]:
             model_name = settings.BEDROCK_MODEL or os.environ.get("BEDROCK_MODEL") or "global.anthropic.claude-sonnet-4-6"
         elif provider_name == "anthropic":
             model_name = settings.ANTHROPIC_MODEL or os.environ.get("ANTHROPIC_MODEL") or "claude-3-7-sonnet-20250219"
