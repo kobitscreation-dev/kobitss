@@ -1177,7 +1177,11 @@ function wireTabEvents() {
         state.selectedMissionId = res.mission_id || res.id;
         const mId = res.mission_id || res.id;
         if (mId) {
-          location.hash = `#missions/${mId}`;
+          if (location.hash === `#missions/${mId}`) {
+            import('./views/mission.js').then(mod => mod.render(mId));
+          } else {
+            location.hash = `#missions/${mId}`;
+          }
         } else {
           await fetchDashboard(true);
         }
@@ -1803,6 +1807,19 @@ function openCreateMissionModal() {
     ).join('') + `<option value="__new__">+ Create New Project…</option>`;
   } else {
     projectOptionsHtml = `<option value="default" selected>Primary Engineering Workspace</option><option value="__new__">+ Create New Project…</option>`;
+    if (!state._fetching) {
+      get('/org/dashboard').then(dash => {
+        if (dash?.projects?.length) {
+          state.dashboard = dash;
+          const sel = document.getElementById('ky-cm-project');
+          if (sel) {
+            sel.innerHTML = dash.projects.map(p =>
+              `<option value="${esc(p.id)}" ${p.id === (state.projectId || dash.projects[0].id) ? 'selected' : ''}>${esc(p.name)}</option>`
+            ).join('') + `<option value="__new__">+ Create New Project…</option>`;
+          }
+        }
+      }).catch(() => {});
+    }
   }
 
   host.innerHTML = `
@@ -1935,7 +1952,11 @@ function openCreateMissionModal() {
       const mId = res.mission_id || res.id;
       if (mId) {
         state.selectedMissionId = mId;
-        location.hash = `#missions/${mId}`;
+        if (location.hash === `#missions/${mId}`) {
+          import('./views/mission.js').then(mod => mod.render(mId));
+        } else {
+          location.hash = `#missions/${mId}`;
+        }
       } else {
         await fetchDashboard(true);
       }
@@ -2449,7 +2470,13 @@ async function renderSettingsPage() {
         const id = ev.currentTarget.getAttribute('data-id');
         if (!confirm('Are you sure you want to delete this applicant record?')) return;
         try {
-          await fetch(`/api/v1/waitlist/leads/${id}`, { method: 'DELETE' });
+          await fetch(`/api/v1/waitlist/leads/${id}`, {
+            method: 'DELETE',
+            credentials: 'include',
+            headers: {
+              ...(localStorage.getItem('kobits_token') ? { 'Authorization': `Bearer ${localStorage.getItem('kobits_token')}` } : {})
+            }
+          });
           if (_settingsCache.leads) {
             _settingsCache.leads = _settingsCache.leads.filter(l => l.id !== id);
           }

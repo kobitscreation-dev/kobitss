@@ -463,6 +463,7 @@ class MissionCreate(BaseModel):
     prompt: Optional[str] = None
     text: Optional[str] = None
     description: Optional[str] = None
+    project_id: Optional[str] = None
     repository_id: Optional[str] = None
     repositories: Optional[List[MissionRepoCreate]] = None
     branch: Optional[str] = None
@@ -768,6 +769,19 @@ async def create_mission(
         "requires_approval": mission.requires_approval,
         "approval_status": mission.approval_status.value,
     }
+
+
+@router.post("", status_code=201)
+@router.post("/", status_code=201)
+async def create_mission_direct(
+    request: MissionCreate,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Direct root intake for creating a mission without specifying project_id in the URL path."""
+    pid = request.project_id or "default"
+    return await create_mission(pid, request, background_tasks, db, current_user)
 
 
 @router.post("/webhooks/inbound", status_code=201)

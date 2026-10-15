@@ -153,10 +153,12 @@ function appendTerminalLine(payload) {
       break;
 
     case 'agent_thinking':
-    case 'thinking':
-      tagHtml = `<span style="color:#c084fc;font-weight:600;">[THINK]</span>`;
+    case 'thinking': {
+      const agentTag = payload.agent ? `THINK: ${payload.agent}` : 'THINK';
+      tagHtml = `<span style="color:#c084fc;font-weight:600;">[${esc(agentTag)}]</span>`;
       contentHtml = `<span style="color:#e9d5ff;font-style:italic;">${esc(payload.thought || payload.message || message)}</span>`;
       break;
+    }
 
     case 'provider_fallback':
       tagHtml = `<span style="color:#fbbf24;font-weight:600;">[FALLBACK]</span>`;
@@ -608,8 +610,15 @@ function wireActions() {
       btn.textContent = 'Applying changes...';
     }
     try {
-      await post(`/missions/${missionId}/apply`, { dry_run: false, force: false });
-      toast('Changes applied successfully to repository!', 'success');
+      const res = await post(`/missions/${missionId}/apply`, { dry_run: false, force: false });
+      if (res && res.status === 'APPLIED') {
+        const count = res.applied_count ?? (res.applied || []).length;
+        toast(`Changes applied successfully (${count} file${count === 1 ? '' : 's'})!`, 'success');
+      } else if (res && res.message) {
+        toast(res.message, res.status === 'NO_CHANGES' ? 'info' : 'warn');
+      } else {
+        toast('Changes applied successfully to repository!', 'success');
+      }
       loadMission();
       loadDiff();
     } catch (e) {
@@ -628,31 +637,65 @@ async function loadMission() {
     const m = await get(`/missions/${missionId}`);
     currentMission = m;
     
-    document.getElementById('mission-header').innerHTML = renderHeader(m);
-    document.getElementById('mission-objective').textContent = m.objective || 'No objective provided.';
-    document.getElementById('mission-tasks').innerHTML = renderTasks(m.tasks);
-    document.getElementById('mission-details').innerHTML = renderDetails(m);
+    const headerEl = document.getElementById('mission-header');
+    if (headerEl) headerEl.innerHTML = renderHeader(m);
+
+    const objEl = document.getElementById('mission-objective');
+    if (objEl) objEl.textContent = m.objective || 'No objective provided.';
+
+    const tasksEl = document.getElementById('mission-tasks');
+    if (tasksEl) tasksEl.innerHTML = renderTasks(m.tasks);
+
+    const detailsEl = document.getElementById('mission-details');
+    if (detailsEl) detailsEl.innerHTML = renderDetails(m);
     
     wireActions();
     return m;
   } catch (e) {
-    document.getElementById('mission-header').innerHTML = errorBox(e);
+    const headerEl = document.getElementById('mission-header');
+    if (headerEl) headerEl.innerHTML = errorBox(e);
     return null;
   }
 }
 
 async function loadDiff() {
   const container = document.getElementById('mission-changes');
+  if (!container) return;
   try {
     const d = await get(`/missions/${missionId}/diff`);
-    if (d && (d.diff_text || (d.files && d.files.length > 0))) {
+    const files = d?.files || [];
+    const diffText = d?.diff_text || files.map(f => f.diff).filter(Boolean).join('\n');
+    if (diffText || files.length > 0) {
       let applyBtn = `<button class="btn btn-primary btn-sm" id="btn-apply" style="margin-bottom:12px;display:inline-flex;align-items:center;gap:6px;"><span>✓</span><span>Apply Changes to Codebase</span></button>`;
+      
+      const fileSummaryHtml = files.length > 0 ? `
+        <div style="margin-bottom:14px;">
+          <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-3,#a1a1aa);margin-bottom:6px;">Changed Files (${files.length})</div>
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            ${files.map(f => `
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--surface-2,#18181b);border:1px solid var(--border,#27272a);border-radius:6px;font-family:var(--font-mono,monospace);font-size:12px;">
+                <span style="display:inline-flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                  <span style="color:#38bdf8;">📄</span>
+                  <span style="color:var(--text-1,#f4f4f5);">${esc(f.path)}</span>
+                  <span class="pill" style="font-size:10px;padding:1px 6px;">${esc(f.status || 'MODIFIED')}</span>
+                </span>
+                <span style="font-size:11px;font-family:var(--font-mono,monospace);flex-shrink:0;">
+                  ${f.added ? `<span style="color:#4ade80;margin-right:6px;">+${f.added}</span>` : ''}
+                  ${f.removed ? `<span style="color:#f87171;">-${f.removed}</span>` : ''}
+                </span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : '';
+
       container.innerHTML = `
         <div class="card-head"><h3>Changes</h3></div>
         <div class="card-body">
-          <p class="faint" style="margin: 0 0 12px 0;">Files changed: ${d.files ? d.files.length : 0}</p>
+          <p class="faint" style="margin: 0 0 12px 0;">Files changed: ${files.length}</p>
           ${applyBtn}
-          ${renderDiff(d.diff_text || '')}
+          ${fileSummaryHtml}
+          ${renderDiff(diffText || '')}
         </div>
       `;
       wireActions(); // to wire the apply button
@@ -892,6 +935,13 @@ function wireTabs() {
           wirePreview();
         }
       }
+      if (targetTab === 'changes') {
+        loadDiff();
+      }
+      if (targetTab === 'terminal') {
+        const outEl = document.getElementById('terminal-output');
+        if (outEl) outEl.scrollTop = outEl.scrollHeight;
+      }
     });
   });
 }
@@ -972,6 +1022,7 @@ export async function render(id) {
   wireTabs();
   connectTerminalWs(missionId);
 
+  window.removeEventListener('hashchange', handleRouteCleanup);
   window.addEventListener('hashchange', handleRouteCleanup);
 
   const m = await loadMission();

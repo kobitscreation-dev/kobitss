@@ -45,6 +45,7 @@ def _inspect(mission_id: str, active_branch: Optional[str], target_files: List[s
 async def get_mission_diff(mission_id: str, active_branch: Optional[str], target_files: Optional[List[str]] = None) -> Dict[str, Any]:
     info = await asyncio.to_thread(_inspect, mission_id, active_branch, target_files or [])
     files = info.get("files") or []
+    all_diffs = "\n".join(f.get("diff", "") for f in files if f.get("diff"))
     return {
         "sandbox_dir": info.get("sandbox_dir"),
         "branch": active_branch or f"kobits/mission/{mission_id[:8]}",
@@ -59,6 +60,7 @@ async def get_mission_diff(mission_id: str, active_branch: Optional[str], target
             }
             for f in files
         ],
+        "diff_text": all_diffs,
         "totals": {
             "files": len(files),
             "added": sum(int(f.get("added", 0)) for f in files),

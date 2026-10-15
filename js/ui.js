@@ -84,7 +84,7 @@ export function compact(v) {
 export const truncate = (s, n = 80) => (!s ? '' : s.length > n ? `${s.slice(0, n - 1)}…` : s);
 export const titleCase = (s) => (s || '').toLowerCase().split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
-// ── Missions (Kyros Fluid Single-Loop Stages) ─────────────────
+// ── Missions (Kobits Fluid Single-Loop Stages) ─────────────────
 export const PHASES = [
   ['PLANNING', 'Plan'],
   ['IMPLEMENTATION', 'Code'],

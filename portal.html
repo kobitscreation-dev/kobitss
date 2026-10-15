@@ -1022,7 +1022,9 @@
 
     function updateAuthMode() {
       if (window.location.hash === '#dashboard' || window.location.hash === '#overview') {
-        window.location.replace('/web/index.html#overview');
+        const tok = localStorage.getItem('kobits_token');
+        const target = tok ? `/dashboard?session_token=${encodeURIComponent(tok)}#overview` : '/dashboard#overview';
+        window.location.replace(target);
         return;
       }
       const title = document.getElementById('auth-title');

@@ -318,6 +318,7 @@ export async function api(method, path, body) {
       console.warn('Backend unavailable, using showcase demo fallback:', e?.message || e);
     }
   }
+
     // 1. Dashboard summary & aggregated telemetry
     if (path.startsWith('/org/dashboard')) {
       const u = new URL('http://localhost' + path);

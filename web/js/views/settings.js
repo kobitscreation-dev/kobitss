@@ -1305,9 +1305,14 @@ async function renderApiKeysTab(container) {
       e.target.disabled = true;
       e.target.textContent = 'Revoking…';
       try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('kobits_token')) {
+          headers['Authorization'] = `Bearer ${localStorage.getItem('kobits_token')}`;
+        }
         const res = await fetch(`/api/v1/auth/api-keys/${keyId}`, {
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          headers: headers,
         });
         if (res.ok) {
           toast('API key revoked.', 'info');

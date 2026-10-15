@@ -72,7 +72,25 @@ async def list_projects(
         .where(Project.organization_id == membership.organization_id)
         .order_by(Project.created_at.desc())
     )
-    return result.scalars().all()
+    projects = result.scalars().all()
+    if not projects:
+        import uuid
+        from backend.models.project import ProjectStatus
+        default_proj = Project(
+            id=str(uuid.uuid4()),
+            name="Primary Engineering Workspace",
+            description="Autonomous multi-agent software engineering workspace.",
+            status=ProjectStatus.READY,
+            progress=0,
+            health_score=100,
+            organization_id=membership.organization_id,
+            created_by=current_user.id,
+        )
+        db.add(default_proj)
+        await db.commit()
+        await db.refresh(default_proj)
+        return [default_proj]
+    return projects
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -82,9 +100,35 @@ async def get_project(
     db: AsyncSession = Depends(get_db),
 ):
     membership = await get_user_default_org(db, current_user.id)
+    clean_pid = (project_id or "").strip()
+    if clean_pid.lower() in ("default", "latest", "active", "primary", "", "null", "undefined"):
+        projects = (await db.execute(
+            select(Project)
+            .where(Project.organization_id == membership.organization_id)
+            .order_by(Project.updated_at.desc(), Project.created_at.desc())
+        )).scalars().all()
+        if projects:
+            return projects[0]
+        import uuid
+        from backend.models.project import ProjectStatus
+        default_proj = Project(
+            id=str(uuid.uuid4()),
+            name="Primary Engineering Workspace",
+            description="Autonomous multi-agent software engineering workspace.",
+            status=ProjectStatus.READY,
+            progress=0,
+            health_score=100,
+            organization_id=membership.organization_id,
+            created_by=current_user.id,
+        )
+        db.add(default_proj)
+        await db.commit()
+        await db.refresh(default_proj)
+        return default_proj
+
     result = await db.execute(
         select(Project).where(
-            Project.id == project_id,
+            Project.id == clean_pid,
             Project.organization_id == membership.organization_id,
         )
     )
