@@ -16,18 +16,21 @@ def detect_configured_provider() -> str:
     """Intelligently detects which LLM provider has credentials configured."""
     explicit = settings.LLM_PROVIDER or os.environ.get("LLM_PROVIDER")
     if explicit and explicit.lower() != "auto":
-        return explicit.lower()
+        norm = explicit.lower()
+        if norm in ("claude", "bedrock", "aws_bedrock", "anthropic_bedrock"):
+            return "bedrock"
+        return norm
 
-    if settings.DEEPSEEK_API_KEY or os.environ.get("DEEPSEEK_API_KEY"):
-        return "deepseek"
+    if settings.AWS_BEDROCK_API_KEY or os.environ.get("AWS_BEDROCK_API_KEY") or settings.AWS_ACCESS_KEY_ID or os.environ.get("AWS_ACCESS_KEY_ID"):
+        return "bedrock"
     if settings.ANTHROPIC_API_KEY or os.environ.get("ANTHROPIC_API_KEY"):
         return "anthropic"
+    if settings.DEEPSEEK_API_KEY or os.environ.get("DEEPSEEK_API_KEY"):
+        return "deepseek"
     if os.environ.get("OPENAI_API_KEY") or getattr(settings, "OPENAI_API_KEY", None):
         return "openai"
     if settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY"):
         return "gemini"
-    if settings.AWS_BEDROCK_API_KEY or os.environ.get("AWS_BEDROCK_API_KEY") or settings.AWS_ACCESS_KEY_ID or os.environ.get("AWS_ACCESS_KEY_ID"):
-        return "bedrock"
 
     return "mock"
 
@@ -48,7 +51,7 @@ def build_provider_instance(name: str, scenarios=None) -> LLMProvider:
         if anthropic_key and anthropic_key.startswith("ABSK"):
             return BedrockProvider(api_key=anthropic_key)
         return AnthropicProvider()
-    elif norm in ["bedrock", "aws", "aws_bedrock"]:
+    elif norm in ["claude", "bedrock", "aws", "aws_bedrock", "anthropic_bedrock"]:
         bedrock_key = settings.AWS_BEDROCK_API_KEY or os.environ.get("AWS_BEDROCK_API_KEY") or settings.ANTHROPIC_API_KEY or os.environ.get("ANTHROPIC_API_KEY")
         return BedrockProvider(api_key=bedrock_key)
     else:
@@ -64,6 +67,11 @@ def get_llm_provider(scenarios=None, use_resilient_router: bool = True) -> LLMPr
     """
     primary_name = detect_configured_provider()
     primary_provider = build_provider_instance(primary_name, scenarios=scenarios)
+
+    explicit = (settings.LLM_PROVIDER or os.environ.get("LLM_PROVIDER", "")).lower()
+    if explicit in ["claude", "bedrock", "aws_bedrock", "anthropic_bedrock"] or os.environ.get("USE_ONLY_CLAUDE") == "1":
+        # When Claude/Bedrock is explicitly chosen ("use only claude"), route directly to Bedrock Claude without cascading
+        return primary_provider
 
     if primary_name == "mock" or not use_resilient_router:
         return primary_provider
