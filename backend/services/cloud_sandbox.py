@@ -207,6 +207,14 @@ class _MockE2BCommands:
 
         # Handle node / node --test in mock
         if "node " in norm_cmd:
+            is_failing = False
+            for path, code in self.files._storage.items():
+                if any(tf in path for tf in norm_cmd.split() if ".test." in tf or ".spec." in tf or tf.endswith(".ts") or tf.endswith(".js")):
+                    if "failing" in path.lower() or "detects wrong result" in code.lower() or "tobe(999)" in code.lower() or "assert.fail" in code.lower():
+                        is_failing = True
+                        break
+            if is_failing:
+                return _Result(cmd, stdout="", stderr="FAIL failing suite > detects wrong result\nAssertionError: expected 6 to be 999\n", exit_code=1)
             return _Result(cmd, stdout="# tests 1\n# pass 1\n# fail 0\n# ok\n", stderr="", exit_code=0)
 
         # Handle pytest in mock
