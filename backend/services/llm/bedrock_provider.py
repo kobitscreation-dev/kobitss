@@ -49,8 +49,11 @@ class BedrockProvider(LLMProvider):
             kwargs["api_key"] = self.api_key
         return AsyncAnthropicBedrock(**kwargs)
 
-    def _normalize_model_id(self, model_id: str) -> str:
-        """Map common friendly names to AWS Bedrock model IDs."""
+    def _normalize_model_id(self, model_id: Optional[str]) -> str:
+        """Map common friendly names to AWS Bedrock model IDs, or fall back to default model."""
+        if not model_id:
+            return self.default_model
+        low = model_id.lower().strip()
         mapping = {
             "claude-sonnet-4.6": "global.anthropic.claude-sonnet-4-6",
             "claude-sonnet-4-6": "global.anthropic.claude-sonnet-4-6",
@@ -64,7 +67,11 @@ class BedrockProvider(LLMProvider):
             "claude-3-opus": "anthropic.claude-3-opus-20240229-v1:0",
             "claude-opus": "global.anthropic.claude-opus-5-5",
         }
-        return mapping.get(model_id.lower(), model_id)
+        if low in mapping:
+            return mapping[low]
+        if "anthropic" in low:
+            return model_id
+        return self.default_model
 
     async def generate_structured_output(
         self,

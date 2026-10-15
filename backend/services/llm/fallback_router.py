@@ -75,12 +75,14 @@ class ResilientLLMRouter(LLMProvider):
 
         for idx, (p_name, provider) in enumerate(self.providers):
             try:
+                # If cascading to a fallback provider, let provider use its own native default model
+                provider_model = model if idx == 0 else None
                 # Call provider
                 result = await provider.generate_structured_output(
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
                     schema=schema,
-                    model=model,
+                    model=provider_model,
                     tools=tools,
                     max_turns=max_turns,
                     tool_executor=tool_executor,
