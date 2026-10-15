@@ -207,7 +207,7 @@ class AgentExecutor:
             cfg_ds_model = settings.DEEPSEEK_MODEL or os.environ.get("DEEPSEEK_MODEL") or "deepseek-v4.1-flash:free"
             model_name = "deepseek-v4.1-flash:free" if cfg_ds_model == "deepseek-flash" else cfg_ds_model
         elif provider_name == "gemini":
-            model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-pro") if model_tier == "default" else f"gemini-{model_tier}"
+            model_name = getattr(settings, "GEMINI_MODEL", None) or os.environ.get("GEMINI_MODEL") or "gemini-4-argon"
         else:
             model_name = f"mock-model-{model_tier}"
         

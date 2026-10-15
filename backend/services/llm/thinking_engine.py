@@ -36,7 +36,9 @@ REASONING_MODELS = {
     "deepseek-r1",
     "deepseek-reasoner",
     "deepseek-v4.1-flash:free",
-    # Google Gemini 2.5
+    # Google Gemini & Argon Frontier Reasoning Models
+    "gemini-4-argon",
+    "argon",
     "gemini-2.5-pro",
     "gemini-2.5-flash",
 }

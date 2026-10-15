@@ -25,14 +25,21 @@ class GeminiProvider(LLMProvider):
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY") or getattr(settings, "GEMINI_API_KEY", None)
         self.configured = bool(self.api_key)
-        self.default_model = model or os.environ.get("GEMINI_MODEL") or "gemini-2.5-pro"
+        self.default_model = model or os.environ.get("GEMINI_MODEL") or getattr(settings, "GEMINI_MODEL", "gemini-4-argon")
         self.base_url = "https://generativelanguage.googleapis.com/v1beta/models"
 
     def _normalize_model(self, model: Optional[str]) -> str:
-        m = (model or self.default_model).lower()
-        if "pro" in m:
+        m = (model or self.default_model or "").strip()
+        if not m:
+            return "gemini-4-argon"
+        low = m.lower()
+        if "argon" in low:
+            return "gemini-4-argon"
+        if "2.5-pro" in low:
             return "gemini-2.5-pro"
-        return "gemini-2.5-flash"
+        if "2.5-flash" in low:
+            return "gemini-2.5-flash"
+        return m
 
     async def generate_structured_output(
         self,
