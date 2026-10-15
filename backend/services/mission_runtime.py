@@ -385,7 +385,7 @@ class MissionRuntime:
         from backend.services.environment_bootstrapper import EnvironmentBootstrapper
         from backend.services.cloud_sandbox import CloudMicroVMSandbox
         driver = EnvironmentBootstrapper.detect_isolation_driver()
-        is_cloud_env = (driver == "cloud_microvm" or CloudMicroVMSandbox.is_cloud_native()) and (
+        is_cloud_env = (driver == "cloud_microvm") and (
             CloudMicroVMSandbox.is_configured() or CloudMicroVMSandbox.is_cloud_native()
         )
 
@@ -454,7 +454,7 @@ class MissionRuntime:
                 from backend.services.cloud_sandbox import CloudMicroVMSandbox
                 driver = EnvironmentBootstrapper.detect_isolation_driver()
                 cloud_executed = False
-                is_cloud_env = (driver == "cloud_microvm" or CloudMicroVMSandbox.is_cloud_native()) and (
+                is_cloud_env = (driver == "cloud_microvm") and (
                     CloudMicroVMSandbox.is_configured() or CloudMicroVMSandbox.is_cloud_native()
                 )
                 if is_cloud_env:
@@ -472,7 +472,7 @@ class MissionRuntime:
                             "vm_id": pt_res.get("vm_id"),
                         }
                         cloud_executed = True
-                        if pt_res.get("exit_code") != 0 and not CloudMicroVMSandbox.is_cloud_native() and os.path.isdir(sandbox_dir):
+                        if pt_res.get("exit_code") != 0 and os.path.isdir(sandbox_dir):
                             env = EnvironmentBootstrapper.build_isolated_env(sandbox_dir)
                             local_pt = subprocess.run(
                                 [sys.executable, "-m", "pytest", "-q", *py_test_files],
@@ -486,9 +486,8 @@ class MissionRuntime:
                             syntax_errors.append(f"pytest failed on {', '.join(py_test_files)}: {pytest_summary['output'][:160]}")
                     except Exception as cloud_err:
                         logger.warning(f"Cloud MicroVM pytest failed ({cloud_err})")
-                        if not CloudMicroVMSandbox.is_cloud_native():
-                            cloud_executed = False
-                if not cloud_executed and not CloudMicroVMSandbox.is_cloud_native():
+                        cloud_executed = False
+                if not cloud_executed:
                     env = EnvironmentBootstrapper.build_isolated_env(sandbox_dir)
                     pt_res = subprocess.run(
                         [sys.executable, "-m", "pytest", "-q", *py_test_files],
@@ -499,6 +498,8 @@ class MissionRuntime:
                         "passed": pt_res.returncode == 0,
                         "output": (pt_res.stdout or pt_res.stderr or "").strip()[-400:],
                     }
+                    if pt_res.returncode != 0:
+                        syntax_errors.append(f"pytest failed on {', '.join(py_test_files)}: {pytest_summary['output'][:160]}")
             except Exception as e:
                 logger.warning(f"Pytest verification error: {e}")
                 if pytest_summary is None and py_test_files:

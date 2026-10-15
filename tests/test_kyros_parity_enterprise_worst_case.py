@@ -58,6 +58,11 @@ NOW = datetime.now(timezone.utc)
 
 async def _seed_test_database():
     await test_engine.dispose()
+    if os.path.exists(TEST_DB_PATH):
+        try:
+            os.remove(TEST_DB_PATH)
+        except Exception:
+            pass
     async with test_engine.begin() as conn:
         await conn.execute(text("PRAGMA foreign_keys = OFF"))
         await conn.run_sync(Base.metadata.drop_all)
@@ -668,6 +673,7 @@ def test_mission_runtime_verify_sandbox_code_catastrophic_runner_failure(monkeyp
     def mock_subprocess_run(*args, **kwargs):
         raise RuntimeError("Subprocess catastrophic failure")
 
+    monkeypatch.setenv("KOBITS_SANDBOX_DRIVER", "virtual_rootfs_jail")
     monkeypatch.setattr("subprocess.run", mock_subprocess_run)
     verification = MissionRuntime._verify_sandbox_code(str(sandbox_dir), target_files=[str(test_f)])
     assert verification["status"] == "FAILED"

@@ -642,6 +642,19 @@ class MemoryService:
             )
             db.add(pm_dec)
             indexed_records.append(pm_dec.id)
+            try:
+                from backend.services.team_memory import TeamMemoryManager
+                TeamMemoryManager.record_adr(
+                    project_id=project_id,
+                    source_agent=dec.agent_id,
+                    title=f"Mission {mission_id[:8]} Decision",
+                    decision=dec.decision,
+                    rationale=dec.reason,
+                    alternatives=dec.alternatives,
+                    confidence=0.95,
+                )
+            except Exception:
+                pass
 
         # 3. Index defect remediations & bug-fix patterns
         for b in (bug_fixes or []):
@@ -660,6 +673,19 @@ class MemoryService:
             )
             db.add(pm_fix)
             indexed_records.append(pm_fix.id)
+            try:
+                from backend.services.team_memory import TeamMemoryManager
+                TeamMemoryManager.record_defect_fix(
+                    project_id=project_id,
+                    source_agent="SentinelQA",
+                    defect=b.get("defect", ""),
+                    fix=b.get("fix", ""),
+                    root_cause=b.get("root_cause", ""),
+                    reproducer=b.get("reproducer", ""),
+                    confidence=1.0,
+                )
+            except Exception:
+                pass
 
         # 4. Index retrospectives & lessons learned
         for l in (lessons or []):
@@ -687,6 +713,17 @@ class MemoryService:
             )
             db.add(pm_les)
             indexed_records.append(pm_les.id)
+            try:
+                from backend.services.team_memory import TeamMemoryManager
+                TeamMemoryManager.record_convention(
+                    project_id=project_id,
+                    source_agent=les.agent_id,
+                    rule=les.lesson,
+                    example=les.cause,
+                    confidence=0.9,
+                )
+            except Exception:
+                pass
 
         await db.commit()
         return {
@@ -770,4 +807,78 @@ class MemoryService:
         for m in memories:
             lines.append(f"- **[{m['category'].upper()}]** {m['content']} *(score: {m['similarity']})*")
         return "\n".join(lines)
+
+    # =========================================================================
+    # Persistent Team Memory Infrastructure (Unified Multi-Agent Architecture)
+    # =========================================================================
+
+    @classmethod
+    def store_team_memory(
+        cls,
+        project_id: str,
+        namespace: str,
+        key: str,
+        content: str,
+        source_agent: str,
+        target_agents: Optional[List[str]] = None,
+        confidence: float = 1.0,
+        decay_factor: float = 0.05,
+        ttl_seconds: Optional[float] = None,
+        evidence: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
+        """Stores a structured team memory in the persistent team memory manager."""
+        from backend.services.team_memory import TeamMemoryManager
+        return TeamMemoryManager.store_memory(
+            project_id=project_id,
+            namespace=namespace,
+            key=key,
+            content=content,
+            source_agent=source_agent,
+            target_agents=target_agents,
+            confidence=confidence,
+            decay_factor=decay_factor,
+            ttl_seconds=ttl_seconds,
+            evidence=evidence,
+            metadata=metadata,
+        )
+
+    @classmethod
+    def query_team_memory(
+        cls,
+        project_id: str,
+        query: str,
+        namespace: Optional[str] = None,
+        agent_name: Optional[str] = None,
+        limit: int = 5,
+        min_confidence: float = 0.05,
+    ) -> List[Dict[str, Any]]:
+        """Queries team memory using hybrid Dense + BM25 RRF semantic retrieval."""
+        from backend.services.team_memory import TeamMemoryManager
+        return TeamMemoryManager.query_team_memory(
+            project_id=project_id,
+            query=query,
+            namespace=namespace,
+            agent_name=agent_name,
+            limit=limit,
+            min_confidence=min_confidence,
+        )
+
+    @classmethod
+    def get_team_context_for_agent(
+        cls,
+        project_id: str,
+        agent_name: str,
+        task_text: str,
+        limit: int = 5,
+    ) -> str:
+        """Retrieves and formats relevant team memories for agent prompt injection."""
+        from backend.services.team_memory import TeamMemoryManager
+        return TeamMemoryManager.get_team_context_for_agent(
+            project_id=project_id,
+            agent_name=agent_name,
+            task_text=task_text,
+            limit=limit,
+        )
+
 

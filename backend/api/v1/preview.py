@@ -316,10 +316,16 @@ ALL_PREVIEW_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD
 
 
 @router.websocket("/{mission_id}/__ws_proxy__")
-async def websocket_preview_proxy(websocket: WebSocket, mission_id: str):
+@router.websocket("/{mission_id}/__ws_proxy__/{subpath:path}")
+@router.websocket("/{mission_id}/_hmr")
+@router.websocket("/{mission_id}/_hmr/{subpath:path}")
+@router.websocket("/ws/{mission_id}")
+@router.websocket("/ws/{mission_id}/{subpath:path}")
+async def websocket_preview_proxy(websocket: WebSocket, mission_id: str, subpath: str = ""):
     """
-    WebSocket Dev Server Tunnel for Hot Module Replacement (HMR, Vite, Next.js).
-    Proxies live WebSocket traffic directly between browser client and sandbox dev server port.
+    Harden WebSocket Dev Server Tunnel for Hot Module Replacement (HMR, Vite, Next.js).
+    Supports transparent bidirectional forwarding of text and binary frames (blobs)
+    with query-string preservation, subpath forwarding, and graceful connection lifecycle management.
     """
     await websocket.accept()
     proxy_port = None
@@ -336,14 +342,23 @@ async def websocket_preview_proxy(websocket: WebSocket, mission_id: str):
     except Exception as e:
         logger.debug(f"Error resolving preview config for websocket proxy: {e}")
 
+    # Build query string if present
+    query_str = websocket.scope.get("query_string", b"").decode("utf-8", errors="ignore")
+
     if not proxy_port:
         try:
-            await websocket.send_json({"type": "kobits_hmr_status", "status": "dev_server_standby", "mission_id": mission_id})
+            await websocket.send_json({
+                "type": "kobits_hmr_status",
+                "status": "dev_server_standby",
+                "mission_id": mission_id,
+                "subpath": subpath,
+            })
             while True:
                 msg = await websocket.receive()
                 if "text" in msg and msg["text"] is not None:
                     await websocket.send_text(f"kobits_ack: {msg['text'][:60]}")
                 elif "bytes" in msg and msg["bytes"] is not None:
+                    # Echo binary frames cleanly
                     await websocket.send_bytes(msg["bytes"])
                 elif msg.get("type") == "websocket.disconnect":
                     break
@@ -353,8 +368,12 @@ async def websocket_preview_proxy(websocket: WebSocket, mission_id: str):
 
     try:
         import websockets
-        ws_target = f"ws://127.0.0.1:{proxy_port}/"
-        async with websockets.connect(ws_target) as target_ws:
+        target_path = f"/{subpath.lstrip('/')}" if subpath else "/"
+        if query_str:
+            target_path = f"{target_path}?{query_str}"
+        ws_target = f"ws://127.0.0.1:{proxy_port}{target_path}"
+
+        async with websockets.connect(ws_target, max_size=16 * 1024 * 1024) as target_ws:
             async def _client_to_target():
                 try:
                     while True:
@@ -374,7 +393,7 @@ async def websocket_preview_proxy(websocket: WebSocket, mission_id: str):
                         if isinstance(msg, bytes):
                             await websocket.send_bytes(msg)
                         else:
-                            await websocket.send_text(msg)
+                            await websocket.send_text(str(msg))
                 except Exception:
                     pass
 
@@ -493,16 +512,20 @@ async def serve_preview_asset(
                     "Cache-Control": "no-cache",
                 }
                 for hk, hv in resp.headers.items():
-                    if hk.lower() not in EXCLUDE_PROXY_HEADERS:
+                    if hk.lower() not in EXCLUDE_PROXY_HEADERS and hk.lower() != "location":
                         headers[hk] = hv
 
                 if "location" in resp.headers:
                     loc = resp.headers["location"]
+                    rewritten_loc = loc
                     if loc.startswith("/") and not loc.startswith(f"/api/v1/preview/{mission_id}"):
-                        headers["Location"] = f"/api/v1/preview/{mission_id}{loc}"
+                        rewritten_loc = f"/api/v1/preview/{mission_id}{loc}"
                     elif f"127.0.0.1:{proxy_port}" in loc or f"localhost:{proxy_port}" in loc:
                         rel = loc.split(f":{proxy_port}", 1)[1]
-                        headers["Location"] = f"/api/v1/preview/{mission_id}{rel}"
+                        rewritten_loc = f"/api/v1/preview/{mission_id}{rel if rel.startswith('/') else '/' + rel}"
+                    elif not loc.startswith("http://") and not loc.startswith("https://"):
+                        rewritten_loc = f"/api/v1/preview/{mission_id}/{loc.lstrip('/')}"
+                    headers["location"] = rewritten_loc
 
                 body_content = resp.content
                 if "text/html" in resp.headers.get("content-type", "").lower():

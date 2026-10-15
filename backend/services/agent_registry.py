@@ -20,6 +20,32 @@ class AgentDefinition:
         self.allowed_tools = allowed_tools
         self.default_model = default_model
 
+    @property
+    def contract(self):
+        """Resolves the strict governance contract specification for this specialist."""
+        from backend.services.governance import GovernanceEngine
+        return GovernanceEngine.resolve_contract(self.type)
+
+    @property
+    def expected_artifacts(self) -> List[str]:
+        c = self.contract
+        return c.expected_artifacts if c else []
+
+    @property
+    def approval_gate_required(self) -> bool:
+        c = self.contract
+        return c.approval_gate_required if c else False
+
+    def validate_input(self, input_data: Dict[str, Any]):
+        """Validates input payload against this specialist's Pydantic contract."""
+        from backend.services.governance import GovernanceEngine
+        return GovernanceEngine.validate_agent_input(self.type, input_data)
+
+    def validate_output(self, output_data: Dict[str, Any]):
+        """Validates output deliverables against this specialist's Pydantic contract."""
+        from backend.services.governance import GovernanceEngine
+        return GovernanceEngine.validate_agent_output(self.type, output_data)
+
 
 KYROS_CORE_TOOLS = [
     "list_directory",

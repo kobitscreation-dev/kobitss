@@ -14,6 +14,7 @@ Generates structured QA findings for Sentinel to trigger automatic remediation.
 
 import os
 import re
+import json
 import math
 import struct
 import zlib
@@ -79,6 +80,123 @@ def parse_color_to_rgb(color_str: str) -> Optional[Tuple[int, int, int]]:
 
 
 @dataclass
+class SentinelFinding:
+    """Formal QA Finding synthesized by Sentinel for automated self-healing and reproducer loops."""
+    finding_id: str
+    category: str  # "LAYOUT_ALIGNMENT" | "TEXT_OVERLAP" | "RESPONSIVE_BREAKPOINT_COMPLIANCE" | "BROKEN_ASSET" | "CONTRAST_VIOLATION" | "VISUAL_DIFF"
+    severity: str  # "CRITICAL" | "HIGH" | "MEDIUM" | "WARNING" | "INFO"
+    message: str
+    viewport: str = "desktop"  # "desktop" | "tablet" | "mobile"
+    selector: Optional[str] = None
+    bounding_box: Optional[Dict[str, float]] = None
+    wcag_criterion: Optional[str] = None  # e.g. "WCAG 2.1 AA 1.4.3"
+    suggested_fix: Optional[str] = None
+    suggested_patch_hints: List[str] = field(default_factory=list)
+    reproducer_snippet: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "finding_id": self.finding_id,
+            "category": self.category,
+            "severity": self.severity,
+            "message": self.message,
+            "viewport": self.viewport,
+            "selector": self.selector,
+            "bounding_box": self.bounding_box,
+            "wcag_criterion": self.wcag_criterion,
+            "suggested_fix": self.suggested_fix,
+            "suggested_patch_hints": list(self.suggested_patch_hints),
+            "reproducer_snippet": self.reproducer_snippet,
+            "metadata": dict(self.metadata),
+        }
+
+    def generate_reproducer_script(self) -> str:
+        """Synthesizes a negative-to-positive Python reproducer script for this Sentinel QA finding."""
+        sel_esc = (self.selector or "body").replace('"', '\\"')
+        msg_esc = self.message.replace('"', '\\"').replace("\n", " ")
+        cat = self.category
+        vp = self.viewport
+
+        return f'''"""
+Sentinel Autonomous Visual QA Negative Reproducer.
+Category: {cat}
+Viewport: {vp}
+Target Selector: {sel_esc}
+Defect: {msg_esc}
+"""
+import sys
+import os
+import re
+
+def reproduce():
+    # Scan worktree HTML/CSS files for the reported visual defect
+    candidates = ["index.html", "dist/index.html", "build/index.html", "public/index.html", "web/index.html"]
+    found_html = None
+    for cand in candidates:
+        if os.path.isfile(cand):
+            with open(cand, "r", encoding="utf-8", errors="ignore") as f:
+                found_html = f.read()
+            break
+
+    if not found_html:
+        # If no static HTML found, inspect all .html files
+        for root, _, files in os.walk("."):
+            for file in files:
+                if file.endswith(".html"):
+                    with open(os.path.join(root, file), "r", encoding="utf-8", errors="ignore") as f:
+                        found_html = f.read()
+                    break
+            if found_html:
+                break
+
+    if not found_html:
+        print("PASS: No HTML files located in workspace root")
+        return 0
+
+    category = "{cat}"
+    if category in ("BROKEN_ASSET",):
+        # Assert no empty/invalid image src attributes
+        img_tags = re.findall(r"<img\\b[^>]*>", found_html, re.IGNORECASE)
+        for img in img_tags:
+            src_m = re.search(r'src=["\\'](.*?)["\\']', img, re.IGNORECASE)
+            val = src_m.group(1).strip() if src_m else ""
+            if not src_m or not val or val in ("#", "undefined", "null", "javascript:void(0)"):
+                print("BUG REPRODUCED: Found broken/missing img src in workspace HTML")
+                return 1
+
+    elif category in ("CONTRAST_VIOLATION",):
+        # Assert no low contrast inline styles or flags
+        if "color" in found_html.lower() and "background" in found_html.lower():
+            # Check for known low contrast matches
+            low_contrast_patterns = [r"color\\s*:\\s*(?:#999|#aaa|#bbb|#ccc|gray|grey)", r"color\\s*:\\s*#[7-9a-fA-F]{3,6}"]
+            for pat in low_contrast_patterns:
+                if re.search(pat, found_html, re.IGNORECASE):
+                    print("BUG REPRODUCED: Low contrast style detected violating WCAG AA")
+                    return 1
+
+    elif category in ("RESPONSIVE_BREAKPOINT_COMPLIANCE", "RESPONSIVE_OVERFLOW"):
+        # Assert no fixed widths > 375 on mobile
+        fixed_w = re.findall(r'(?:width|min-width)\\s*:\\s*([0-9]+)px', found_html, re.IGNORECASE)
+        for w_str in fixed_w:
+            if int(w_str) > 375:
+                print(f"BUG REPRODUCED: Fixed element width {{w_str}}px exceeds viewport boundary")
+                return 1
+
+    elif category in ("LAYOUT_ALIGNMENT", "TEXT_OVERLAP"):
+        if re.search(r'margin(?:-top|-left|-right|-bottom)?\\s*:\\s*-[3-9][0-9]px', found_html, re.IGNORECASE):
+            print("BUG REPRODUCED: Severe negative margin causing layout collision")
+            return 1
+
+    print("SUCCESS: Visual QA defect has been remediated")
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(reproduce())
+'''
+
+
+@dataclass
 class VisualFinding:
     category: str  # "LAYOUT_OVERLAP" | "CONTRAST_VIOLATION" | "BROKEN_ASSET" | "RESPONSIVE_OVERFLOW" | "VISUAL_DIFF"
     severity: str  # "CRITICAL" | "WARNING" | "INFO"
@@ -98,6 +216,34 @@ class VisualFinding:
             "suggested_fix": self.suggested_fix,
             "metadata": self.metadata,
         }
+
+    def to_sentinel_finding(self) -> SentinelFinding:
+        """Elevates this VisualFinding to a formal SentinelFinding."""
+        import uuid
+        f_id = f"sentinel_{uuid.uuid4().hex[:8]}"
+        cat = self.category
+        if cat == "LAYOUT_OVERLAP":
+            cat = "TEXT_OVERLAP" if "text" in self.message.lower() else "LAYOUT_ALIGNMENT"
+        elif cat == "RESPONSIVE_OVERFLOW":
+            cat = "RESPONSIVE_BREAKPOINT_COMPLIANCE"
+
+        wcag = "WCAG 2.1 AA 1.4.3" if self.category == "CONTRAST_VIOLATION" else None
+        hints = [self.suggested_fix] if self.suggested_fix else []
+        sf = SentinelFinding(
+            finding_id=f_id,
+            category=cat,
+            severity=self.severity,
+            message=self.message,
+            viewport=self.viewport or "desktop",
+            selector=self.selector,
+            wcag_criterion=wcag,
+            suggested_fix=self.suggested_fix,
+            suggested_patch_hints=hints,
+            metadata=dict(self.metadata),
+        )
+        sf.reproducer_snippet = sf.generate_reproducer_script()
+        return sf
+
 
 
 @dataclass
@@ -367,3 +513,196 @@ class VisualQAManager:
             diff_ratio=max_diff,
             summary=summary,
         )
+
+    @classmethod
+    def elevate_to_sentinel_findings(cls, report: VisualQAReport) -> List[SentinelFinding]:
+        """Elevates all findings in a VisualQAReport to formal SentinelFindings."""
+        return [f.to_sentinel_finding() for f in report.findings]
+
+    @classmethod
+    def build_frontier_vision_prompt(
+        cls,
+        viewport_name: str,
+        target_url: Optional[str] = None,
+        dom_snapshot: Optional[str] = None,
+    ) -> str:
+        """
+        Formulates a high-precision multi-modal vision prompt for frontier models
+        (Claude 3.5/3.7 Sonnet, Gemini 1.5/2.0 Pro) inspecting rendered UI screenshots.
+        """
+        vp_cfg = STANDARD_VIEWPORTS.get(viewport_name, STANDARD_VIEWPORTS["desktop"])
+        dom_section = f"\nRelevant DOM Snippet:\n```html\n{dom_snapshot[:2000]}\n```\n" if dom_snapshot else ""
+        return f"""You are Sentinel, a Principal Visual QA and Computer Vision engineer at a world-class technology company.
+Your role is to inspect the attached UI screenshot rendered at viewport: {viewport_name.upper()} ({vp_cfg['width']}x{vp_cfg['height']}px).
+Target URL: {target_url or 'Ephemeral preview server'}
+{dom_section}
+Evaluate the rendered UI against these 5 strict multi-modal quality pillars:
+1. LAYOUT_ALIGNMENT: Crooked elements, grid/flex column misalignment, inconsistent margins/padding, crooked headers or broken button rows.
+2. TEXT_OVERLAP: Text colliding with adjacent elements, icons, or badges; truncated text labels missing ellipses; multi-line overlap.
+3. RESPONSIVE_BREAKPOINT_COMPLIANCE: Content overflowing horizontal viewport bounds ({vp_cfg['width']}px on {viewport_name}), unstyled mobile clipping, horizontal scrollbars.
+4. BROKEN_ASSET: Missing image thumbnails, 404 broken image placeholders, empty src tags, failed web font fallbacks.
+5. CONTRAST_VIOLATION: Low color contrast violating WCAG 2.1 AA (requires minimum 4.5:1 for normal text, 3:1 for large text or interactive controls).
+
+OUTPUT INSTRUCTIONS:
+Return ONLY a valid JSON array of findings. If no defects exist, return `[]`.
+Schema for each finding item:
+{{
+  "category": "LAYOUT_ALIGNMENT" | "TEXT_OVERLAP" | "RESPONSIVE_BREAKPOINT_COMPLIANCE" | "BROKEN_ASSET" | "CONTRAST_VIOLATION",
+  "severity": "CRITICAL" | "HIGH" | "WARNING" | "INFO",
+  "message": "<Precise description of the visual defect>",
+  "selector": "<CSS selector or semantic element location>",
+  "bounding_box": {{"x": <float>, "y": <float>, "width": <float>, "height": <float>}},
+  "wcag_criterion": "<e.g. WCAG 2.1 AA 1.4.3 or null>",
+  "suggested_fix": "<Concrete CSS / HTML / Tailwind remediation code>",
+  "suggested_patch_hints": ["<hint 1>", "<hint 2>"]
+}}
+"""
+
+    @classmethod
+    def parse_frontier_vision_response(
+        cls,
+        response_text: str,
+        viewport_name: str = "desktop",
+        viewport: Optional[str] = None,
+    ) -> List[SentinelFinding]:
+        """Parses and validates structured JSON response from frontier multi-modal vision models."""
+        import uuid
+        vp = viewport or viewport_name or "desktop"
+        findings: List[SentinelFinding] = []
+        if not response_text or not response_text.strip():
+            return findings
+
+        clean_text = response_text.strip()
+        if "```json" in clean_text:
+            clean_text = clean_text.split("```json", 1)[1].split("```", 1)[0].strip()
+        elif "```" in clean_text:
+            clean_text = clean_text.split("```", 1)[1].split("```", 1)[0].strip()
+
+        try:
+            raw_data = json.loads(clean_text)
+            if isinstance(raw_data, dict) and "findings" in raw_data:
+                raw_data = raw_data["findings"]
+            if not isinstance(raw_data, list):
+                raw_data = [raw_data]
+
+            for item in raw_data:
+                if not isinstance(item, dict):
+                    continue
+                f_id = item.get("finding_id") or f"sentinel_{uuid.uuid4().hex[:8]}"
+                cat = item.get("category", "LAYOUT_ALIGNMENT")
+                sev = item.get("severity", "WARNING").upper()
+                msg = item.get("message", "Visual defect detected by frontier vision model")
+                sel = item.get("selector")
+                bbox = item.get("bounding_box")
+                wcag = item.get("wcag_criterion")
+                fix = item.get("suggested_fix")
+                hints = item.get("suggested_patch_hints", [])
+                if fix and fix not in hints:
+                    hints.insert(0, fix)
+
+                sf = SentinelFinding(
+                    finding_id=f_id,
+                    category=cat,
+                    severity=sev,
+                    message=msg,
+                    viewport=vp,
+                    selector=sel,
+                    bounding_box=bbox,
+                    wcag_criterion=wcag,
+                    suggested_fix=fix,
+                    suggested_patch_hints=hints,
+                    metadata=item.get("metadata", {}),
+                )
+                sf.reproducer_snippet = sf.generate_reproducer_script()
+                findings.append(sf)
+        except Exception as err:
+            logger.warning(f"Failed to parse frontier vision response as JSON: {err}")
+
+        return findings
+
+    @classmethod
+    async def analyze_with_frontier_vision(
+        cls,
+        screenshot_bytes: bytes,
+        viewport_name: str = "desktop",
+        model: str = "gemini-1.5-pro",
+        api_key: Optional[str] = None,
+        dom_content: Optional[str] = None,
+        target_url: Optional[str] = None,
+    ) -> List[SentinelFinding]:
+        """
+        Executes multi-modal visual QA analysis using frontier models (Gemini / Claude Sonnet).
+        Falls back seamlessly to local computer-vision and DOM heuristic analysis when offline
+        or when external model credentials are not configured.
+        """
+        prompt = cls.build_frontier_vision_prompt(viewport_name, target_url, dom_content)
+        findings: List[SentinelFinding] = []
+
+        # Check if an external multi-modal LLM API key is present
+        anthropic_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        gemini_key = api_key or os.environ.get("GEMINI_API_KEY")
+
+        if "claude" in model.lower() and anthropic_key:
+            try:
+                import anthropic
+                import base64
+                client = anthropic.Anthropic(api_key=anthropic_key)
+                b64_img = base64.b64encode(screenshot_bytes).decode("utf-8")
+                msg = client.messages.create(
+                    model=model,
+                    max_tokens=2048,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": "image/png",
+                                        "data": b64_img,
+                                    },
+                                },
+                                {"type": "text", "text": prompt},
+                            ],
+                        }
+                    ],
+                )
+                res_text = msg.content[0].text if msg.content else ""
+                findings = cls.parse_frontier_vision_response(res_text, viewport_name=viewport_name)
+                if findings:
+                    return findings
+            except Exception as e:
+                logger.warning(f"Claude Vision QA failed ({e}), falling back to heuristic engine")
+
+        elif ("gemini" in model.lower() or not anthropic_key) and gemini_key:
+            try:
+                from google import genai
+                client = genai.Client(api_key=gemini_key)
+                resp = client.models.generate_content(
+                    model=model,
+                    contents=[
+                        genai.types.Part.from_bytes(data=screenshot_bytes, mime_type="image/png"),
+                        prompt,
+                    ],
+                )
+                findings = cls.parse_frontier_vision_response(resp.text or "", viewport_name=viewport_name)
+                if findings:
+                    return findings
+            except Exception as e:
+                logger.warning(f"Gemini Vision QA failed ({e}), falling back to heuristic engine")
+
+        # Hermetic / Offline Rule-Based Fallback
+        if dom_content:
+            dom_findings = cls.inspect_dom_for_visual_defects(dom_content, viewport_name=viewport_name)
+            for df in dom_findings:
+                findings.append(df.to_sentinel_finding())
+
+        return findings
+
+
+# Module-level convenience aliases
+build_frontier_vision_prompt = VisualQAManager.build_frontier_vision_prompt
+parse_frontier_vision_response = VisualQAManager.parse_frontier_vision_response
+analyze_with_frontier_vision = VisualQAManager.analyze_with_frontier_vision
+

@@ -242,6 +242,23 @@ async def build_agent_context(
         except Exception:
             pass
 
+        # 8C. Persistent Governed Team Memory (ADR, Conventions, Defect Fixes, Peer Notes)
+        try:
+            from backend.services.team_memory import TeamMemoryManager
+            team_mem_ctx = TeamMemoryManager.get_team_context_for_agent(
+                project_id=project.id,
+                agent_name=agent.name,
+                task_text=search_query,
+                limit=5,
+            )
+            if team_mem_ctx:
+                context_parts.append("\n==================================================")
+                context_parts.append("PERSISTENT TEAM MEMORY (GOVERNED SPECIALISTS)")
+                context_parts.append("==================================================")
+                context_parts.append(team_mem_ctx)
+        except Exception:
+            pass
+
     # 9. Task Context
     context_parts.append("\n==================================================")
     context_parts.append("CURRENT TASK OBJECTIVE")
