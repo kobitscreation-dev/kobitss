@@ -887,3 +887,193 @@ class TestSWEBenchVerifiedTDDEngineAndRemediation:
         assert "Negative-to-Positive TDD Reproducer for CI Check" in repro
         assert "backend/network/client.py" in repro
         assert "timeout" in repro
+
+    def test_specialist_alias_expansion_and_immediate_ttl(self):
+        TeamMemoryManager.clear("proj_test")
+        entry1 = TeamMemoryManager.store_memory(
+            project_id="proj_test",
+            namespace=MemoryNamespace.PEER_NOTE,
+            key="peer_backend_note",
+            content="Use asyncpg connection pooling for PostgreSQL",
+            source_agent="Nexus",
+            target_agents=["BACKEND_ENGINEER"],
+            confidence=1.0,
+        )
+        assert entry1.is_applicable_to_agent("Core")
+        assert entry1.is_applicable_to_agent("backend_engineer")
+        assert not entry1.is_applicable_to_agent("Pixel")
+
+        entry2 = TeamMemoryManager.store_memory(
+            project_id="proj_test",
+            namespace=MemoryNamespace.PEER_NOTE,
+            key="peer_qa_note",
+            content="Run visual regression on mobile 375px viewport",
+            source_agent="Nexus",
+            target_agents=["QA"],
+            confidence=1.0,
+        )
+        assert entry2.is_applicable_to_agent("Sentinel")
+        assert entry2.is_applicable_to_agent("qa_engineer")
+        assert not entry2.is_applicable_to_agent("Aegis")
+
+        # Test immediate TTL expiration (ttl_seconds=0)
+        entry3 = TeamMemoryManager.store_memory(
+            project_id="proj_test",
+            namespace=MemoryNamespace.PEER_NOTE,
+            key="peer_ephemeral_note",
+            content="Transient lock reminder",
+            source_agent="Nexus",
+            ttl_seconds=0.0,
+        )
+        assert entry3.is_expired()
+        assert entry3.compute_effective_confidence() == 0.0
+
+    def test_sentinel_visual_qa_reproducer_on_react_components(self):
+        with tempfile.TemporaryDirectory() as sdir:
+            os.makedirs(os.path.join(sdir, "src"), exist_ok=True)
+            app_file = os.path.join(sdir, "src", "App.tsx")
+            with open(app_file, "w", encoding="utf-8") as f:
+                f.write(
+                    "export function App() {\n"
+                    "  return (\n"
+                    "    <div className='hero'>\n"
+                    "      <h1 style={{ color: '#999' }}>Low Contrast Title</h1>\n"
+                    "      <img src='' alt='Broken logo' />\n"
+                    "    </div>\n"
+                    "  );\n"
+                    "}\n"
+                )
+
+            # Test broken asset reproducer on React component
+            finding_asset = SentinelFinding(
+                finding_id="sentinel_broken_asset_001",
+                category="BROKEN_ASSET",
+                severity="CRITICAL",
+                message="Broken image src in App.tsx",
+                viewport="mobile",
+                selector="img",
+            )
+            repro_script = finding_asset.generate_reproducer_script()
+            ReproducerEngine.author_reproducer(sdir, repro_script, "reproduce_asset.py")
+            base_res = ReproducerEngine.verify_negative_baseline(sdir, "reproduce_asset.py")
+            assert base_res.valid
+            assert base_res.exit_code == 1
+
+            # Fix the broken image in App.tsx
+            with open(app_file, "w", encoding="utf-8") as f:
+                f.write(
+                    "export function App() {\n"
+                    "  return (\n"
+                    "    <div className='hero'>\n"
+                    "      <h1 style={{ color: '#111' }}>High Contrast Title</h1>\n"
+                    "      <img src='https://cdn.kobits.space/logo.png' alt='Valid logo' />\n"
+                    "    </div>\n"
+                    "  );\n"
+                    "}\n"
+                )
+
+            pos_res = ReproducerEngine.verify_positive(sdir, "reproduce_asset.py")
+            assert pos_res.success
+            assert pos_res.reproducer_passed
+
+    def test_phase_gate_skipping_prevention(self):
+        # Multi-stage jump from INTAKE directly to DEPLOYMENT without approvals must be blocked
+        res_skip = GovernanceEngine.validate_phase_transition(
+            from_phase=WorkflowPhase.INTAKE,
+            to_phase=WorkflowPhase.DEPLOYMENT,
+            approvals=[],
+        )
+        assert not res_skip.allowed
+        assert "SOLUTION_ARCHITECT" in res_skip.missing_approvals
+        assert "SECURITY_ENGINEER" in res_skip.missing_approvals
+        assert "HUMAN_ENGINEER_DELIVERY_APPROVAL" in res_skip.missing_approvals
+
+        # Jump to CODE_REVIEW without Security approval must be blocked
+        res_review = GovernanceEngine.validate_phase_transition(
+            from_phase=WorkflowPhase.IMPLEMENTATION,
+            to_phase=WorkflowPhase.CODE_REVIEW,
+            approvals=[],
+        )
+        assert not res_review.allowed
+        assert "SECURITY_ENGINEER" in res_review.missing_approvals
+
+    def test_sandbox_manager_and_github_service_push_branch(self):
+        from backend.services.github_service import GitHubService
+        with tempfile.TemporaryDirectory() as sdir:
+            subprocess.run(["git", "init"], cwd=sdir, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "TestPush"], cwd=sdir, capture_output=True)
+            subprocess.run(["git", "config", "user.email", "push@kobits.space"], cwd=sdir, capture_output=True)
+            
+            readme = os.path.join(sdir, "README.md")
+            with open(readme, "w", encoding="utf-8") as f:
+                f.write("# Test Repo\n")
+            subprocess.run(["git", "add", "."], cwd=sdir, capture_output=True)
+            subprocess.run(["git", "commit", "-m", "init"], cwd=sdir, capture_output=True)
+            subprocess.run(["git", "branch", "-M", "feature/ci-fix"], cwd=sdir, capture_output=True)
+
+            session = SandboxManager.create_sandbox(
+                project_root=sdir,
+                branch_name="feature/ci-fix",
+            )
+            # Push using mock or local git
+            push_res = SandboxManager.push_branch(
+                session_id=session.session_id,
+                branch="feature/ci-fix",
+            )
+            assert push_res.get("success")
+
+            # GitHubService push_branch in mock mode
+            with patch("backend.services.github_service.MOCK_GITHUB_API", True):
+                import asyncio
+                loop = asyncio.get_event_loop()
+                gh_push = loop.run_until_complete(
+                    GitHubService.push_branch(
+                        sandbox_dir=sdir,
+                        branch="feature/ci-fix",
+                        repo_full_name="kobitscreation-dev/kobitss",
+                        token="fake-token-123",
+                    )
+                )
+                assert gh_push.get("success")
+                assert gh_push.get("branch") == "feature/ci-fix"
+
+    @pytest.mark.asyncio
+    async def test_reproducer_verify_positive_cloud_execution_flow(self):
+        with tempfile.TemporaryDirectory() as sdir:
+            subprocess.run(["git", "init"], cwd=sdir, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "CloudTester"], cwd=sdir, capture_output=True)
+            subprocess.run(["git", "config", "user.email", "cloud@kobits.space"], cwd=sdir, capture_output=True)
+
+            repro_file = os.path.join(sdir, "reproduce_issue.py")
+            with open(repro_file, "w", encoding="utf-8") as f:
+                f.write("import sys; sys.exit(0)\n")
+
+            mock_cloud_sb = MagicMock()
+            mock_cloud_sb.execute_script.return_value = {
+                "exit_code": 0,
+                "stdout": "reproducer passed",
+                "stderr": "",
+                "timed_out": False,
+            }
+            mock_cloud_sb.execute_tests.return_value = {
+                "exit_code": 0,
+                "stdout": "10 tests passed in 0.5s",
+                "stderr": "",
+                "timed_out": False,
+            }
+
+            with patch("backend.services.cloud_sandbox.CloudMicroVMSandbox.is_configured", return_value=True), \
+                 patch("backend.services.cloud_sandbox.CloudMicroVMSandbox.is_cloud_native", return_value=True), \
+                 patch("backend.services.cloud_sandbox.CloudMicroVMSandbox.get_or_create", return_value=mock_cloud_sb):
+                
+                pos_res = ReproducerEngine.verify_positive(
+                    sandbox_dir=sdir,
+                    script_path="reproduce_issue.py",
+                    regression_cmd="pytest -v",
+                )
+                assert pos_res.success
+                assert pos_res.reproducer_passed
+                assert pos_res.regression_passed
+                assert pos_res.regression_execution is not None
+                assert pos_res.regression_execution.exit_code == 0
+

@@ -69,6 +69,31 @@ class MemoryNamespace(str, Enum):
         return cls.PEER_NOTE
 
 
+SPECIALIST_ALIASES: Dict[str, Set[str]] = {
+    "nexus": {"orchestrator", "solution_architect", "architect", "lead"},
+    "axiom": {"solution_architect", "architect", "orchestrator"},
+    "forge": {"product_manager", "technical_lead", "backend_engineer", "pm", "lead"},
+    "muse": {"ux_designer", "frontend_engineer", "ui", "ux", "designer"},
+    "schema": {"database_engineer", "dba", "db", "database"},
+    "core": {"backend_engineer", "backend", "api", "coder"},
+    "pixel": {"frontend_engineer", "frontend", "ui", "web"},
+    "swift": {"mobile_engineer", "mobile", "ios", "android"},
+    "neuron": {"ai_ml_engineer", "ai", "ml", "data_science"},
+    "bridge": {"integrations_engineer", "integrations", "api_connectors"},
+    "pulse": {"devops_engineer", "devops", "infra", "ci_cd"},
+    "sentinel": {"qa_engineer", "qa", "tester", "visual_qa", "test"},
+    "aegis": {"security_engineer", "security", "auditor", "infosec"},
+    "review": {"code_reviewer", "reviewer", "review"},
+    "vector": {"performance_engineer", "perf", "performance"},
+    "access": {"accessibility_engineer", "a11y", "accessibility"},
+    "insight": {"data_analytics_engineer", "analytics", "telemetry"},
+    "scribe": {"documentation_engineer", "docs", "documentation", "writer"},
+    "launch": {"release_manager", "release", "deployment"},
+    "reliant": {"sre", "reliability", "infrastructure"},
+    "catalyst": {"business_analyst", "business", "ba"},
+}
+
+
 @dataclass
 class TeamMemoryEntry:
     id: str
@@ -94,6 +119,9 @@ class TeamMemoryEntry:
         If TTL has passed, effective confidence is 0.0.
         Otherwise, confidence decays exponentially according to decay_factor.
         """
+        if self.confidence <= 0.0:
+            return 0.0
+
         now = as_of or datetime.now(timezone.utc)
         if self.created_at.tzinfo is None:
             created = self.created_at.replace(tzinfo=timezone.utc)
@@ -102,8 +130,8 @@ class TeamMemoryEntry:
 
         age_seconds = max(0.0, (now - created).total_seconds())
 
-        # Hard TTL expiration check
-        if self.ttl_seconds is not None and age_seconds > self.ttl_seconds:
+        # Hard TTL expiration check (>= handles ttl_seconds=0 immediately)
+        if self.ttl_seconds is not None and age_seconds >= self.ttl_seconds:
             return 0.0
 
         # Exponential decay: C_eff = C_0 * exp(-lambda * days)
@@ -122,8 +150,19 @@ class TeamMemoryEntry:
         if not agent_name or not self.target_agents:
             return True
         agent_norm = agent_name.strip().lower()
-        targets_norm = [t.strip().lower() for t in self.target_agents if t]
-        return agent_norm in targets_norm or "all" in targets_norm or "*" in targets_norm
+        targets_norm = {t.strip().lower() for t in self.target_agents if t}
+        if "all" in targets_norm or "*" in targets_norm or agent_norm in targets_norm:
+            return True
+
+        agent_identities = {agent_norm}
+        if agent_norm in SPECIALIST_ALIASES:
+            agent_identities.update(SPECIALIST_ALIASES[agent_norm])
+        for name, aliases in SPECIALIST_ALIASES.items():
+            if agent_norm in aliases:
+                agent_identities.add(name)
+                agent_identities.update(aliases)
+
+        return bool(agent_identities & targets_norm)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

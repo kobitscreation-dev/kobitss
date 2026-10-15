@@ -479,10 +479,10 @@ async def serve_preview_asset(
             req_body = await request.body() if request and request.method not in ("GET", "HEAD") else None
             query_str = str(request.url.query) if request and request.url.query else ""
             full_target = f"{proxy_url}?{query_str}" if query_str else proxy_url
-            EXCLUDE_PROXY_HEADERS = {"connection", "keep-alive", "transfer-encoding", "content-encoding", "content-length"}
-            fwd_headers = {k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")} if request else {}
+            EXCLUDE_PROXY_HEADERS = {"connection", "keep-alive", "transfer-encoding", "content-encoding", "content-length", "host"}
+            fwd_headers = {k: v for k, v in request.headers.items() if k.lower() not in EXCLUDE_PROXY_HEADERS} if request else {}
 
-            async with httpx.AsyncClient(timeout=6.0, follow_redirects=False) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(connect=1.5, read=10.0, write=5.0, pool=5.0), follow_redirects=False) as client:
                 req_method = (request.method if request else "GET").upper()
                 if req_method == "GET":
                     resp = await client.get(full_target, headers=fwd_headers)

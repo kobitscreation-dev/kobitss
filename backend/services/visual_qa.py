@@ -130,8 +130,11 @@ import os
 import re
 
 def reproduce():
-    # Scan worktree HTML/CSS files for the reported visual defect
-    candidates = ["index.html", "dist/index.html", "build/index.html", "public/index.html", "web/index.html"]
+    # Scan worktree component and markup files for the reported visual defect
+    candidates = [
+        "index.html", "dist/index.html", "build/index.html", "public/index.html", "web/index.html",
+        "src/App.tsx", "src/App.jsx", "src/App.vue", "src/App.svelte", "src/index.tsx", "src/index.jsx"
+    ]
     found_html = None
     for cand in candidates:
         if os.path.isfile(cand):
@@ -140,36 +143,54 @@ def reproduce():
             break
 
     if not found_html:
-        # If no static HTML found, inspect all .html files
-        for root, _, files in os.walk("."):
+        # If no default candidate located, inspect component and HTML/CSS files
+        ignored_dirs = {{".git", "node_modules", ".venv", "venv", "__pycache__"}}
+        for root, dirs, files in os.walk("."):
+            dirs[:] = [d for d in dirs if d not in ignored_dirs]
             for file in files:
-                if file.endswith(".html"):
+                if file.endswith((".html", ".htm", ".jsx", ".tsx", ".vue", ".svelte", ".css")):
                     with open(os.path.join(root, file), "r", encoding="utf-8", errors="ignore") as f:
-                        found_html = f.read()
-                    break
+                        content = f.read()
+                        if "{cat}" in ("BROKEN_ASSET",) and ("<img" in content.lower() or "src=" in content.lower()):
+                            found_html = content
+                            break
+                        elif "{cat}" in ("CONTRAST_VIOLATION",) and ("color" in content.lower() or "background" in content.lower()):
+                            found_html = content
+                            break
+                        elif "{cat}" in ("RESPONSIVE_BREAKPOINT_COMPLIANCE", "RESPONSIVE_OVERFLOW") and ("width" in content.lower() or "px" in content.lower()):
+                            found_html = content
+                            break
+                        elif "{cat}" in ("LAYOUT_ALIGNMENT", "TEXT_OVERLAP") and ("margin" in content.lower() or "padding" in content.lower()):
+                            found_html = content
+                            break
+                        elif not found_html:
+                            found_html = content
             if found_html:
                 break
 
     if not found_html:
-        print("PASS: No HTML files located in workspace root")
-        return 0
+        print("BUG REPRODUCED: Target markup or component not found in workspace")
+        return 1
 
     category = "{cat}"
     if category in ("BROKEN_ASSET",):
-        # Assert no empty/invalid image src attributes
+        # Assert no empty/invalid image src attributes (HTML, JSX, or Vue templates)
         img_tags = re.findall(r"<img\\b[^>]*>", found_html, re.IGNORECASE)
         for img in img_tags:
-            src_m = re.search(r'src=["\\'](.*?)["\\']', img, re.IGNORECASE)
+            src_m = re.search(r'src=["\\\'{{](.*?)["\\\'}}]', img, re.IGNORECASE)
             val = src_m.group(1).strip() if src_m else ""
-            if not src_m or not val or val in ("#", "undefined", "null", "javascript:void(0)"):
-                print("BUG REPRODUCED: Found broken/missing img src in workspace HTML")
+            if not src_m or not val or val in ("#", "undefined", "null", "javascript:void(0)", "''", '""'):
+                print("BUG REPRODUCED: Found broken/missing img src in workspace HTML/JSX")
                 return 1
 
     elif category in ("CONTRAST_VIOLATION",):
         # Assert no low contrast inline styles or flags
         if "color" in found_html.lower() and "background" in found_html.lower():
-            # Check for known low contrast matches
-            low_contrast_patterns = [r"color\\s*:\\s*(?:#999|#aaa|#bbb|#ccc|gray|grey)", r"color\\s*:\\s*#[7-9a-fA-F]{3,6}"]
+            low_contrast_patterns = [
+                r"""color\\s*[:=]\\s*["']?(?:#999|#aaa|#bbb|#ccc|gray|grey)["']?""",
+                r"""color\\s*[:=]\\s*["']?#[7-9a-fA-F]{{3,6}}["']?""",
+                r"""text-(?:gray|zinc|slate)-(?:300|400)"""
+            ]
             for pat in low_contrast_patterns:
                 if re.search(pat, found_html, re.IGNORECASE):
                     print("BUG REPRODUCED: Low contrast style detected violating WCAG AA")
@@ -177,14 +198,14 @@ def reproduce():
 
     elif category in ("RESPONSIVE_BREAKPOINT_COMPLIANCE", "RESPONSIVE_OVERFLOW"):
         # Assert no fixed widths > 375 on mobile
-        fixed_w = re.findall(r'(?:width|min-width)\\s*:\\s*([0-9]+)px', found_html, re.IGNORECASE)
+        fixed_w = re.findall(r"""(?:width|min-width)\\s*[:=]\\s*["']?([0-9]+)(?:px)?["']?""", found_html, re.IGNORECASE)
         for w_str in fixed_w:
             if int(w_str) > 375:
                 print(f"BUG REPRODUCED: Fixed element width {{w_str}}px exceeds viewport boundary")
                 return 1
 
     elif category in ("LAYOUT_ALIGNMENT", "TEXT_OVERLAP"):
-        if re.search(r'margin(?:-top|-left|-right|-bottom)?\\s*:\\s*-[3-9][0-9]px', found_html, re.IGNORECASE):
+        if re.search(r"""margin(?:-top|-left|-right|-bottom)?\\s*[:=]\\s*["']?-[3-9][0-9]px["']?""", found_html, re.IGNORECASE) or "-mt-[3-9]" in found_html:
             print("BUG REPRODUCED: Severe negative margin causing layout collision")
             return 1
 

@@ -654,20 +654,27 @@ class GovernanceEngine:
         missing_arts = []
         missing_apps = []
 
-        if tgt == "IMPLEMENTATION" and cur in ("INTAKE", "ARCHITECTURE", "PLANNING"):
+        if tgt in ("IMPLEMENTATION", "VERIFICATION", "VALIDATION") and cur in ("INTAKE", "ARCHITECTURE", "PLANNING"):
             # Check Architecture sign-off
-            if not any(k in app_types for k in ("SOLUTION_ARCHITECT", "ARCHITECTURE_APPROVAL", "AXIOM")):
+            if not any(k in app_types for k in ("SOLUTION_ARCHITECT", "ARCHITECTURE_APPROVAL", "AXIOM", "NEXUS")):
                 missing_apps.append("SOLUTION_ARCHITECT")
 
-        elif tgt in ("REVIEW", "MERGE") and cur in ("IMPLEMENTATION", "VERIFICATION", "VALIDATION"):
-            # Check Security (Aegis) sign-off
-            if not any(k in app_types for k in ("SECURITY_ENGINEER", "AEGIS", "SECURITY_AUDIT")):
+        if tgt in ("CODE_REVIEW", "DELIVERY_REVIEW", "REVIEW", "MERGE") and cur in ("INTAKE", "ANALYSIS", "PLANNING", "ARCHITECTURE", "ARCHITECTURE_REVIEW", "IMPLEMENTATION", "VALIDATION"):
+            if not any(k in app_types for k in ("SECURITY_ENGINEER", "AEGIS", "SECURITY_AUDIT")) and not any(k in art_types for k in ("SECURITY_AUDIT", "SECURITY_REPORT")):
                 missing_apps.append("SECURITY_ENGINEER")
+            if cur in ("INTAKE", "ANALYSIS", "PLANNING", "ARCHITECTURE", "ARCHITECTURE_REVIEW"):
+                if not any(k in app_types for k in ("SOLUTION_ARCHITECT", "ARCHITECTURE_APPROVAL", "AXIOM", "NEXUS")):
+                    missing_apps.append("SOLUTION_ARCHITECT")
 
-        elif tgt in ("DEPLOYMENT", "RELEASE"):
-            # Check Release Manager / Human sign-off
+        if tgt in ("DEPLOYMENT", "RELEASE"):
             if not any(k in app_types for k in ("RELEASE_MANAGER", "HUMAN_APPROVAL", "HUMAN_ENGINEER_DELIVERY_APPROVAL", "LAUNCH")):
                 missing_apps.append("HUMAN_ENGINEER_DELIVERY_APPROVAL")
+            if cur in ("INTAKE", "ANALYSIS", "PLANNING", "ARCHITECTURE", "ARCHITECTURE_REVIEW", "IMPLEMENTATION", "VALIDATION"):
+                if not any(k in app_types for k in ("SECURITY_ENGINEER", "AEGIS", "SECURITY_AUDIT")) and not any(k in art_types for k in ("SECURITY_AUDIT", "SECURITY_REPORT")):
+                    missing_apps.append("SECURITY_ENGINEER")
+            if cur in ("INTAKE", "ANALYSIS", "PLANNING", "ARCHITECTURE", "ARCHITECTURE_REVIEW"):
+                if not any(k in app_types for k in ("SOLUTION_ARCHITECT", "ARCHITECTURE_APPROVAL", "AXIOM", "NEXUS")):
+                    missing_apps.append("SOLUTION_ARCHITECT")
 
         allowed = len(missing_arts) == 0 and len(missing_apps) == 0
         reason = None

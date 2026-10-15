@@ -2758,6 +2758,34 @@ class MissionRuntime:
                                 except Exception:
                                     pass
 
+                                # Auto-remediation remote push: push verified commit to PR branch
+                                if mission.active_branch and (is_tdd_mode or getattr(task, "is_correction", False)):
+                                    try:
+                                        from backend.services.sandbox_manager import SandboxManager
+                                        gh_tok = ""
+                                        repo_url = None
+                                        if mission.repository_id:
+                                            from backend.models.github import Repository, GitHubConnection
+                                            repo_obj = await db.get(Repository, mission.repository_id)
+                                            if repo_obj:
+                                                repo_url = repo_obj.clone_url or repo_obj.web_url
+                                                if repo_obj.github_connection_id:
+                                                    conn_obj = await db.get(GitHubConnection, repo_obj.github_connection_id)
+                                                    if conn_obj and conn_obj.metadata_json:
+                                                        try:
+                                                            gh_tok = json.loads(conn_obj.metadata_json).get("token", "")
+                                                        except Exception:
+                                                            pass
+                                        push_res = SandboxManager.push_branch(
+                                            session_id=mission_session.session_id,
+                                            branch=mission.active_branch,
+                                            remote_url=repo_url,
+                                            token=gh_tok,
+                                        )
+                                        logger.info(f"Auto-remediation pushed verified commit to branch {mission.active_branch}: {push_res.get('success')}")
+                                    except Exception as _push_err:
+                                        logger.warning(f"Auto-remediation push_branch error: {_push_err}")
+
                 async with self._db_lock:
                     decision = await OrchestratorDecision.evaluate_task_result(db, task, run)
                 

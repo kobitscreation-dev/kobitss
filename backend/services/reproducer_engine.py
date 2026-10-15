@@ -477,49 +477,49 @@ class ReproducerEngine:
                         cmd = regression_cmd.split()
 
                 start_t = time.perf_counter()
-            try:
-                env = os.environ.copy()
-                existing_py = env.get("PYTHONPATH", "")
-                env["PYTHONPATH"] = (
-                    f"{sandbox_dir}{os.pathsep}{existing_py}" if existing_py else sandbox_dir
-                )
-                res = subprocess.run(
-                    cmd,
-                    cwd=sandbox_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout,
-                    env=env,
-                )
-                reg_dur = time.perf_counter() - start_t
-                regression_exec = ReproducerExecution(
-                    exit_code=res.returncode,
-                    stdout=res.stdout,
-                    stderr=res.stderr,
-                    duration_seconds=round(reg_dur, 4),
-                    command=cmd,
-                )
-            except subprocess.TimeoutExpired as te:
-                reg_dur = time.perf_counter() - start_t
-                regression_exec = ReproducerExecution(
-                    exit_code=-1,
-                    stdout=te.stdout or "" if isinstance(te.stdout, str) else "",
-                    stderr=te.stderr or "" if isinstance(te.stderr, str) else "",
-                    duration_seconds=round(reg_dur, 4),
-                    command=cmd,
-                    timed_out=True,
-                    error=f"Regression test suite timed out after {timeout} seconds",
-                )
-            except Exception as e:
-                reg_dur = time.perf_counter() - start_t
-                regression_exec = ReproducerExecution(
-                    exit_code=-1,
-                    stdout="",
-                    stderr="",
-                    duration_seconds=round(reg_dur, 4),
-                    command=cmd,
-                    error=str(e),
-                )
+                try:
+                    env = os.environ.copy()
+                    existing_py = env.get("PYTHONPATH", "")
+                    env["PYTHONPATH"] = (
+                        f"{sandbox_dir}{os.pathsep}{existing_py}" if existing_py else sandbox_dir
+                    )
+                    res = subprocess.run(
+                        cmd,
+                        cwd=sandbox_dir,
+                        capture_output=True,
+                        text=True,
+                        timeout=timeout,
+                        env=env,
+                    )
+                    reg_dur = time.perf_counter() - start_t
+                    regression_exec = ReproducerExecution(
+                        exit_code=res.returncode,
+                        stdout=res.stdout,
+                        stderr=res.stderr,
+                        duration_seconds=round(reg_dur, 4),
+                        command=cmd,
+                    )
+                except subprocess.TimeoutExpired as te:
+                    reg_dur = time.perf_counter() - start_t
+                    regression_exec = ReproducerExecution(
+                        exit_code=-1,
+                        stdout=te.stdout or "" if isinstance(te.stdout, str) else "",
+                        stderr=te.stderr or "" if isinstance(te.stderr, str) else "",
+                        duration_seconds=round(reg_dur, 4),
+                        command=cmd,
+                        timed_out=True,
+                        error=f"Regression test suite timed out after {timeout} seconds",
+                    )
+                except Exception as e:
+                    reg_dur = time.perf_counter() - start_t
+                    regression_exec = ReproducerExecution(
+                        exit_code=-1,
+                        stdout="",
+                        stderr="",
+                        duration_seconds=round(reg_dur, 4),
+                        command=cmd,
+                        error=str(e),
+                    )
 
             if regression_exec.exit_code != 0:
                 reg_reason = (

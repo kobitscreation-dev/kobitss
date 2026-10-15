@@ -176,5 +176,26 @@ class GitHubService:
             logger.warning(f"GitHub commit status update ({state}) returned {resp.status_code}: {resp.text}")
             return {"error": resp.text, "status_code": resp.status_code}
 
+    @classmethod
+    async def push_branch(
+        cls,
+        sandbox_dir: str,
+        branch: str,
+        repo_full_name: str,
+        token: str = "",
+    ) -> dict:
+        """Pushes a local sandbox branch to GitHub using token auth."""
+        if MOCK_GITHUB_API:
+            return {"success": True, "branch": branch, "output": f"Pushed {branch} to {repo_full_name}"}
+
+        from backend.services.sandbox_manager import _run_git
+        remote_url = f"https://x-access-token:{token}@github.com/{repo_full_name}.git" if token else f"https://github.com/{repo_full_name}.git"
+        try:
+            out = _run_git(sandbox_dir, "push", remote_url, branch)
+            return {"success": True, "branch": branch, "output": out}
+        except Exception as e:
+            logger.error(f"Failed to push branch {branch} to {repo_full_name}: {e}")
+            return {"success": False, "error": str(e)}
+
 
 

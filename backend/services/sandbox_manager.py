@@ -2524,6 +2524,67 @@ class SandboxManager:
         }
 
     @classmethod
+    def push_branch(
+        cls,
+        session_id: str,
+        remote_name: str = "origin",
+        branch: Optional[str] = None,
+        remote_url: Optional[str] = None,
+        token: Optional[str] = None,
+    ) -> dict:
+        """
+        Pushes the sandbox's git branch to the remote repository.
+        Supports token authentication and remote URL rewriting.
+        """
+        session = cls._sessions.get(session_id)
+        if not session:
+            return {"success": False, "error": "Sandbox session not found"}
+
+        target_branch = branch or session.branch_name
+        if not target_branch:
+            return {"success": False, "error": "Branch name not specified"}
+
+        from backend.services.cloud_sandbox import CloudMicroVMSandbox
+        is_cloud = (
+            getattr(session, "isolation_driver", None) == "cloud_microvm"
+            or CloudMicroVMSandbox.is_configured()
+            or CloudMicroVMSandbox.is_cloud_native()
+        )
+        if is_cloud and CloudMicroVMSandbox.is_configured():
+            try:
+                cloud_sb = CloudMicroVMSandbox.get_or_create(session_id)
+                r_url = remote_url or os.environ.get("GITHUB_REPO_URL") or "https://github.com/kobits-org/project.git"
+                push_res = cloud_sb.git_commit_and_push(
+                    branch=target_branch,
+                    message="Kobits automated verification patch",
+                    repo_url=r_url,
+                    auth_token=token or os.environ.get("GITHUB_TOKEN"),
+                    workdir="/workspace",
+                )
+                return {"success": True, "pushed": True, "cloud": True, "result": push_res}
+            except Exception as e:
+                logger.warning(f"Cloud MicroVM push_branch failed: {e}")
+
+        repos = cls._find_git_repos(session.sandbox_dir)
+        if not repos:
+            return {"success": False, "error": f"No git repository found in {session.sandbox_dir}"}
+
+        results = []
+        for repo in repos:
+            dest = remote_name
+            if remote_url:
+                if token and "@" not in remote_url and remote_url.startswith("https://"):
+                    auth_url = remote_url.replace("https://", f"https://x-access-token:{token}@")
+                else:
+                    auth_url = remote_url
+                dest = auth_url
+
+            out = _run_git(repo, "push", dest, target_branch)
+            results.append(out)
+
+        return {"success": True, "branch": target_branch, "output": "\n".join(results)}
+
+    @classmethod
     def cleanup(cls, session_id: str) -> dict:
         """Destroy any associated ephemeral container/MicroVM and remove the sandbox workspace from disk."""
         session = cls._sessions.get(session_id)
