@@ -1161,12 +1161,13 @@
           if (data) {
             localStorage.setItem('kobits_user', JSON.stringify(data));
           }
+          const sessionParam = data?.access_token ? `session_token=${encodeURIComponent(data.access_token)}` : '';
           if (isSignUp) {
             // Trigger first-time onboarding walkthrough for real newly registered users
             localStorage.removeItem('kobits.onboarded');
-            window.location.href = '/web/index.html?onboarding=true#overview';
+            window.location.href = `/dashboard?onboarding=true${sessionParam ? '&' + sessionParam : ''}#overview`;
           } else {
-            window.location.href = '/web/index.html#overview';
+            window.location.href = `/dashboard${sessionParam ? '?' + sessionParam : ''}#overview`;
           }
         } else {
           if (errBox && errText) {

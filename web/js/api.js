@@ -305,14 +305,16 @@ export async function api(method, path, body) {
       if (res.ok) {
         return data;
       }
-      if (res.status === 401) {
-        const detail = data && typeof data === 'object' ? (data.detail || JSON.stringify(data)) : (data || res.statusText);
-        throw new ApiError(401, typeof detail === 'string' ? detail : JSON.stringify(detail));
-      }
       const detail = data && typeof data === 'object' ? (data.detail || JSON.stringify(data)) : (data || res.statusText);
+      if (method !== 'GET' || res.status === 400 || res.status === 401 || res.status === 403 || res.status === 404 || res.status === 422) {
+        throw new ApiError(res.status, typeof detail === 'string' ? detail : JSON.stringify(detail));
+      }
       console.warn(`Backend returned ${res.status} for ${path}, using showcase demo fallback:`, detail);
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) throw e;
+      if (e instanceof ApiError) throw e;
+      if (method !== 'GET') {
+        throw new ApiError(0, e?.message || 'Cannot reach the Kobits server. Is it running?');
+      }
       console.warn('Backend unavailable, using showcase demo fallback:', e?.message || e);
     }
   }

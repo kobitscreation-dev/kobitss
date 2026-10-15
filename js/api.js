@@ -275,10 +275,49 @@ function getFakeDashboard(projectId) {
 // ── API Router ─────────────────────────────────────────────────────────────
 
 export async function api(method, path, body) {
-  // Support explicit query override (?live_db=true) if ever needed
-  const isLiveRequested = window.location.search.includes('live_db=true');
+  const isDemoExplicit = typeof window !== 'undefined' && (
+    window.location.search.includes('mock=true') || window.location.search.includes('demo=true')
+  );
 
-  if (!isLiveRequested) {
+  if (!isDemoExplicit) {
+    const opts = { method, credentials: 'include', headers: {} };
+    if (typeof localStorage !== 'undefined') {
+      const token = localStorage.getItem('kobits_token');
+      if (token) {
+        opts.headers['Authorization'] = `Bearer ${token}`;
+      }
+    }
+    if (body !== undefined) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    const backendBase = (typeof window !== 'undefined' && window.KOBITS_API_URL)
+      ? window.KOBITS_API_URL
+      : '';
+
+    try {
+      const res = await fetch(`${backendBase}/api/v1${path}`, opts);
+      const text = await res.text();
+      let data = null;
+      if (text) {
+        try { data = JSON.parse(text); } catch { data = text; }
+      }
+      if (res.ok) {
+        return data;
+      }
+      const detail = data && typeof data === 'object' ? (data.detail || JSON.stringify(data)) : (data || res.statusText);
+      if (method !== 'GET' || res.status === 400 || res.status === 401 || res.status === 403 || res.status === 404 || res.status === 422) {
+        throw new ApiError(res.status, typeof detail === 'string' ? detail : JSON.stringify(detail));
+      }
+      console.warn(`Backend returned ${res.status} for ${path}, using showcase demo fallback:`, detail);
+    } catch (e) {
+      if (e instanceof ApiError) throw e;
+      if (method !== 'GET') {
+        throw new ApiError(0, e?.message || 'Cannot reach the Kobits server. Is it running?');
+      }
+      console.warn('Backend unavailable, using showcase demo fallback:', e?.message || e);
+    }
+  }
     // 1. Dashboard summary & aggregated telemetry
     if (path.startsWith('/org/dashboard')) {
       const u = new URL('http://localhost' + path);
@@ -403,43 +442,33 @@ index 0000000..9b62a4f
       };
     }
 
-    // 9. Interactive actions (Approve, Apply, Retry, Cancel, Start mission)
+    // 9. GitHub connection
+    if (path === '/github/status') {
+      const savedGh = typeof localStorage !== 'undefined' ? localStorage.getItem('kobits.gh_user') : null;
+      return savedGh ? { connected: true, username: savedGh } : { connected: false };
+    }
+    if (path === '/github/connect' && method === 'POST') {
+      const u = body?.username || 'octocat';
+      if (typeof localStorage !== 'undefined') localStorage.setItem('kobits.gh_user', u);
+      return { status: "success", message: `Connected to GitHub as @${u}` };
+    }
+    if (path === '/github/disconnect' && method === 'POST') {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem('kobits.gh_user');
+      return { status: "success", message: "Disconnected GitHub account" };
+    }
+
+    // 10. Interactive actions (Approve, Apply, Retry, Cancel, Start mission)
     if (method === 'POST') {
       if (path.includes('/missions/projects/') && path.includes('/missions')) {
         const newId = "demo-msn-" + Math.random().toString(36).substring(2, 7);
         return { mission_id: newId, status: "PLANNING" };
       }
-      return { success: true, message: "Operation completed in isolated sandbox cleanroom." };
+      return { success: true, message: "Operation completed." };
     }
-  }
 
-  // Fallback to real backend fetch if live_db=true
-  const opts = { method, credentials: 'include', headers: {} };
-  if (body !== undefined) {
-    opts.headers['Content-Type'] = 'application/json';
-    opts.body = JSON.stringify(body);
-  }
-  let res;
-  const backendBase = (typeof window !== 'undefined' && window.KOBITS_API_URL)
-    ? window.KOBITS_API_URL
-    : '';
-
-  try {
-    res = await fetch(`${backendBase}/api/v1${path}`, opts);
-  } catch (e) {
-    throw new ApiError(0, 'Cannot reach the Kobits server. Is it running?');
-  }
-  const text = await res.text();
-  let data = null;
-  if (text) {
-    try { data = JSON.parse(text); } catch { data = text; }
-  }
-  if (!res.ok) {
-    const detail = data && typeof data === 'object' ? (data.detail || JSON.stringify(data)) : (data || res.statusText);
-    throw new ApiError(res.status, typeof detail === 'string' ? detail : JSON.stringify(detail));
-  }
-  return data;
+  return null;
 }
 
 export const get = (p) => api('GET', p);
 export const post = (p, b = {}) => api('POST', p, b);
+export const del = (p) => api('DELETE', p);

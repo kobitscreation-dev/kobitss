@@ -183,7 +183,7 @@ async function fetchDashboard(silent = false) {
 function populateProjectSelect(data) {
   const sel = document.getElementById('ky-project-select');
   if (!sel || !data?.projects) return;
-  const activeId = data.project?.id || '';
+  const activeId = data.project?.id || state.projectId || (data.projects[0]?.id) || '';
   sel.innerHTML = data.projects.map((p) =>
     `<option value="${esc(p.id)}" ${p.id === activeId ? 'selected' : ''}>${esc(p.name)}</option>`
   ).join('');
@@ -1112,9 +1112,41 @@ function initTopBar() {
     fetchDashboard();
   });
 
+  const newBtn = document.getElementById('ky-topbar-new');
+  newBtn?.addEventListener('click', () => {
+    state.tab = 'overview';
+    location.hash = '#overview';
+    renderDashboard();
+    setTimeout(() => {
+      const p = document.getElementById('ky-mission-prompt');
+      if (p) {
+        p.focus();
+        p.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 80);
+  });
+
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      document.getElementById('ky-modal-host').innerHTML = '';
+      const host = document.getElementById('ky-modal-host');
+      if (host) host.innerHTML = '';
+      return;
+    }
+    if ((e.key === 'n' || e.key === 'N') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag !== 'input' && tag !== 'textarea' && tag !== 'select' && !document.activeElement?.isContentEditable) {
+        e.preventDefault();
+        state.tab = 'overview';
+        location.hash = '#overview';
+        renderDashboard();
+        setTimeout(() => {
+          const p = document.getElementById('ky-mission-prompt');
+          if (p) {
+            p.focus();
+            p.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 80);
+      }
     }
   });
 

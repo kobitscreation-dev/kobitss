@@ -74,6 +74,10 @@ function appendTerminalLine(payload) {
       message = payload.content;
     } else if (payload.command) {
       message = payload.command;
+    } else if (payload.data) {
+      message = payload.data;
+    } else if (payload.thought) {
+      message = payload.thought;
     } else {
       message = JSON.stringify(payload);
     }
@@ -91,6 +95,11 @@ function appendTerminalLine(payload) {
     case 'system':
       tagHtml = `<span style="color:#38bdf8;font-weight:600;">[SYS]</span>`;
       contentHtml = `<span style="color:#e0f2fe;">${esc(message)}</span>`;
+      break;
+
+    case 'pty_output':
+      tagHtml = `<span style="color:#a78bfa;font-weight:600;">[SHELL]</span>`;
+      contentHtml = `<span style="color:#e4e4e7;white-space:pre-wrap;font-family:inherit;">${esc(payload.data || message)}</span>`;
       break;
 
     case 'terminal_output': {
@@ -593,11 +602,23 @@ function wireActions() {
   });
 
   document.getElementById('btn-apply')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-apply');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Applying changes...';
+    }
     try {
       await post(`/missions/${missionId}/apply`, { dry_run: false, force: false });
-      toast('Changes applied successfully', 'success');
+      toast('Changes applied successfully to repository!', 'success');
+      loadMission();
+      loadDiff();
     } catch (e) {
       toast(e.message, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<span>✓</span><span>Apply Changes to Codebase</span>';
+      }
     }
   });
 }
@@ -624,14 +645,14 @@ async function loadDiff() {
   const container = document.getElementById('mission-changes');
   try {
     const d = await get(`/missions/${missionId}/diff`);
-    if (d && d.diff_text) {
-      let applyBtn = currentMission?.status === 'COMPLETED' ? `<button class="btn btn-primary btn-sm" id="btn-apply" style="margin-bottom:12px;">Apply Changes</button>` : '';
+    if (d && (d.diff_text || (d.files && d.files.length > 0))) {
+      let applyBtn = `<button class="btn btn-primary btn-sm" id="btn-apply" style="margin-bottom:12px;display:inline-flex;align-items:center;gap:6px;"><span>✓</span><span>Apply Changes to Codebase</span></button>`;
       container.innerHTML = `
         <div class="card-head"><h3>Changes</h3></div>
         <div class="card-body">
           <p class="faint" style="margin: 0 0 12px 0;">Files changed: ${d.files ? d.files.length : 0}</p>
           ${applyBtn}
-          ${renderDiff(d.diff_text)}
+          ${renderDiff(d.diff_text || '')}
         </div>
       `;
       wireActions(); // to wire the apply button
@@ -813,17 +834,27 @@ function wirePreview() {
   });
 
   // Query remote preview info & cloud microVM telemetry
-  fetch(`/api/v1/preview/${encodeURIComponent(missionId)}/info`)
-    .then(r => r.json())
+  const previewHeaders = {};
+  if (typeof localStorage !== 'undefined') {
+    const token = localStorage.getItem('kobits_token');
+    if (token) previewHeaders['Authorization'] = `Bearer ${token}`;
+  }
+
+  fetch(`/api/v1/preview/${encodeURIComponent(missionId)}/info`, {
+    headers: previewHeaders,
+    credentials: 'include'
+  })
+    .then(r => r.ok ? r.json() : null)
     .then(data => {
-      if (data && data.cloud_microvm) {
+      if (!data) return;
+      if (data.cloud_microvm) {
         const badge = document.getElementById('preview-cloud-badge');
         if (badge) {
           badge.innerHTML = `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;background:rgba(56,189,248,0.12);color:#38bdf8;font-size:11px;font-family:monospace;border:1px solid rgba(56,189,248,0.25);">&#9729; Cloud MicroVM: ${data.cloud_microvm.vm_id}</span>`;
         }
         if (data.preview_url && data.preview_url.startsWith('http')) {
-          addressInput.value = data.preview_url;
-          iframe.src = data.preview_url;
+          if (addressInput) addressInput.value = data.preview_url;
+          if (iframe && iframe.src !== data.preview_url) iframe.src = data.preview_url;
           if (btnNewtab) btnNewtab.href = data.preview_url;
         }
       }
@@ -854,6 +885,13 @@ function wireTabs() {
           pane.style.display = 'none';
         }
       });
+
+      if (targetTab === 'preview') {
+        const iframe = document.getElementById('preview-iframe');
+        if (iframe && (!iframe.src || iframe.src === 'about:blank' || iframe.src.endsWith('/'))) {
+          wirePreview();
+        }
+      }
     });
   });
 }

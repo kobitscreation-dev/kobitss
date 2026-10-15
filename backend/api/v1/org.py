@@ -170,7 +170,12 @@ async def get_dashboard(
         "project": None,
     }
 
-    project = next((p for p in projects if p.id == project_id), None) if project_id else projects[0]
+    project = None
+    if not project_id or project_id.lower() in ("default", "latest", "active", "", "null", "undefined"):
+        project = projects[0]
+    else:
+        project = next((p for p in projects if p.id == project_id or p.name == project_id), None)
+
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     pid = project.id

@@ -182,6 +182,9 @@ async function fetchDashboard(silent = false) {
     if (data?.project?.id) {
       state.projectId = data.project.id;
       localStorage.setItem('kobits.projectId', state.projectId);
+    } else if (data?.projects && data.projects.length > 0) {
+      state.projectId = data.projects[0].id;
+      localStorage.setItem('kobits.projectId', state.projectId);
     } else {
       state.projectId = '';
       localStorage.removeItem('kobits.projectId');
@@ -274,11 +277,15 @@ function populateProjectSelect(data) {
   const sel = document.getElementById('ky-project-select');
   if (sel) {
     const projects = data?.projects || [];
-    const activeId = data?.project?.id || '';
+    const activeId = data?.project?.id || state.projectId || (projects[0]?.id) || '';
     if (projects.length > 0) {
       sel.innerHTML = projects.map((p) =>
         `<option value="${esc(p.id)}" ${p.id === activeId ? 'selected' : ''}>${esc(p.name)}</option>`
       ).join('') + `<option value="__new__">+ Create New Project…</option>`;
+      if (!state.projectId && activeId) {
+        state.projectId = activeId;
+        localStorage.setItem('kobits.projectId', activeId);
+      }
     } else {
       sel.innerHTML = `
         <option value="default" selected>Primary Engineering Workspace</option>
@@ -1167,9 +1174,13 @@ function wireTabEvents() {
         }
         notify('🚀 Mission launched into cleanroom sandbox!');
         promptInput.value = '';
-        state.draftPrompt = '';
         state.selectedMissionId = res.mission_id || res.id;
-        await fetchDashboard(true);
+        const mId = res.mission_id || res.id;
+        if (mId) {
+          location.hash = `#missions/${mId}`;
+        } else {
+          await fetchDashboard(true);
+        }
       } catch (err) {
         notify(`Failed to launch mission: ${err.message}`, 'error');
         launchBtn.disabled = false;
@@ -1575,18 +1586,7 @@ function initTopBar() {
 
   const newBtn = document.getElementById('ky-topbar-new');
   newBtn?.addEventListener('click', () => {
-    state.tab = 'overview';
-    location.hash = '#overview';
-    renderDashboard();
-    setTimeout(() => {
-      const p = document.getElementById('ky-mission-prompt');
-      if (p) {
-        p.focus();
-        p.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        openNewProjectModal();
-      }
-    }, 80);
+    openCreateMissionModal();
   });
 
   const settingsBtn = document.getElementById('ky-topbar-settings');
@@ -1602,7 +1602,16 @@ function initTopBar() {
 
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      document.getElementById('ky-modal-host').innerHTML = '';
+      const host = document.getElementById('ky-modal-host');
+      if (host) host.innerHTML = '';
+      return;
+    }
+    if ((e.key === 'n' || e.key === 'N') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag !== 'input' && tag !== 'textarea' && tag !== 'select' && !document.activeElement?.isContentEditable) {
+        e.preventDefault();
+        openCreateMissionModal();
+      }
     }
   });
 
@@ -1778,6 +1787,181 @@ function openNewProjectModal() {
   location.hash = '#new-project';
   renderNewProjectPage();
 }
+
+function openCreateMissionModal() {
+  const host = document.getElementById('ky-modal-host');
+  if (!host) return;
+
+  const d = state.dashboard;
+  const projects = d?.projects || [];
+  const curPid = state.projectId || (projects[0]?.id) || 'default';
+
+  let projectOptionsHtml = '';
+  if (projects.length > 0) {
+    projectOptionsHtml = projects.map(p => 
+      `<option value="${esc(p.id)}" ${p.id === curPid ? 'selected' : ''}>${esc(p.name)}</option>`
+    ).join('') + `<option value="__new__">+ Create New Project…</option>`;
+  } else {
+    projectOptionsHtml = `<option value="default" selected>Primary Engineering Workspace</option><option value="__new__">+ Create New Project…</option>`;
+  }
+
+  host.innerHTML = `
+    <div class="ky-modal-overlay" id="ky-cm-overlay">
+      <div class="ky-modal" style="max-width:580px" role="dialog" aria-modal="true">
+        <div class="ky-modal-head" style="align-items:flex-start">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:38px;height:38px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+              </svg>
+            </div>
+            <div>
+              <div class="ky-eyebrow">AUTONOMOUS MISSION INTAKE</div>
+              <h3 style="margin:2px 0 0;font-size:18px">Launch New Mission</h3>
+            </div>
+          </div>
+          <button type="button" class="ky-icon-btn" id="ky-cm-close" aria-label="Close">✕</button>
+        </div>
+
+        <div class="ky-modal-body">
+          <form id="ky-cm-form" onsubmit="return false;">
+            <!-- Target Project -->
+            <div style="margin-bottom:16px">
+              <label for="ky-cm-project" style="display:block;font-size:12.5px;font-weight:600;margin-bottom:6px">
+                Target Project <span style="color:var(--err-fg, #ef4444)">*</span>
+              </label>
+              <select id="ky-cm-project" class="ky-select" style="width:100%;height:38px;padding:0 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text-1);font-size:13px">
+                ${projectOptionsHtml}
+              </select>
+            </div>
+
+            <!-- Target Branch & Mode -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+              <div>
+                <label for="ky-cm-branch" style="display:block;font-size:12.5px;font-weight:600;margin-bottom:6px">
+                  Target Branch
+                </label>
+                <input id="ky-cm-branch" type="text" class="ky-select" value="main" style="width:100%;height:38px;padding:0 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text-1);font-size:13px;font-family:var(--font-mono)" placeholder="main" />
+              </div>
+              <div>
+                <label for="ky-cm-mode" style="display:block;font-size:12.5px;font-weight:600;margin-bottom:6px">
+                  Execution Mode
+                </label>
+                <select id="ky-cm-mode" class="ky-select" style="width:100%;height:38px;padding:0 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text-1);font-size:13px">
+                  <option value="autopilot">⚡ Autopilot (Autonomous)</option>
+                  <option value="approval_required">🛡 Requires Approval</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Goal Description Textarea -->
+            <div style="margin-bottom:20px">
+              <label for="ky-cm-prompt" style="display:block;font-size:12.5px;font-weight:600;margin-bottom:6px">
+                Goal &amp; Requirements <span style="color:var(--err-fg, #ef4444)">*</span>
+              </label>
+              <textarea id="ky-cm-prompt" rows="4" autofocus style="width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text-1);font-size:13px;line-height:1.5;outline:none;resize:vertical;font-family:inherit" placeholder="What should Kobits build, refactor, or test? (e.g. 'Add Stripe webhook verification with HMAC-SHA256 and pytest assertions')"></textarea>
+              <div style="font-size:11.5px;color:var(--text-3);margin-top:4px">Decomposed into verified tasks across specialist agents (Axiom, Sentinel, Aegis, Atlas).</div>
+            </div>
+
+            <!-- Footer Buttons -->
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;padding-top:12px;border-top:1px solid var(--border)">
+              <button type="button" class="ky-btn ky-btn-ghost ky-btn-sm" id="ky-cm-cancel">Cancel</button>
+              <button type="button" class="ky-btn ky-btn-primary ky-btn-sm" id="ky-cm-submit" style="display:inline-flex;align-items:center;gap:6px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Launch Mission</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const closeModal = () => {
+    host.innerHTML = '';
+  };
+
+  document.getElementById('ky-cm-close')?.addEventListener('click', closeModal);
+  document.getElementById('ky-cm-cancel')?.addEventListener('click', closeModal);
+  document.getElementById('ky-cm-overlay')?.addEventListener('click', (e) => {
+    if (e.target && e.target.id === 'ky-cm-overlay') closeModal();
+  });
+
+  const projSelect = document.getElementById('ky-cm-project');
+  projSelect?.addEventListener('change', () => {
+    if (projSelect.value === '__new__') {
+      closeModal();
+      openNewProjectModal();
+    }
+  });
+
+  const promptInput = document.getElementById('ky-cm-prompt');
+  const submitBtn = document.getElementById('ky-cm-submit');
+
+  const doSubmit = async () => {
+    const text = (promptInput?.value || '').trim();
+    if (!text) {
+      notify('Please enter a goal objective for Kobits.', 'error');
+      promptInput?.focus();
+      return;
+    }
+
+    const selectedPid = projSelect?.value || curPid || 'default';
+    const branch = (document.getElementById('ky-cm-branch')?.value || 'main').trim();
+    const mode = document.getElementById('ky-cm-mode')?.value || 'autopilot';
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<span>⚡ Booting sandbox…</span>`;
+    }
+
+    try {
+      const title = text.length > 60 ? text.slice(0, 60) + '…' : text;
+      const targetPid = (selectedPid && selectedPid !== '__new__') ? selectedPid : 'default';
+      const res = await post(`/missions/projects/${encodeURIComponent(targetPid)}/missions`, {
+        title: title,
+        objective: text,
+        branch: branch,
+        execution_mode: mode,
+        auto_execute: true
+      });
+
+      if (res?.project_id) {
+        state.projectId = res.project_id;
+        localStorage.setItem('kobits.projectId', res.project_id);
+      }
+      closeModal();
+      notify('🚀 Mission launched into cleanroom sandbox!');
+      const mId = res.mission_id || res.id;
+      if (mId) {
+        state.selectedMissionId = mId;
+        location.hash = `#missions/${mId}`;
+      } else {
+        await fetchDashboard(true);
+      }
+    } catch (err) {
+      notify(`Failed to launch mission: ${err.message}`, 'error');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <span>Launch Mission</span>
+        `;
+      }
+    }
+  };
+
+  submitBtn?.addEventListener('click', doSubmit);
+  promptInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      doSubmit();
+    }
+  });
+
+  setTimeout(() => promptInput?.focus(), 50);
+}
+window.openCreateMissionModal = openCreateMissionModal;
 
 // ── Standard Settings Page ─────────────────────────────────────────────────
 

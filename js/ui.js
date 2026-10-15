@@ -178,7 +178,13 @@ export function renderDiff(text) {
   const rows = [];
   let oldLn = 0, newLn = 0;
   for (const line of text.split('\n')) {
-    if (/^(diff --git|index |new file mode|deleted file mode|similarity|rename |--- |\+\+\+ |\\ No newline)/.test(line)) continue;
+    const gitMatch = /^diff --git a\/(.*?) b\/(.*)/.exec(line);
+    if (gitMatch) {
+      const fileName = gitMatch[2] || gitMatch[1];
+      rows.push(`<tr class="file-header"><td class="ln" style="user-select:none;background:var(--surface-2, #18181b);"></td><td style="font-weight:700;padding:6px 10px;background:var(--surface-2, #18181b);color:var(--text-1, #f4f4f5);font-family:var(--font-mono, monospace);font-size:12px;border-top:1px solid var(--border, #27272a);border-bottom:1px solid var(--border, #27272a);"><span style="color:#38bdf8;margin-right:6px;">📄</span>${esc(fileName)}</td></tr>`);
+      continue;
+    }
+    if (/^(index |new file mode|deleted file mode|similarity|rename |--- |\+\+\+ |\\ No newline)/.test(line)) continue;
     const h = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)/.exec(line);
     if (h) {
       oldLn = Number(h[1]); newLn = Number(h[2]);
