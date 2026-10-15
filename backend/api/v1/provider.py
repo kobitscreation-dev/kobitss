@@ -38,10 +38,12 @@ async def get_provider_health():
             status_info["available"] = status_info["configured"]
             status_info["model"] = settings.DEEPSEEK_MODEL
             
-        elif provider_name in ["bedrock", "aws", "aws_bedrock"]:
-            status_info["configured"] = bool(settings.AWS_BEDROCK_API_KEY or (settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY))
+        elif provider_name in ["bedrock", "aws", "aws_bedrock", "claude"]:
+            status_info["configured"] = getattr(provider, "configured", False) or bool(
+                settings.AWS_BEDROCK_API_KEY or settings.ANTHROPIC_API_KEY or (settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY)
+            )
             status_info["available"] = status_info["configured"]
-            status_info["model"] = settings.BEDROCK_MODEL
+            status_info["model"] = getattr(provider, "default_model", settings.BEDROCK_MODEL)
 
         elif provider_name == "gemini":
             status_info["configured"] = getattr(provider, "configured", False)

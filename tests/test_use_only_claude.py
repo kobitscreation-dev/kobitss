@@ -40,3 +40,15 @@ def test_agent_executor_model_mapping_for_claude():
                 model_name = "mock"
             
             assert model_name == "global.anthropic.claude-sonnet-4-6"
+
+@pytest.mark.asyncio
+async def test_provider_health_endpoint_for_claude():
+    from backend.api.v1.provider import get_provider_health
+    with patch.dict(os.environ, {"LLM_PROVIDER": "claude", "USE_ONLY_CLAUDE": "1"}):
+        with patch.object(settings, "LLM_PROVIDER", "claude"):
+            health = await get_provider_health()
+            assert health["provider"] == "claude"
+            assert health["configured"] is True
+            assert health["available"] is True
+            assert health["model"] == "global.anthropic.claude-sonnet-4-6"
+
