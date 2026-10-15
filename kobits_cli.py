@@ -293,17 +293,139 @@ async def local_resolve_or_create_project(project_arg: Optional[str]) -> Dict[st
     return await local_create_project(name=ws_name, repository_url=str(WORKSPACE_DIR))
 
 
-async def _resolve_mission_id(mission_id_arg: Optional[str], prefer_status: Optional[str] = None) -> Optional[str]:
-    if mission_id_arg:
-        return mission_id_arg
-    missions = await local_list_missions()
-    if not missions:
+DEFAULT_CLOUD_API_URL = (
+    os.environ.get("KOBITS_API_URL")
+    or "https://kobitss-850300766138.europe-west1.run.app"
+).rstrip("/")
+
+
+async def cloud_list_missions(limit: int = 50) -> List[Dict[str, Any]]:
+    import httpx
+    api_url = DEFAULT_CLOUD_API_URL
+    headers = {"Content-Type": "application/json"}
+    token = os.environ.get("KOBITS_AUTH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        res = await client.get(f"{api_url}/api/v1/missions", headers=headers)
+        if res.status_code == 200:
+            data = res.json()
+            if isinstance(data, dict) and "missions" in data:
+                return data["missions"][:limit]
+            elif isinstance(data, list):
+                return data[:limit]
+        return []
+
+
+async def cloud_get_mission_detail(mission_id: str) -> Optional[Dict[str, Any]]:
+    import httpx
+    api_url = DEFAULT_CLOUD_API_URL
+    headers = {"Content-Type": "application/json"}
+    token = os.environ.get("KOBITS_AUTH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        res = await client.get(f"{api_url}/api/v1/missions/{mission_id}", headers=headers)
+        if res.status_code == 200:
+            return res.json()
         return None
-    if prefer_status:
-        for m in missions:
-            if m["status"] == prefer_status:
-                return m["id"]
-    return missions[0]["id"]
+
+
+async def cloud_steer_mission(mission_id: str, instruction: str) -> Optional[Dict[str, Any]]:
+    import httpx
+    api_url = DEFAULT_CLOUD_API_URL
+    headers = {"Content-Type": "application/json"}
+    token = os.environ.get("KOBITS_AUTH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        res = await client.post(
+            f"{api_url}/api/v1/missions/{mission_id}/steer",
+            headers=headers,
+            json={"instruction": instruction},
+        )
+        if res.status_code in (200, 201):
+            return res.json()
+        return None
+
+
+async def cloud_get_diff(mission_id: str) -> Optional[Dict[str, Any]]:
+    import httpx
+    api_url = DEFAULT_CLOUD_API_URL
+    headers = {"Content-Type": "application/json"}
+    token = os.environ.get("KOBITS_AUTH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        res = await client.get(f"{api_url}/api/v1/missions/{mission_id}/diff", headers=headers)
+        if res.status_code == 200:
+            return res.json()
+        return None
+
+
+async def cloud_apply_mission(mission_id: str, dry_run: bool = False, force: bool = False) -> Optional[Dict[str, Any]]:
+    import httpx
+    api_url = DEFAULT_CLOUD_API_URL
+    headers = {"Content-Type": "application/json"}
+    token = os.environ.get("KOBITS_AUTH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        res = await client.post(
+            f"{api_url}/api/v1/missions/{mission_id}/apply",
+            headers=headers,
+            json={"dry_run": dry_run, "force": force},
+        )
+        if res.status_code == 200:
+            return res.json()
+        return None
+
+
+async def _resolve_mission_id(mission_id_arg: Optional[str], prefer_status: Optional[str] = None) -> Optional[str]:
+    is_local = os.environ.get("KOBITS_LOCAL_MODE") == "1"
+    if mission_id_arg:
+        if len(mission_id_arg) == 36 and "-" in mission_id_arg:
+            return mission_id_arg
+        if not is_local:
+            try:
+                cloud_missions = await cloud_list_missions()
+                for m in cloud_missions:
+                    if m.get("id", "").startswith(mission_id_arg):
+                        return m["id"]
+            except Exception:
+                pass
+        try:
+            local_missions = await local_list_missions()
+            for m in local_missions:
+                if m.get("id", "").startswith(mission_id_arg):
+                    return m["id"]
+        except Exception:
+            pass
+        return mission_id_arg
+
+    if not is_local:
+        try:
+            cloud_missions = await cloud_list_missions()
+            if cloud_missions:
+                if prefer_status:
+                    for m in cloud_missions:
+                        if m.get("status") == prefer_status:
+                            return m["id"]
+                return cloud_missions[0]["id"]
+        except Exception:
+            pass
+
+    try:
+        missions = await local_list_missions()
+        if not missions:
+            return None
+        if prefer_status:
+            for m in missions:
+                if m["status"] == prefer_status:
+                    return m["id"]
+        return missions[0]["id"]
+    except Exception:
+        return None
 
 
 async def local_list_missions(status_filter: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -1816,23 +1938,42 @@ async def cmd_connect(args: argparse.Namespace) -> int:
 
 
 async def cmd_diff(args: argparse.Namespace) -> int:
+    is_local = getattr(args, "local", False) or os.environ.get("KOBITS_LOCAL_MODE") == "1"
     target_id = await _resolve_mission_id(args.mission_id)
     if not target_id:
         print(f"{RED}No missions found.{RESET}")
         return 1
 
-    detail = await local_get_mission_detail(target_id)
+    detail = None
+    if not is_local:
+        try:
+            detail = await cloud_get_mission_detail(target_id)
+        except Exception:
+            pass
+
     if not detail:
-        print(f"{RED}Mission matching '{target_id}' not found.{RESET}")
-        return 1
+        detail = await local_get_mission_detail(target_id)
+        if not detail:
+            print(f"{RED}Mission matching '{target_id}' not found.{RESET}")
+            return 1
 
     sb_info = detail.get("sandbox") or {}
     sb_dir = sb_info.get("sandbox_dir")
     files = sb_info.get("files") or []
     ver = sb_info.get("verification") or {}
 
+    if not files and not is_local:
+        try:
+            cloud_diff = await cloud_get_diff(target_id)
+            if cloud_diff and cloud_diff.get("files"):
+                files = cloud_diff.get("files")
+                sb_dir = sb_dir or cloud_diff.get("sandbox_dir") or "CloudMicroVM:/workspace"
+                ver = ver or cloud_diff.get("verification") or {}
+        except Exception:
+            pass
+
     print(f"\n{BLUE}{BOLD}⚡ KOBITS SANDBOX DIFF:{RESET} {detail['title']} ({CYAN}{detail['id'][:8]}{RESET})")
-    if not sb_dir:
+    if not sb_dir and not files:
         print(f"  {YELLOW}No sandbox directory found for this mission.{RESET}\n")
         return 1
 
@@ -2406,12 +2547,33 @@ def apply_sandbox_to_workspace(
 
 
 async def cmd_apply(args: argparse.Namespace) -> int:
+    is_local = getattr(args, "local", False) or os.environ.get("KOBITS_LOCAL_MODE") == "1"
     target_id = await _resolve_mission_id(args.mission_id)
     if not target_id:
         print(f"{RED}No missions found.{RESET}")
         return 1
 
-    detail = await local_get_mission_detail(target_id)
+    detail = None
+    if not is_local:
+        try:
+            detail = await cloud_get_mission_detail(target_id)
+        except Exception:
+            pass
+
+    if detail and not is_local:
+        try:
+            cloud_res = await cloud_apply_mission(target_id, dry_run=args.dry_run, force=args.force)
+            if cloud_res:
+                st = cloud_res.get("status", "APPLIED")
+                app_cnt = cloud_res.get("applied_count", 0)
+                print(f"\n{GREEN}{BOLD}✓ Cloud Deliverable {st}:{RESET} {detail['title']} ({CYAN}{detail['id'][:8]}{RESET})")
+                print(f"  {GRAY}Applied Files:{RESET} {app_cnt}")
+                print(f"  {GRAY}Control Plane:{RESET} {CYAN}{DEFAULT_CLOUD_API_URL}{RESET}\n")
+                return 0
+        except Exception as e:
+            logger.debug(f"Cloud apply error: {e}")
+
+    detail = detail or await local_get_mission_detail(target_id)
     if not detail:
         print(f"{RED}Mission matching '{target_id}' not found.{RESET}")
         return 1
@@ -2631,12 +2793,22 @@ async def cmd_search(args: argparse.Namespace) -> int:
 
 async def cmd_goal(args: argparse.Namespace) -> int:
     """Inspect or define mission high-level goals, acceptance criteria, and milestones."""
+    is_local = getattr(args, "local", False) or os.environ.get("KOBITS_LOCAL_MODE") == "1"
     target_id = await _resolve_mission_id(getattr(args, "mission_id", None))
     if not target_id:
         print(f"{RED}No active or recent missions found.{RESET}")
         return 1
 
-    detail = await local_get_mission_detail(target_id, include_sandbox=False)
+    detail = None
+    if not is_local:
+        try:
+            detail = await cloud_get_mission_detail(target_id)
+        except Exception:
+            pass
+
+    if not detail:
+        detail = await local_get_mission_detail(target_id, include_sandbox=False)
+
     if not detail:
         print(f"{RED}Mission matching '{target_id}' not found.{RESET}")
         return 1
@@ -2675,12 +2847,22 @@ async def cmd_goal(args: argparse.Namespace) -> int:
 
 async def cmd_teamwork_preview(args: argparse.Namespace) -> int:
     """Preview multi-agent collaborative choreography, active agent roles, and live tunnel."""
+    is_local = getattr(args, "local", False) or os.environ.get("KOBITS_LOCAL_MODE") == "1"
     target_id = await _resolve_mission_id(getattr(args, "mission_id", None))
     if not target_id:
         print(f"{RED}No active or recent missions found.{RESET}")
         return 1
 
-    detail = await local_get_mission_detail(target_id, include_sandbox=False)
+    detail = None
+    if not is_local:
+        try:
+            detail = await cloud_get_mission_detail(target_id)
+        except Exception:
+            pass
+
+    if not detail:
+        detail = await local_get_mission_detail(target_id, include_sandbox=False)
+
     if not detail:
         print(f"{RED}Mission matching '{target_id}' not found.{RESET}")
         return 1
@@ -2690,7 +2872,10 @@ async def cmd_teamwork_preview(args: argparse.Namespace) -> int:
 
     session = None
     if detail.get("active_branch"):
-        session = SandboxManager.get_session_by_branch(detail["active_branch"])
+        try:
+            session = SandboxManager.get_session_by_branch(detail["active_branch"])
+        except Exception:
+            pass
 
     preview_url = None
     if session:
@@ -2712,6 +2897,8 @@ async def cmd_teamwork_preview(args: argparse.Namespace) -> int:
         if cloud_base:
             short_id = detail["id"][:8]
             preview_url = cloud_base.format(short_id=short_id) if "{" in cloud_base else f"{cloud_base.rstrip('/')}/{short_id}"
+        elif not is_local:
+            preview_url = f"{DEFAULT_CLOUD_API_URL}/api/v1/preview/{detail['id'][:8]}"
 
     print(f"\n{CYAN}{BOLD}╔══════════════════════════════════════════════════════════════════╗{RESET}")
     print(f"{CYAN}{BOLD}║         KOBITS MULTI-AGENT TEAMWORK & LIVE PREVIEW               ║{RESET}")
@@ -2763,6 +2950,9 @@ async def cmd_boost(args: argparse.Namespace) -> int:
     os.environ["KOBITS_SPECULATIVE_EXEC"] = "1"
     os.environ["KOBITS_EXECUTION_MODE"] = "cloud_native"
 
+    is_local = getattr(args, "local", False) or os.environ.get("KOBITS_LOCAL_MODE") == "1"
+    target_id = await _resolve_mission_id(getattr(args, "mission_id", None), prefer_status="ACTIVE")
+
     print(f"\n{YELLOW}{BOLD}╔══════════════════════════════════════════════════════════════════╗{RESET}")
     print(f"{YELLOW}{BOLD}║         KOBITS TURBO BOOST & ACCELERATION ENGINE                 ║{RESET}")
     print(f"{YELLOW}{BOLD}╚══════════════════════════════════════════════════════════════════╝{RESET}")
@@ -2773,6 +2963,18 @@ async def cmd_boost(args: argparse.Namespace) -> int:
     print(f"    {GREEN}✓{RESET} {BOLD}Speculative Fast-Path     :{RESET} Pruning non-blocking review gates for verified diffs")
     print(f"    {GREEN}✓{RESET} {BOLD}Zero Host Footprint       :{RESET} 100% remote ephemeral Firecracker MicroVM execution")
     print(f"    {GREEN}✓{RESET} {BOLD}Max Reasoning Token Budget:{RESET} Expanded to 32,768 tokens per turn")
+
+    if target_id and not is_local:
+        try:
+            steer_res = await cloud_steer_mission(
+                target_id,
+                f"TURBO_BOOST_ACTIVATED: mode={mode}, parallel_verification=True, speculative_execution=True",
+            )
+            if steer_res:
+                print(f"    {GREEN}✓{RESET} {BOLD}Cloud Mission Synced      :{RESET} Turbo state injected into active mission {target_id[:8]}")
+        except Exception as e:
+            logger.debug(f"Cloud boost steer error: {e}")
+
     print(f"\n  {CYAN}Your autonomous missions will now execute with maximum throughput.{RESET}\n")
     return 0
 

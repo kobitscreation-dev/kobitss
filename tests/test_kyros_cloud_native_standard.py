@@ -333,3 +333,167 @@ def test_kobits_cli_parser_includes_logs_and_cloud_native_flags():
     parsed_logs = parser.parse_args(["logs", "m-1234"])
     assert parsed_logs.command == "logs"
     assert parsed_logs.mission_id == "m-1234"
+
+
+@pytest.mark.asyncio
+async def test_containerized_pytest_gate_executes_in_microvm_zero_host_leak(tmp_path):
+    """Verify Stage 3A pytest execution runs in CloudMicroVMSandbox and does not invoke host pytest."""
+    py_test = tmp_path / "test_sample.py"
+    py_test.write_text("def test_ok():\n    assert 1 + 1 == 2\n", encoding="utf-8")
+
+    session_id = f"sb-pytest-{uuid.uuid4().hex[:8]}"
+    cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=session_id)
+    cloud_sb.ensure_synced(local_dir=str(tmp_path), remote_dir="/workspace")
+
+    with patch("subprocess.run") as mock_host_subproc:
+        report = MissionRuntime._verify_sandbox_code(
+            sandbox_dir=str(tmp_path),
+            target_files=["test_sample.py"],
+        )
+        assert report["status"] == "PASSED"
+        assert report["pytest_summary"] is not None
+        assert report["pytest_summary"]["driver"] == "cloud_microvm"
+        assert report["pytest_summary"]["passed"] is True
+        mock_host_subproc.assert_not_called()
+
+    CloudMicroVMSandbox.close_session(session_id)
+
+
+@pytest.mark.asyncio
+async def test_containerized_pytest_gate_catches_syntax_error_in_microvm(tmp_path):
+    """Verify Stage 3A pytest execution in microVM detects syntax errors in test files."""
+    broken_test = tmp_path / "test_broken.py"
+    broken_test.write_text("def test_broken(:\n    assert True\n", encoding="utf-8")
+
+    report = MissionRuntime._verify_sandbox_code(
+        sandbox_dir=str(tmp_path),
+        target_files=["test_broken.py"],
+    )
+    assert report["status"] == "FAILED"
+    assert any("syntaxerror" in err.lower() or "syntax error" in err.lower() for err in report["errors"])
+
+
+@pytest.mark.asyncio
+async def test_kobits_cli_resolve_mission_id_cloud_first():
+    """Verify _resolve_mission_id queries cloud API first when not in local mode."""
+    cloud_missions = [
+        {"id": "cloud-mission-uuid-1111", "status": "ACTIVE", "title": "Cloud 1"},
+        {"id": "cloud-mission-uuid-2222", "status": "COMPLETED", "title": "Cloud 2"},
+    ]
+    with patch("kobits_cli.cloud_list_missions", AsyncMock(return_value=cloud_missions)):
+        mid = await kobits_cli._resolve_mission_id("cloud-mission-uuid-2")
+        assert mid == "cloud-mission-uuid-2222"
+
+        mid_active = await kobits_cli._resolve_mission_id(None, prefer_status="ACTIVE")
+        assert mid_active == "cloud-mission-uuid-1111"
+
+
+@pytest.mark.asyncio
+async def test_kobits_cli_goal_cloud_client(capsys):
+    """Verify kobits goal inspects goals from Cloud Run API."""
+    mock_cloud_detail = {
+        "id": "cm-98765432-1111-2222-3333-444455556666",
+        "title": "Cloud Mission Goal Verification",
+        "status": "ACTIVE",
+        "phase": "EXECUTION",
+        "progress": 75,
+        "active_branch": "main",
+        "objective": "Align Kobits to Kyros Cloud-Native standard",
+        "tasks": [
+            {"title": "Remote MicroVM Fleet", "status": "COMPLETED", "agent_name": "DevOps"},
+            {"title": "Container Review Gate", "status": "IN_PROGRESS", "agent_name": "Reviewer"},
+        ],
+    }
+    with patch("kobits_cli._resolve_mission_id", AsyncMock(return_value=mock_cloud_detail["id"])):
+        with patch("kobits_cli.cloud_get_mission_detail", AsyncMock(return_value=mock_cloud_detail)):
+            args = argparse.Namespace(mission_id=mock_cloud_detail["id"], local=False)
+            code = await kobits_cli.cmd_goal(args)
+            assert code == 0
+
+    out = capsys.readouterr().out
+    assert "KOBITS MISSION STRATEGIC GOALS & ACCEPTANCE CRITERIA" in out
+    assert "Cloud Mission Goal Verification" in out
+    assert "Align Kobits to Kyros Cloud-Native standard" in out
+    assert "Remote MicroVM Fleet" in out
+
+
+@pytest.mark.asyncio
+async def test_kobits_cli_teamwork_preview_cloud_client(capsys):
+    """Verify kobits preview fetches remote preview URL from Cloud Run API."""
+    mock_cloud_detail = {
+        "id": "cm-prev-1111-2222-3333-444455556666",
+        "title": "Cloud Preview Mission",
+        "status": "ACTIVE",
+        "phase": "EXECUTION",
+        "remote_preview_url": "https://3000-vm-cloud.e2b.dev",
+        "tasks": [],
+    }
+    with patch("kobits_cli._resolve_mission_id", AsyncMock(return_value=mock_cloud_detail["id"])):
+        with patch("kobits_cli.cloud_get_mission_detail", AsyncMock(return_value=mock_cloud_detail)):
+            args = argparse.Namespace(mission_id=mock_cloud_detail["id"], local=False)
+            code = await kobits_cli.cmd_teamwork_preview(args)
+            assert code == 0
+
+    out = capsys.readouterr().out
+    assert "KOBITS MULTI-AGENT TEAMWORK & LIVE PREVIEW" in out
+    assert "https://3000-vm-cloud.e2b.dev" in out
+
+
+@pytest.mark.asyncio
+async def test_kobits_cli_boost_cloud_steering(capsys):
+    """Verify kobits boost injects turbo mode into active cloud mission."""
+    with patch("kobits_cli._resolve_mission_id", AsyncMock(return_value="cm-boost-1234")):
+        with patch("kobits_cli.cloud_steer_mission", AsyncMock(return_value={"status": "STEERED"})) as mock_steer:
+            args = argparse.Namespace(instruction=["HYPER_SCALE"], mission_id="cm-boost-1234", local=False)
+            code = await kobits_cli.cmd_boost(args)
+            assert code == 0
+            mock_steer.assert_awaited_once()
+
+    out = capsys.readouterr().out
+    assert "KOBITS TURBO BOOST & ACCELERATION ENGINE" in out
+    assert "Mode: HYPER_SCALE" in out
+    assert "Turbo state injected into active mission" in out
+
+
+@pytest.mark.asyncio
+async def test_kobits_cli_diff_and_apply_cloud_client(capsys):
+    """Verify kobits diff and apply interact with Cloud Run API."""
+    mock_detail = {
+        "id": "cm-diff-1234-5678-9012-345678901234",
+        "title": "Cloud Diff Verification",
+        "status": "AWAITING_APPROVAL",
+    }
+    mock_diff = {
+        "sandbox_dir": "CloudMicroVM:/workspace",
+        "files": [
+            {
+                "path": "src/core.py",
+                "status": "MODIFIED",
+                "added": 5,
+                "removed": 1,
+                "diff": "--- a/src/core.py\n+++ b/src/core.py\n@@ -1,1 +1,5 @@\n+cloud_native = True\n",
+            }
+        ],
+        "verification": {"status": "PASSED"},
+    }
+    with patch("kobits_cli._resolve_mission_id", AsyncMock(return_value=mock_detail["id"])):
+        with patch("kobits_cli.cloud_get_mission_detail", AsyncMock(return_value=mock_detail)):
+            with patch("kobits_cli.cloud_get_diff", AsyncMock(return_value=mock_diff)):
+                args_diff = argparse.Namespace(mission_id=mock_detail["id"], file=None, stat=False, local=False)
+                code_diff = await kobits_cli.cmd_diff(args_diff)
+                assert code_diff == 0
+
+    out_diff = capsys.readouterr().out
+    assert "KOBITS SANDBOX DIFF" in out_diff
+    assert "src/core.py" in out_diff
+
+    # Test cloud apply
+    with patch("kobits_cli._resolve_mission_id", AsyncMock(return_value=mock_detail["id"])):
+        with patch("kobits_cli.cloud_get_mission_detail", AsyncMock(return_value=mock_detail)):
+            with patch("kobits_cli.cloud_apply_mission", AsyncMock(return_value={"status": "APPLIED", "applied_count": 1})):
+                args_apply = argparse.Namespace(mission_id=mock_detail["id"], dry_run=False, force=False, local=False)
+                code_apply = await kobits_cli.cmd_apply(args_apply)
+                assert code_apply == 0
+
+    out_apply = capsys.readouterr().out
+    assert "Cloud Deliverable APPLIED" in out_apply

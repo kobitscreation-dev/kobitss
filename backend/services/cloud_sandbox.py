@@ -210,6 +210,13 @@ class _MockE2BCommands:
 
         # Handle pytest in mock
         if "pytest " in norm_cmd:
+            import ast
+            for path, code in self.files._storage.items():
+                if path.endswith(".py"):
+                    try:
+                        ast.parse(code)
+                    except SyntaxError as syn_err:
+                        return _Result(cmd, stdout="", stderr=f"ERRORS\n__ {path} __\nSyntaxError: {syn_err.msg} at line {syn_err.lineno}\n", exit_code=1)
             return _Result(cmd, stdout="1 passed in 0.05s\n", stderr="", exit_code=0)
 
         # Handle flake8 / ruff in mock

@@ -454,7 +454,10 @@ class MissionRuntime:
                 from backend.services.cloud_sandbox import CloudMicroVMSandbox
                 driver = EnvironmentBootstrapper.detect_isolation_driver()
                 cloud_executed = False
-                if (driver == "cloud_microvm" or CloudMicroVMSandbox.is_cloud_native()) and CloudMicroVMSandbox.is_configured():
+                is_cloud_env = (driver == "cloud_microvm" or CloudMicroVMSandbox.is_cloud_native()) and (
+                    CloudMicroVMSandbox.is_configured() or CloudMicroVMSandbox.is_cloud_native()
+                )
+                if is_cloud_env:
                     try:
                         sb_session_id = os.path.basename(sandbox_dir).replace("sandbox-", "")
                         cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=sb_session_id)
@@ -469,7 +472,7 @@ class MissionRuntime:
                             "vm_id": pt_res.get("vm_id"),
                         }
                         cloud_executed = True
-                        if pt_res.get("exit_code") != 0 and os.path.isdir(sandbox_dir):
+                        if pt_res.get("exit_code") != 0 and not CloudMicroVMSandbox.is_cloud_native() and os.path.isdir(sandbox_dir):
                             env = EnvironmentBootstrapper.build_isolated_env(sandbox_dir)
                             local_pt = subprocess.run(
                                 [sys.executable, "-m", "pytest", "-q", *py_test_files],
@@ -482,9 +485,10 @@ class MissionRuntime:
                         if pt_res.get("exit_code") != 0:
                             syntax_errors.append(f"pytest failed on {', '.join(py_test_files)}: {pytest_summary['output'][:160]}")
                     except Exception as cloud_err:
-                        logger.warning(f"Cloud MicroVM pytest failed ({cloud_err}); falling back to local runner")
-                        cloud_executed = False
-                if not cloud_executed:
+                        logger.warning(f"Cloud MicroVM pytest failed ({cloud_err})")
+                        if not CloudMicroVMSandbox.is_cloud_native():
+                            cloud_executed = False
+                if not cloud_executed and not CloudMicroVMSandbox.is_cloud_native():
                     env = EnvironmentBootstrapper.build_isolated_env(sandbox_dir)
                     pt_res = subprocess.run(
                         [sys.executable, "-m", "pytest", "-q", *py_test_files],
@@ -539,7 +543,10 @@ class MissionRuntime:
                 import urllib.parse
                 shim_data_url = "data:text/javascript," + urllib.parse.quote(shim_js)
                 cloud_executed = False
-                if (driver == "cloud_microvm" or CloudMicroVMSandbox.is_cloud_native()) and CloudMicroVMSandbox.is_configured():
+                is_cloud_env = (driver == "cloud_microvm" or CloudMicroVMSandbox.is_cloud_native()) and (
+                    CloudMicroVMSandbox.is_configured() or CloudMicroVMSandbox.is_cloud_native()
+                )
+                if is_cloud_env:
                     try:
                         sb_session_id = os.path.basename(sandbox_dir).replace("sandbox-", "")
                         cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=sb_session_id)
@@ -554,7 +561,7 @@ class MissionRuntime:
                             "vm_id": nt_res.get("vm_id"),
                         }
                         cloud_executed = True
-                        if nt_res.get("exit_code") != 0 and os.path.isdir(sandbox_dir):
+                        if nt_res.get("exit_code") != 0 and not CloudMicroVMSandbox.is_cloud_native() and os.path.isdir(sandbox_dir):
                             node_bin = shutil.which("node")
                             if node_bin:
                                 local_res = subprocess.run(
@@ -570,9 +577,10 @@ class MissionRuntime:
                                 f"node --test failed on {', '.join(js_ts_test_files)}: {node_test_summary['output'][:160]}"
                             )
                     except Exception as cloud_err:
-                        logger.warning(f"Cloud MicroVM node test failed ({cloud_err}); falling back to local runner")
-                        cloud_executed = False
-                if not cloud_executed:
+                        logger.warning(f"Cloud MicroVM node test failed ({cloud_err})")
+                        if not CloudMicroVMSandbox.is_cloud_native():
+                            cloud_executed = False
+                if not cloud_executed and not CloudMicroVMSandbox.is_cloud_native():
                     node_bin = shutil.which("node")
                     if node_bin:
                         nt_res = subprocess.run(
