@@ -892,6 +892,9 @@ app.include_router(waitlist.router, prefix="/api/v1", tags=["Waitlist"])
 from backend.api.v1 import extension
 app.include_router(extension.router, prefix="/api/v1/extension", tags=["VS Code & IDE Extension"])
 
+from backend.api.v1 import discovery
+app.include_router(discovery.router, prefix="/api/v1/discovery", tags=["Codebase Discovery & Architecture"])
+
 try:
     from backend.api import webhooks as notification_webhooks
     app.include_router(notification_webhooks.router)
