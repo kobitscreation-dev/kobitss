@@ -633,6 +633,25 @@ class ReproducerEngine:
                 error=f"Coder implementation raised exception: {coder_err}",
             )
 
+        # 5.5. Real-Time LSP Compiler Diagnostics Check (Kyros / Devin Parity)
+        lsp_diagnostics_telemetry = {}
+        try:
+            from backend.services.lsp_service import HeadlessLSPService
+            diag_rep = HeadlessLSPService.get_diagnostics(repo_path=sandbox_dir)
+            lsp_diagnostics_telemetry = {
+                "status": diag_rep.get("status"),
+                "error_count": diag_rep.get("error_count", 0),
+                "warning_count": diag_rep.get("warning_count", 0),
+                "diagnostics": diag_rep.get("diagnostics", []),
+            }
+            if diag_rep.get("error_count", 0) > 0:
+                logger.warning(
+                    f"LSP compiler diagnostics detected {diag_rep['error_count']} error(s) before test verification: "
+                    f"{[d.get('message') for d in diag_rep.get('diagnostics', [])[:3]]}"
+                )
+        except Exception as lsp_err:
+            logger.debug(f"LSP diagnostics check in TDD cycle skipped: {lsp_err}")
+
         # 6. Positive Verification Check
         verify_res = cls.verify_positive(
             sandbox_dir,
@@ -657,6 +676,7 @@ class ReproducerEngine:
                 pre_patch_checkpoint_sha=pre_patch_cp_sha,
                 rolled_back=rolled_back,
                 error=verify_res.reason,
+                telemetry={"lsp_diagnostics": lsp_diagnostics_telemetry},
             )
 
         # 8. SOTA Success
@@ -679,6 +699,7 @@ class ReproducerEngine:
                     if verify_res.regression_execution
                     else 0.0
                 ),
+                "lsp_diagnostics": lsp_diagnostics_telemetry,
             },
         )
 

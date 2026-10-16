@@ -336,6 +336,20 @@ class MissionRuntime:
                                 f"{rel_file}:{ln_no}: Unresolved Rust module 'mod {mod_name};' (expected {mod_name}.rs or {mod_name}/mod.rs)"
                             )
 
+        # Stage 2D.5: Headless LSP Compiler Diagnostics Gate (Kyros Parity)
+        if not syntax_errors and candidates:
+            try:
+                from backend.services.lsp_service import HeadlessLSPService
+                for cand_f in candidates:
+                    diag_res = HeadlessLSPService.get_diagnostics(file_path=cand_f, repo_path=sandbox_dir)
+                    for d in diag_res.get("diagnostics", []):
+                        if d.get("severity") == "error":
+                            err_str = f"{d['file']}:{d['line']}: {d['message']}"
+                            if err_str not in syntax_errors:
+                                syntax_errors.append(err_str)
+            except Exception as lsp_gate_err:
+                logger.debug(f"LSP verification gate error: {lsp_gate_err}")
+
         # Stage 2E: Project-Level TypeCheckers (tsc --noEmit / go vet / cargo check) when present
         if not syntax_errors:
             if any(f.lower().endswith((".ts", ".tsx")) for f in js_ts_candidates) and os.path.isfile(os.path.join(sandbox_dir, "tsconfig.json")):

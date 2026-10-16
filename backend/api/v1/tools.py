@@ -172,7 +172,12 @@ async def create_tool(
     current_user: User = Depends(get_current_active_user)
 ):
     """Create a custom tool scoped to the user's organization."""
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+    from backend.services.soc2_audit_service import SOC2AuditService
+
     org_member = await get_user_default_org(db, current_user.id)
+    await enforce_permission_with_audit(db, org_member, Permission.CODE_WRITE, action="create_tool")
 
     # Check for duplicate name within org
     stmt = select(CustomTool).where(
@@ -194,6 +199,18 @@ async def create_tool(
         enabled=True,
     )
     db.add(new_tool)
+    await db.flush()
+    await SOC2AuditService.log_code_change(
+        db,
+        file_path=f"custom_tools/{tool.name}.{tool.execution_type}",
+        before_content="",
+        after_content=tool.execution_code,
+        operation="write",
+        user_id=current_user.id,
+        organization_id=org_member.organization_id,
+        actor_role=org_member.role.value if hasattr(org_member.role, "value") else str(org_member.role),
+        detail={"tool_id": new_tool.id, "tool_name": new_tool.name, "execution_type": tool.execution_type},
+    )
     await db.commit()
     await db.refresh(new_tool)
 
@@ -215,11 +232,17 @@ async def update_tool(
     current_user: User = Depends(get_current_active_user)
 ):
     """Update a custom tool. Invalidates cache."""
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+    from backend.services.soc2_audit_service import SOC2AuditService
+
     org_member = await get_user_default_org(db, current_user.id)
+    await enforce_permission_with_audit(db, org_member, Permission.CODE_WRITE, action="update_tool")
     tool = await db.get(CustomTool, tool_id)
     if not tool or tool.organization_id != org_member.organization_id:
         raise HTTPException(status_code=404, detail="Tool not found")
 
+    before_code = tool.execution_code or ""
     if update.description is not None:
         tool.description = update.description
     if update.input_schema is not None:
@@ -236,6 +259,17 @@ async def update_tool(
         tool.enabled = update.enabled
 
     tool.updated_at = datetime.now(timezone.utc).isoformat()
+    await SOC2AuditService.log_code_change(
+        db,
+        file_path=f"custom_tools/{tool.name}.{tool.execution_type}",
+        before_content=before_code,
+        after_content=tool.execution_code or "",
+        operation="edit",
+        user_id=current_user.id,
+        organization_id=org_member.organization_id,
+        actor_role=org_member.role.value if hasattr(org_member.role, "value") else str(org_member.role),
+        detail={"tool_id": tool.id, "tool_name": tool.name},
+    )
     await db.commit()
 
     # Invalidate + re-register (or unregister if disabled)
@@ -253,16 +287,35 @@ async def delete_tool(
     current_user: User = Depends(get_current_active_user)
 ):
     """Delete a custom tool. Removes from cache."""
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+    from backend.services.soc2_audit_service import SOC2AuditService
+
     org_member = await get_user_default_org(db, current_user.id)
+    await enforce_permission_with_audit(db, org_member, Permission.CODE_DELETE, action="delete_tool")
     tool = await db.get(CustomTool, tool_id)
     if not tool or tool.organization_id != org_member.organization_id:
         raise HTTPException(status_code=404, detail="Tool not found")
 
+    before_code = tool.execution_code or ""
+    t_name = tool.name
+    t_type = tool.execution_type
     ToolRegistry.unregister(tool.name)
     await db.delete(tool)
+    await SOC2AuditService.log_code_change(
+        db,
+        file_path=f"custom_tools/{t_name}.{t_type}",
+        before_content=before_code,
+        after_content="",
+        operation="delete",
+        user_id=current_user.id,
+        organization_id=org_member.organization_id,
+        actor_role=org_member.role.value if hasattr(org_member.role, "value") else str(org_member.role),
+        detail={"tool_id": tool_id, "tool_name": t_name},
+    )
     await db.commit()
 
-    logger.info(f"Custom tool deleted: name={tool.name} org={org_member.organization_id}")
+    logger.info(f"Custom tool deleted: name={t_name} org={org_member.organization_id}")
     return {"message": "Tool deleted"}
 
 

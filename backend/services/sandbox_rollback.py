@@ -87,6 +87,32 @@ class SandboxRollbackManager:
         clean_step = str(step_name).strip() or "pre_task"
         commit_msg = f"checkpoint: {clean_step}"
 
+        # Cloud MicroVM remote git checkpoint routing for zero-local footprint
+        try:
+            from backend.services.cloud_sandbox import CloudMicroVMSandbox
+            from backend.services.sandbox_manager import SandboxManager
+            if CloudMicroVMSandbox.is_configured() or CloudMicroVMSandbox.is_cloud_native():
+                session = SandboxManager.get_session_by_dir(sandbox_dir) if sandbox_dir else None
+                sid = session.session_id if session else "default"
+                cloud_sb = CloudMicroVMSandbox.get_or_create(sid)
+                res = cloud_sb.run_command(
+                    f"git -C /workspace reset -q -- .kobits* 2>/dev/null || true; "
+                    f"git -C /workspace add -A && "
+                    f"git -C /workspace -c user.name=Kobits -c user.email=bot@kobits.ai commit --allow-empty -m '{commit_msg}' && "
+                    f"git -C /workspace rev-parse HEAD"
+                )
+                if res.get("exit_code") == 0 and res.get("stdout"):
+                    cloud_sha = res["stdout"].strip().splitlines()[-1]
+                    if len(cloud_sha) == 40:
+                        logger.info(f"Created cloud microvm git checkpoint '{clean_step}' -> {cloud_sha}")
+                        return cloud_sha
+        except Exception as e:
+            logger.debug(f"Cloud MicroVM checkpoint error: {e}")
+
+        if not sandbox_dir or not cls._is_git_repo(sandbox_dir):
+            logger.debug(f"Sandbox {sandbox_dir} is not a git repository. Checkpoint skipped.")
+            return None
+
         git_cmd = [
             "git",
             "-c", "user.name=Kobits",
@@ -139,15 +165,38 @@ class SandboxRollbackManager:
         Performs an atomic hard rollback to the specified checkpoint SHA,
         reverting all file modifications and cleaning untracked files (`git reset --hard` + `git clean -fdx`).
         """
-        if not sandbox_dir or not cls._is_git_repo(sandbox_dir):
-            logger.warning(f"Cannot rollback: {sandbox_dir} is not a valid git repository.")
-            return False
-
         if not checkpoint_sha or not isinstance(checkpoint_sha, str):
             logger.warning(f"Invalid checkpoint SHA '{checkpoint_sha}' for rollback.")
             return False
 
         target_sha = checkpoint_sha.strip()
+
+        # Cloud MicroVM remote rollback routing for zero-local footprint
+        try:
+            from backend.services.cloud_sandbox import CloudMicroVMSandbox
+            from backend.services.sandbox_manager import SandboxManager
+            if CloudMicroVMSandbox.is_configured() or CloudMicroVMSandbox.is_cloud_native():
+                session = SandboxManager.get_session_by_dir(sandbox_dir) if sandbox_dir else None
+                sid = session.session_id if session else "default"
+                cloud_sb = CloudMicroVMSandbox.get_or_create(sid)
+                res = cloud_sb.run_command(
+                    f"git -C /workspace reset --hard {target_sha} && git -C /workspace clean -fdx"
+                )
+                if res.get("exit_code") == 0:
+                    logger.info(f"Successfully rolled back cloud MicroVM /workspace to {target_sha}")
+                    if sandbox_dir and cls._is_git_repo(sandbox_dir):
+                        try:
+                            subprocess.run(["git", "reset", "--hard", target_sha], cwd=sandbox_dir, timeout=10)
+                            subprocess.run(["git", "clean", "-fdx"], cwd=sandbox_dir, timeout=10)
+                        except Exception:
+                            pass
+                    return True
+        except Exception as e:
+            logger.debug(f"Cloud MicroVM rollback error: {e}")
+
+        if not sandbox_dir or not cls._is_git_repo(sandbox_dir):
+            logger.warning(f"Cannot rollback: {sandbox_dir} is not a valid git repository.")
+            return False
 
         try:
             # 1. Hard reset to checkpoint

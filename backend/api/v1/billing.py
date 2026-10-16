@@ -58,19 +58,23 @@ async def get_packages(db: AsyncSession = Depends(get_db)):
 
 @router.get("/balance", response_model=BalanceResponse)
 async def get_balance(
+    request: Request,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Returns the user's organizational credit balance from the ledger."""
-    # Note: get_current_active_user ensures user is valid, but we need their org.
-    # In Kobits, organization_id is sometimes on user or in memberships.
-    # Let's get it safely.
-    from backend.models.organization import OrganizationMember
-    stmt = select(OrganizationMember).where(OrganizationMember.user_id == current_user.id)
-    membership = (await db.execute(stmt)).scalars().first()
-    if not membership:
-        raise HTTPException(status_code=403, detail="User has no organization")
-        
+    from backend.api.deps import get_current_org_member
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+
+    membership = await get_current_org_member(request=request, current_user=current_user, db=db)
+    await enforce_permission_with_audit(
+        db,
+        membership,
+        Permission.BILLING_READ,
+        request=request,
+        action="get_billing_balance",
+    )
     org_id = membership.organization_id
     balance = await CreditPolicy.get_balance(db, org_id)
     return BalanceResponse(balance=balance)
@@ -78,10 +82,25 @@ async def get_balance(
 @router.post("/checkout", response_model=CheckoutResponse)
 async def create_checkout_session(
     req: CheckoutRequest,
+    request: Request,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Creates a Stripe Checkout Session using the server-side Stripe secret."""
+    from backend.api.deps import get_current_org_member
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+
+    membership = await get_current_org_member(request=request, current_user=current_user, db=db)
+    await enforce_permission_with_audit(
+        db,
+        membership,
+        Permission.BILLING_MANAGE,
+        request=request,
+        action="create_checkout_session",
+    )
+    org_id = membership.organization_id
+
     if not settings.STRIPE_SECRET_KEY:
         raise HTTPException(status_code=500, detail="Stripe configuration is missing")
         
@@ -89,14 +108,6 @@ async def create_checkout_session(
     package = await db.get(CreditPackage, req.package_id)
     if not package or not package.is_active:
         raise HTTPException(status_code=404, detail="Credit package not found or inactive")
-
-    # Get org
-    from backend.models.organization import OrganizationMember
-    stmt = select(OrganizationMember).where(OrganizationMember.user_id == current_user.id)
-    membership = (await db.execute(stmt)).scalars().first()
-    if not membership:
-        raise HTTPException(status_code=403, detail="User has no organization")
-    org_id = membership.organization_id
 
     # Use HTTP client to call Stripe API directly (avoiding full stripe-python dependency if not installed)
     async with httpx.AsyncClient() as client:

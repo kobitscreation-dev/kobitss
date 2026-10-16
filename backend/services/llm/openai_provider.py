@@ -159,7 +159,8 @@ class OpenAIProvider(LLMProvider):
             "Content-Type": "application/json",
         }
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        client_timeout = httpx.Timeout(self.timeout, connect=min(5.0, self.timeout))
+        async with httpx.AsyncClient(timeout=client_timeout) as client:
             while turn < max_turns:
                 turn += 1
 

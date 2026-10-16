@@ -33,6 +33,10 @@ class AnthropicProvider(LLMProvider):
         self.timeout = timeout
         self.max_retries = max_retries
 
+    @property
+    def configured(self) -> bool:
+        return bool(self.api_key or getattr(settings, "ANTHROPIC_API_KEY", None))
+
     async def generate_structured_output(
         self,
         system_prompt: str,
@@ -132,7 +136,8 @@ class AnthropicProvider(LLMProvider):
                     payload["tools"] = anthropic_tools
 
                 try:
-                    async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    client_timeout = httpx.Timeout(self.timeout, connect=min(5.0, self.timeout))
+                    async with httpx.AsyncClient(timeout=client_timeout) as client:
                         resp = await client.post(f"{self.base_url}/messages", headers=headers, json=payload)
                         
                         if resp.status_code != 200:

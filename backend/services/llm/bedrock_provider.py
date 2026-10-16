@@ -39,6 +39,17 @@ class BedrockProvider(LLMProvider):
         self.timeout = timeout
         self.max_retries = max_retries
 
+    @property
+    def configured(self) -> bool:
+        return bool(
+            self.api_key
+            or (self.aws_access_key and self.aws_secret_key)
+            or os.environ.get("USE_ONLY_CLAUDE") == "1"
+            or getattr(settings, "AWS_BEDROCK_API_KEY", None)
+            or getattr(settings, "ANTHROPIC_API_KEY", None)
+            or (getattr(settings, "AWS_ACCESS_KEY_ID", None) and getattr(settings, "AWS_SECRET_ACCESS_KEY", None))
+        )
+
     def _get_client(self):
         from anthropic import AsyncAnthropicBedrock
         kwargs = {"aws_region": self.aws_region, "timeout": self.timeout}

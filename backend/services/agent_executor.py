@@ -204,8 +204,12 @@ class AgentExecutor:
         elif provider_name == "openai":
             model_name = getattr(settings, "OPENAI_MODEL", None) or os.environ.get("OPENAI_MODEL") or "o3-mini"
         elif provider_name == "deepseek":
-            cfg_ds_model = settings.DEEPSEEK_MODEL or os.environ.get("DEEPSEEK_MODEL") or "deepseek-v4.1-flash:free"
-            model_name = "deepseek-v4.1-flash:free" if cfg_ds_model == "deepseek-flash" else cfg_ds_model
+            raw_base = getattr(settings, "LLM_BASE_URL", None) or getattr(settings, "DEEPSEEK_BASE_URL", "")
+            cfg_ds_model = settings.DEEPSEEK_MODEL or os.environ.get("DEEPSEEK_MODEL") or "deepseek-flash"
+            if "tokenharbor" in str(raw_base) and cfg_ds_model == "deepseek-flash":
+                model_name = "deepseek-v4.1-flash:free"
+            else:
+                model_name = cfg_ds_model
         elif provider_name == "gemini":
             model_name = getattr(settings, "GEMINI_MODEL", None) or os.environ.get("GEMINI_MODEL") or "gemini-4-argon"
         else:
@@ -479,6 +483,54 @@ class AgentExecutor:
                 except Exception as steer_err:
                     if os.environ.get("KOBITS_VERBOSE") == "1":
                         print(f"[AgentExecutor] Mid-turn steering check error: {steer_err}")
+
+            # ── REAL-TIME COMPILER DIAGNOSTICS (Kyros / Devin LSP Parity) ───
+            code_mod_tools = {
+                "write_file", "repository.write", "repository_write",
+                "edit_file_block", "repository.edit", "repository_edit"
+            }
+            if mapped_name in code_mod_tools and isinstance(result, (dict, str)):
+                mod_file = args.get("path") or args.get("file_path") or args.get("filepath")
+                if mod_file:
+                    sb_dir = context.get("sandbox_dir")
+                    if not sb_dir and context.get("sandbox_session_id"):
+                        try:
+                            from backend.services.sandbox_manager import SandboxManager
+                            sess = SandboxManager.get_session(context["sandbox_session_id"])
+                            if sess and getattr(sess, "sandbox_dir", None):
+                                sb_dir = sess.sandbox_dir
+                        except Exception:
+                            pass
+                    if not sb_dir:
+                        sb_dir = os.environ.get("KOBITS_TARGET_WORKSPACE") or "."
+                    try:
+                        from backend.services.lsp_service import HeadlessLSPService
+                        diag_report = HeadlessLSPService.get_diagnostics(file_path=mod_file, repo_path=sb_dir)
+                        if diag_report.get("diagnostics"):
+                            if isinstance(result, str):
+                                result = {"output": result, "status": "success"}
+                            elif isinstance(result, dict):
+                                result = dict(result)
+                            result["diagnostics"] = diag_report["diagnostics"]
+                            result["compiler_check"] = {
+                                "status": diag_report["status"],
+                                "error_count": diag_report["error_count"],
+                                "warning_count": diag_report["warning_count"],
+                            }
+                            if diag_report.get("error_count", 0) > 0:
+                                err_summaries = [
+                                    f"[{d['file']}:{d['line']}] {d['message']}"
+                                    for d in diag_report["diagnostics"] if d.get("severity") == "error"
+                                ][:5]
+                                result["COMPILER_DIAGNOSTICS_ALERT"] = (
+                                    f"LSP COMPILER DIAGNOSTICS DETECTED {diag_report['error_count']} ERROR(S) "
+                                    f"immediately after editing {mod_file}:\n"
+                                    + "\n".join(err_summaries)
+                                    + "\nPlease resolve these broken references or syntax errors before proceeding."
+                                )
+                    except Exception as diag_err:
+                        if os.environ.get("KOBITS_VERBOSE") == "1":
+                            print(f"[AgentExecutor] LSP diagnostics check error: {diag_err}")
 
             trace_logs.append({
                 "type": "tool_result",

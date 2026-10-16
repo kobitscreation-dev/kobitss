@@ -132,8 +132,12 @@ async def extension_dispatch(
     Dispatch an autonomous engineering mission directly from the IDE.
     Supports inline file context, selection ranges, and active branches.
     """
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+
     preferred_org = getattr(current_user, "_active_org_id", None)
     membership = await get_user_default_org(db, current_user.id, preferred_org_id=preferred_org)
+    await enforce_permission_with_audit(db, membership, Permission.MISSION_EXECUTE, request=request, action="extension_dispatch")
     org_id = membership.organization_id
 
     # Resolve or create default project in user's organization
@@ -368,8 +372,12 @@ async def extension_mission_apply(
     Apply sandbox changes to the repository or working tree.
     Verifies tenant ownership before executing application.
     """
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+
     preferred_org = getattr(current_user, "_active_org_id", None)
     membership = await get_user_default_org(db, current_user.id, preferred_org_id=preferred_org)
+    await enforce_permission_with_audit(db, membership, Permission.CODE_WRITE, action="extension_mission_apply")
 
     stmt = select(Mission).where(Mission.organization_id == membership.organization_id)
     if len(mission_id) < 36:

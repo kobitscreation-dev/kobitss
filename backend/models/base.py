@@ -20,3 +20,4 @@ from backend.models.github import GitHubConnection, Repository
 from backend.models.tool import CustomTool
 from backend.models.intelligence import ProcessMemory, ProcessOutcomeRecord, IntelligenceTrace, MemoryUsefulness, HumanFeedback, ContextEfficiencyRecord
 from backend.models.audit_log import AuditLog
+from backend.models.webhook import OutboxEvent, WebhookEndpoint, WebhookMessageState

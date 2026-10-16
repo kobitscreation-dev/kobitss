@@ -103,7 +103,8 @@ class GeminiProvider(LLMProvider):
         compactor = ContextCompactor(max_token_budget=context_budget, recent_turns=3)
         compaction_history = []
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        client_timeout = httpx.Timeout(120.0, connect=5.0)
+        async with httpx.AsyncClient(timeout=client_timeout) as client:
             while turn_count < max_turns:
                 turn_count += 1
 

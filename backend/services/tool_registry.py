@@ -107,19 +107,83 @@ class ToolRegistry:
                     
         if not tool:
             return {"error": f"Tool {name} not found"}
-        return await tool.execute(context=context, **args)
+
+        ctx = context or {}
+        actor_role = ctx.get("actor_role") or ctx.get("role")
+        actor_role_str = actor_role.value if hasattr(actor_role, "value") else (str(actor_role) if actor_role else None)
+
+        if actor_role is not None:
+            from backend.services.auth_service import check_tool_rbac
+            allowed, deny_reason = check_tool_rbac(actor_role, tool.name)
+            if not allowed:
+                from backend.models.audit_log import AuditCategory, AuditEvent, AuditSeverity
+                from backend.services.soc2_audit_service import SOC2AuditService
+
+                SOC2AuditService._append_sync_entry(
+                    {
+                        "event": AuditEvent.RBAC_ACCESS_DENIED,
+                        "category": AuditCategory.RBAC.value,
+                        "severity": AuditSeverity.HIGH.value,
+                        "status": "DENIED",
+                        "user_id": ctx.get("user_id"),
+                        "organization_id": ctx.get("organization_id"),
+                        "actor_role": actor_role_str,
+                        "session_id": ctx.get("sandbox_session_id"),
+                        "mission_id": ctx.get("mission_id"),
+                        "project_id": ctx.get("project_id"),
+                        "ip_address": ctx.get("ip_address"),
+                        "resource_type": "tool",
+                        "resource_id": tool.name,
+                        "detail": SOC2AuditService._serialize_detail(
+                            {"tool": tool.name, "reason": deny_reason}
+                        ),
+                    }
+                )
+                if ctx.get("db") is not None:
+                    await SOC2AuditService.flush_staged_to_db(
+                        ctx["db"],
+                        default_user_id=ctx.get("user_id"),
+                        default_organization_id=ctx.get("organization_id"),
+                        default_actor_role=actor_role_str,
+                        default_ip_address=ctx.get("ip_address"),
+                    )
+                return {
+                    "status": "forbidden",
+                    "error": f"RBAC Permission Denied: {deny_reason}",
+                    "rbac_denied": True,
+                    "role": actor_role_str,
+                    "tool": tool.name,
+                }
+
+        result = await tool.execute(context=context, **args)
+        if isinstance(result, dict) and "error" not in result:
+            result.setdefault("status", "success")
+            if "data" not in result:
+                result["data"] = dict(result)
+
+        if ctx.get("db") is not None:
+            from backend.services.soc2_audit_service import SOC2AuditService
+            await SOC2AuditService.flush_staged_to_db(
+                ctx["db"],
+                default_user_id=ctx.get("user_id"),
+                default_organization_id=ctx.get("organization_id"),
+                default_actor_role=actor_role_str,
+                default_ip_address=ctx.get("ip_address"),
+            )
+        return result
 
 
 # ── Tool Implementations ──
 
 async def handle_repository_read(
-    path: str,
+    path: str = None,
     start_line: int = None,
     end_line: int = None,
     context: dict = None,
     **kwargs
 ) -> dict:
     """Reads a file (or line range) from the repository inside a safe sandbox path."""
+    path = path or kwargs.get("file_path") or kwargs.get("filepath") or ""
     try:
         if context and context.get("sandbox_session_id"):
             from backend.services.sandbox_manager import SandboxManager
@@ -131,6 +195,51 @@ async def handle_repository_read(
                     start_line=start_line,
                     end_line=end_line,
                 )
+
+        from backend.services.cloud_sandbox import CloudMicroVMSandbox
+        if CloudMicroVMSandbox.is_cloud_native():
+            cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=(context or {}).get("sandbox_session_id") or "default")
+            clean_rel = path.lstrip("/\\")
+            remote_path = f"/workspace/{clean_rel}" if clean_rel not in (".", "") else "/workspace"
+            if clean_rel in (".", ""):
+                files = cloud_sb.list_remote_files("/workspace")
+                return {"type": "directory", "files": files}
+            remote_content = cloud_sb.read_file(remote_path)
+            if remote_content is not None:
+                lines = remote_content.splitlines()
+                total = len(lines)
+                s = max(1, start_line) if start_line else 1
+                e = min(total, end_line) if end_line else total
+                formatted = [f"{idx + 1:4d} | {lines[idx]}" for idx in range(s - 1, e)]
+                output_str = "\n".join(formatted) if formatted else "(File is empty)"
+                raw_slice = "\n".join(lines[s - 1:e])
+                ctx = context or {}
+                audit_entry = None
+                try:
+                    from backend.services.soc2_audit_service import SOC2AuditService
+                    audit_entry = SOC2AuditService.record_file_read_sync(
+                        file_path=path,
+                        content=raw_slice,
+                        user_id=ctx.get("user_id"),
+                        organization_id=ctx.get("organization_id"),
+                        actor_role=ctx.get("actor_role") or ctx.get("role"),
+                        session_id=ctx.get("sandbox_session_id"),
+                        mission_id=ctx.get("mission_id"),
+                        project_id=ctx.get("project_id"),
+                        ip_address=ctx.get("ip_address"),
+                    )
+                except Exception:
+                    pass
+                return {
+                    "type": "file",
+                    "path": path,
+                    "content": output_str,
+                    "total_lines": total,
+                    "start_line": s,
+                    "end_line": e,
+                    "audit_entry_hash": getattr(audit_entry, "entry_hash", None),
+                }
+            return {"error": f"File not found in Cloud MicroVM: {path}"}
             
         target_dir = None
         if context and context.get("sandbox_dir") and os.path.isdir(context["sandbox_dir"]):
@@ -163,6 +272,24 @@ async def handle_repository_read(
         e = min(total, end_line) if end_line else total
         formatted = [f"{idx + 1:4d} | {lines[idx]}" for idx in range(s - 1, e)]
         output_str = "\n".join(formatted) if formatted else "(File is empty)"
+        raw_slice = "\n".join(lines[s - 1:e])
+        ctx = context or {}
+        audit_entry = None
+        try:
+            from backend.services.soc2_audit_service import SOC2AuditService
+            audit_entry = SOC2AuditService.record_file_read_sync(
+                file_path=path,
+                content=raw_slice,
+                user_id=ctx.get("user_id"),
+                organization_id=ctx.get("organization_id"),
+                actor_role=ctx.get("actor_role") or ctx.get("role"),
+                session_id=ctx.get("sandbox_session_id"),
+                mission_id=ctx.get("mission_id"),
+                project_id=ctx.get("project_id"),
+                ip_address=ctx.get("ip_address"),
+            )
+        except Exception:
+            pass
         return {
             "type": "file",
             "path": path,
@@ -170,20 +297,23 @@ async def handle_repository_read(
             "start_line": s,
             "end_line": e,
             "content": output_str,
-            "raw": "\n".join(lines[s - 1:e])
+            "raw": raw_slice,
+            "content_hash": getattr(audit_entry, "content_hash", None),
+            "audit_entry_hash": getattr(audit_entry, "entry_hash", None),
         }
     except Exception as e:
         return {"error": str(e)}
 
-async def handle_read_file(path: str, start_line: int = None, end_line: int = None, context: dict = None, **kwargs) -> str:
+async def handle_read_file(path: str = None, start_line: int = None, end_line: int = None, context: dict = None, **kwargs) -> str:
     """Reads the content of a file with 1-based line numbers."""
     res = await handle_repository_read(path=path, start_line=start_line, end_line=end_line, context=context, **kwargs)
     if "error" in res:
         return f"Error: {res['error']}"
     return res.get("content", str(res))
 
-async def handle_repository_write(path: str, content: str = "", context: dict = None, **kwargs) -> dict:
+async def handle_repository_write(path: str = None, content: str = "", context: dict = None, **kwargs) -> dict:
     """Writes a file to the repository safely using sandbox."""
+    path = path or kwargs.get("file_path") or kwargs.get("filepath") or ""
     try:
         raw_text = content or kwargs.get("code") or kwargs.get("text") or ""
         lines = raw_text.splitlines()
@@ -192,12 +322,49 @@ async def handle_repository_write(path: str, content: str = "", context: dict = 
         if lines and lines[-1].startswith("```"):
             lines = lines[:-1]
         clean_content = "\n".join(lines)
+        if raw_text.endswith("\n") and not clean_content.endswith("\n"):
+            clean_content += "\n"
 
         if context and context.get("sandbox_session_id"):
             from backend.services.sandbox_manager import SandboxManager
             sess = SandboxManager.get_session(context["sandbox_session_id"])
             if sess:
                 return SandboxManager.write_file(context["sandbox_session_id"], path, clean_content)
+
+        from backend.services.cloud_sandbox import CloudMicroVMSandbox
+        if CloudMicroVMSandbox.is_cloud_native():
+            cloud_sb = CloudMicroVMSandbox.get_or_create(session_id=(context or {}).get("sandbox_session_id") or "default")
+            clean_rel = path.lstrip("/\\")
+            remote_path = f"/workspace/{clean_rel}"
+            before_content = cloud_sb.read_file(remote_path)
+            cloud_sb.write_file(remote_path, clean_content)
+            ctx = context or {}
+            audit_entry = None
+            try:
+                from backend.services.soc2_audit_service import SOC2AuditService
+                audit_entry = SOC2AuditService.record_code_change_sync(
+                    file_path=path,
+                    before_content=before_content,
+                    after_content=clean_content,
+                    operation="write",
+                    user_id=ctx.get("user_id"),
+                    organization_id=ctx.get("organization_id"),
+                    actor_role=ctx.get("actor_role") or ctx.get("role"),
+                    session_id=ctx.get("sandbox_session_id"),
+                    mission_id=ctx.get("mission_id"),
+                    project_id=ctx.get("project_id"),
+                    ip_address=ctx.get("ip_address"),
+                )
+            except Exception:
+                pass
+            return {
+                "status": "success",
+                "message": f"Successfully wrote {len(clean_content.splitlines())} lines to {path} in Cloud MicroVM",
+                "lines": len(clean_content.splitlines()),
+                "path": path,
+                "code_change_hash": getattr(audit_entry, "code_change_hash", None),
+                "audit_entry_hash": getattr(audit_entry, "entry_hash", None),
+            }
             
         target_dir = None
         if context and context.get("sandbox_dir") and os.path.isdir(context["sandbox_dir"]):
@@ -213,20 +380,50 @@ async def handle_repository_write(path: str, content: str = "", context: dict = 
         if not (abs_target == target_real or abs_target.startswith(target_real + os.sep)):
             return {"error": f"Security Block: Path traversal attempt detected: {path}"}
 
+        before_content = None
+        if os.path.isfile(abs_target):
+            try:
+                with open(abs_target, "r", encoding="utf-8", errors="replace") as bf:
+                    before_content = bf.read()
+            except Exception:
+                before_content = None
+
         os.makedirs(os.path.dirname(abs_target), exist_ok=True)
         with open(abs_target, "w", encoding="utf-8") as f:
             f.write(clean_content)
+
+        ctx = context or {}
+        audit_entry = None
+        try:
+            from backend.services.soc2_audit_service import SOC2AuditService
+            audit_entry = SOC2AuditService.record_code_change_sync(
+                file_path=path,
+                before_content=before_content,
+                after_content=clean_content,
+                operation="write",
+                user_id=ctx.get("user_id"),
+                organization_id=ctx.get("organization_id"),
+                actor_role=ctx.get("actor_role") or ctx.get("role"),
+                session_id=ctx.get("sandbox_session_id"),
+                mission_id=ctx.get("mission_id"),
+                project_id=ctx.get("project_id"),
+                ip_address=ctx.get("ip_address"),
+            )
+        except Exception:
+            pass
 
         return {
             "status": "success",
             "message": f"Successfully wrote {len(clean_content.splitlines())} lines to {path}",
             "lines": len(clean_content.splitlines()),
-            "path": path
+            "path": path,
+            "code_change_hash": getattr(audit_entry, "code_change_hash", None),
+            "audit_entry_hash": getattr(audit_entry, "entry_hash", None),
         }
     except Exception as e:
         return {"error": str(e)}
 
-async def handle_write_file(path: str, content: str = "", context: dict = None, **kwargs) -> str:
+async def handle_write_file(path: str = None, content: str = "", context: dict = None, **kwargs) -> str:
     """Creates a new file or overwrites an existing file."""
     res = await handle_repository_write(path=path, content=content, context=context, **kwargs)
     if "error" in res:
@@ -234,7 +431,7 @@ async def handle_write_file(path: str, content: str = "", context: dict = None, 
     return res.get("message", f"Successfully wrote to {path}")
 
 async def handle_repository_edit(
-    path: str,
+    path: str = None,
     old_string: str = "",
     new_string: str = "",
     search_block: str = "",
@@ -245,8 +442,9 @@ async def handle_repository_edit(
     **kwargs
 ) -> dict:
     """Surgically patches an existing file inside the sandbox (single or atomic multi-chunk)."""
-    search_str = old_string or search_block
-    replace_str = new_string or replace_block
+    path = path or kwargs.get("file_path") or kwargs.get("filepath") or ""
+    search_str = old_string or search_block or kwargs.get("target") or ""
+    replace_str = new_string or replace_block or kwargs.get("replacement") or ""
     try:
         if context and context.get("sandbox_session_id"):
             from backend.services.sandbox_manager import SandboxManager
@@ -289,24 +487,47 @@ async def handle_repository_edit(
         with open(abs_target, "w", encoding="utf-8") as f:
             f.write(updated)
 
+        ctx = context or {}
+        audit_entry = None
+        try:
+            from backend.services.soc2_audit_service import SOC2AuditService
+            audit_entry = SOC2AuditService.record_code_change_sync(
+                file_path=path,
+                before_content=content,
+                after_content=updated,
+                operation="edit",
+                user_id=ctx.get("user_id"),
+                organization_id=ctx.get("organization_id"),
+                actor_role=ctx.get("actor_role") or ctx.get("role"),
+                session_id=ctx.get("sandbox_session_id"),
+                mission_id=ctx.get("mission_id"),
+                project_id=ctx.get("project_id"),
+                ip_address=ctx.get("ip_address"),
+            )
+        except Exception:
+            pass
+
         return {
             "status": "success",
             "message": f"Successfully replaced {count if replace_all else 1} block(s) in {path}",
             "path": path,
-            "replacements": count if replace_all else 1
+            "replacements": count if replace_all else 1,
+            "code_change_hash": getattr(audit_entry, "code_change_hash", None),
+            "audit_entry_hash": getattr(audit_entry, "entry_hash", None),
         }
     except Exception as e:
         return {"error": str(e)}
 
-async def handle_edit_file_block(path: str, search_block: str = "", replace_block: str = "", context: dict = None, **kwargs) -> str:
+async def handle_edit_file_block(path: str = None, search_block: str = "", replace_block: str = "", context: dict = None, **kwargs) -> str:
     """Performs an atomic search-and-replace edit on an existing file."""
     res = await handle_repository_edit(path=path, search_block=search_block, replace_block=replace_block, context=context, **kwargs)
     if "error" in res:
         return f"Error: {res['error']}"
     return res.get("message", f"Successfully edited {path}")
 
-async def handle_repository_delete(path: str, context: dict = None, **kwargs) -> dict:
+async def handle_repository_delete(path: str = None, context: dict = None, **kwargs) -> dict:
     """Safely deletes a file inside the sandboxed repository."""
+    path = path or kwargs.get("file_path") or kwargs.get("filepath") or ""
     try:
         if context and context.get("sandbox_session_id"):
             from backend.services.sandbox_manager import SandboxManager
@@ -329,8 +550,38 @@ async def handle_repository_delete(path: str, context: dict = None, **kwargs) ->
             return {"error": f"Security Block: Path traversal attempt detected: {path}"}
 
         if os.path.isfile(abs_target):
+            before_content = None
+            try:
+                with open(abs_target, "r", encoding="utf-8", errors="replace") as bf:
+                    before_content = bf.read()
+            except Exception:
+                before_content = None
             os.remove(abs_target)
-            return {"status": "success", "message": f"Deleted file: {path}"}
+            ctx = context or {}
+            audit_entry = None
+            try:
+                from backend.services.soc2_audit_service import SOC2AuditService
+                audit_entry = SOC2AuditService.record_code_change_sync(
+                    file_path=path,
+                    before_content=before_content,
+                    after_content=None,
+                    operation="delete",
+                    user_id=ctx.get("user_id"),
+                    organization_id=ctx.get("organization_id"),
+                    actor_role=ctx.get("actor_role") or ctx.get("role"),
+                    session_id=ctx.get("sandbox_session_id"),
+                    mission_id=ctx.get("mission_id"),
+                    project_id=ctx.get("project_id"),
+                    ip_address=ctx.get("ip_address"),
+                )
+            except Exception:
+                pass
+            return {
+                "status": "success",
+                "message": f"Deleted file: {path}",
+                "code_change_hash": getattr(audit_entry, "code_change_hash", None),
+                "audit_entry_hash": getattr(audit_entry, "entry_hash", None),
+            }
         return {"error": f"File not found: {path}"}
     except Exception as e:
         return {"error": str(e)}
@@ -364,6 +615,26 @@ async def handle_terminal_execute(command: str = "", timeout: int = 60, context:
             command=cmd,
             timeout=timeout,
         )
+        ctx = context or {}
+        try:
+            from backend.services.soc2_audit_service import SOC2AuditService
+            err_str = str(res.get("error") or "").lower()
+            audit_entry = SOC2AuditService.record_command_executed_sync(
+                command=cmd,
+                exit_code=res.get("exit_code", 1),
+                output_snippet=(res.get("stdout") or res.get("stderr") or "")[:256],
+                blocked=bool(res.get("blocked") or "security block" in err_str),
+                user_id=ctx.get("user_id"),
+                organization_id=ctx.get("organization_id"),
+                actor_role=ctx.get("actor_role") or ctx.get("role"),
+                session_id=ctx.get("sandbox_session_id"),
+                mission_id=ctx.get("mission_id"),
+                project_id=ctx.get("project_id"),
+                ip_address=ctx.get("ip_address"),
+            )
+            res["audit_entry_hash"] = audit_entry.entry_hash
+        except Exception:
+            pass
         await _broadcast_terminal(context, cmd, res)
         return res
     except Exception as e:
@@ -623,8 +894,27 @@ async def handle_git_run(command: str, context: dict = None) -> dict:
         return res
     return await handle_terminal_execute(command, context=context)
 
-async def handle_browser_navigate(url: str) -> dict:
-    """Mocks browser navigation or fetch."""
+async def handle_browser_navigate(url: str, context: dict = None, **kwargs) -> dict:
+    """Mocks browser navigation or fetch and records SOC2 IP/network access telemetry."""
+    from urllib.parse import urlparse
+    ctx = context or {}
+    parsed = urlparse(url or "")
+    target_host = parsed.hostname or url
+    try:
+        from backend.services.soc2_audit_service import SOC2AuditService
+        SOC2AuditService.record_ip_access_sync(
+            ip_address=ctx.get("ip_address") or target_host[:64],
+            endpoint_or_url=url,
+            method="GET",
+            user_id=ctx.get("user_id"),
+            organization_id=ctx.get("organization_id"),
+            actor_role=ctx.get("actor_role") or ctx.get("role"),
+            session_id=ctx.get("sandbox_session_id"),
+            mission_id=ctx.get("mission_id"),
+            project_id=ctx.get("project_id"),
+        )
+    except Exception:
+        pass
     try:
         # In a real system, we'd use Playwright or Puppeteer
         # Here we just use a simple curl/request representation
@@ -1351,26 +1641,120 @@ ToolRegistry.register(ToolDefinition(
 # LANGUAGE SERVER PROTOCOL (LSP) TOOLS (Kyros Parity Layer 3)
 # ══════════════════════════════════════════════════════════════════════════════
 
-async def handle_lsp_goto_definition(symbol: str, current_file: str = None, context: dict = None) -> dict:
-    from backend.services.lsp_service import LSPService
-    ws = "."
-    if context and context.get("sandbox_dir"):
-        ws = context["sandbox_dir"]
-    return LSPService.goto_definition(symbol, current_file=current_file, workspace_dir=ws)
+def _resolve_lsp_workspace(repo_path: str = None, context: dict = None) -> str:
+    if repo_path:
+        return repo_path
+    if context:
+        if context.get("sandbox_dir"):
+            return context["sandbox_dir"]
+        if context.get("sandbox_session_id"):
+            try:
+                from backend.services.sandbox_manager import SandboxManager
+                sess = SandboxManager.get_session(context["sandbox_session_id"])
+                if sess and getattr(sess, "sandbox_dir", None):
+                    return sess.sandbox_dir
+            except Exception:
+                pass
+    return os.environ.get("KOBITS_TARGET_WORKSPACE") or "."
 
-async def handle_lsp_find_references(symbol: str, max_results: int = 25, context: dict = None) -> dict:
-    from backend.services.lsp_service import LSPService
-    ws = "."
-    if context and context.get("sandbox_dir"):
-        ws = context["sandbox_dir"]
-    return LSPService.find_references(symbol, workspace_dir=ws, max_results=max_results)
+async def handle_lsp_find_definition(
+    symbol: str = "",
+    file_path: str = None,
+    line: int = None,
+    col: int = None,
+    current_file: str = None,
+    repo_path: str = None,
+    context: dict = None,
+    **kwargs
+) -> dict:
+    from backend.services.lsp_service import HeadlessLSPService
+    ws = _resolve_lsp_workspace(repo_path, context)
+    fpath = file_path or current_file or kwargs.get("path") or kwargs.get("filepath")
+    return HeadlessLSPService.find_definition(
+        symbol=symbol,
+        file_path=fpath,
+        line=line,
+        col=col,
+        repo_path=ws,
+        **kwargs
+    )
 
-async def handle_lsp_document_symbols(file_path: str, context: dict = None) -> dict:
-    from backend.services.lsp_service import LSPService
-    ws = "."
-    if context and context.get("sandbox_dir"):
-        ws = context["sandbox_dir"]
-    return LSPService.get_document_symbols(file_path, workspace_dir=ws)
+async def handle_lsp_goto_definition(symbol: str = "", current_file: str = None, context: dict = None, **kwargs) -> dict:
+    return await handle_lsp_find_definition(symbol=symbol, file_path=current_file, context=context, **kwargs)
+
+async def handle_lsp_find_references(
+    symbol: str = "",
+    file_path: str = None,
+    max_results: int = 50,
+    repo_path: str = None,
+    context: dict = None,
+    **kwargs
+) -> dict:
+    from backend.services.lsp_service import HeadlessLSPService
+    ws = _resolve_lsp_workspace(repo_path, context)
+    fpath = file_path or kwargs.get("current_file") or kwargs.get("path") or kwargs.get("filepath")
+    return HeadlessLSPService.find_references(
+        symbol=symbol,
+        file_path=fpath,
+        repo_path=ws,
+        max_results=max_results,
+        **kwargs
+    )
+
+async def handle_lsp_get_diagnostics(
+    file_path: str = None,
+    repo_path: str = None,
+    context: dict = None,
+    **kwargs
+) -> dict:
+    from backend.services.lsp_service import HeadlessLSPService
+    ws = _resolve_lsp_workspace(repo_path, context)
+    fpath = file_path or kwargs.get("path") or kwargs.get("filepath") or kwargs.get("current_file")
+    return HeadlessLSPService.get_diagnostics(
+        file_path=fpath,
+        repo_path=ws,
+        **kwargs
+    )
+
+async def handle_lsp_get_symbol_graph(
+    repo_path: str = None,
+    context: dict = None,
+    **kwargs
+) -> dict:
+    from backend.services.lsp_service import HeadlessLSPService
+    ws = _resolve_lsp_workspace(repo_path, context)
+    return HeadlessLSPService.get_symbol_graph(
+        repo_path=ws,
+        **kwargs
+    )
+
+async def handle_lsp_document_symbols(file_path: str = None, context: dict = None, **kwargs) -> dict:
+    from backend.services.lsp_service import HeadlessLSPService
+    ws = _resolve_lsp_workspace(kwargs.get("repo_path") or kwargs.get("workspace_dir"), context)
+    fpath = file_path or kwargs.get("path") or kwargs.get("filepath") or kwargs.get("current_file")
+    if not fpath:
+        return {"file": "", "error": "file_path is required", "symbols": []}
+    return HeadlessLSPService.get_document_symbols(fpath, workspace_dir=ws, **kwargs)
+
+ToolRegistry.register(ToolDefinition(
+    name="lsp.find_definition",
+    description=(
+        "Language Server Protocol: Jump directly to the exact definition line, column, file, and signature "
+        "of any class, function, method, or variable using AST & import tracing (100% compiler precision)."
+    ),
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "symbol": {"type": "string", "description": "The exact function, class, method, or variable name to locate."},
+            "file_path": {"type": "string", "description": "Optional file path where the symbol is referenced (traces imports)."},
+            "line": {"type": "integer", "description": "Optional 1-based line number for cursor-based symbol resolution."},
+            "col": {"type": "integer", "description": "Optional 0-based column offset."}
+        },
+        "required": ["symbol"]
+    },
+    handler=handle_lsp_find_definition
+))
 
 ToolRegistry.register(ToolDefinition(
     name="lsp.goto_definition",
@@ -1393,19 +1777,50 @@ ToolRegistry.register(ToolDefinition(
 ToolRegistry.register(ToolDefinition(
     name="lsp.find_references",
     description=(
-        "Language Server Protocol: Find all exact call sites, usages, and imports of a symbol "
-        "across the entire project with line numbers and context."
+        "Language Server Protocol: Find all exact call sites, usages, callers, and imports of a symbol "
+        "across the entire project with line numbers, columns, and caller context."
     ),
     risk_level=RiskLevel.LOW,
     input_schema={
         "type": "object",
         "properties": {
             "symbol": {"type": "string", "description": "Symbol name to find usages for."},
-            "max_results": {"type": "integer", "description": "Maximum references to return (default 25)."}
+            "file_path": {"type": "string", "description": "Optional file path to limit reference search."},
+            "max_results": {"type": "integer", "description": "Maximum references to return (default 50)."}
         },
         "required": ["symbol"]
     },
     handler=handle_lsp_find_references
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="lsp.get_diagnostics",
+    description=(
+        "Language Server Protocol: Run real-time compiler diagnostics (syntax errors, broken imports, missing symbols, and cross-file ripple errors) without needing to run tests."
+    ),
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "file_path": {"type": "string", "description": "Optional file path to analyze. If omitted, scans workspace."}
+        }
+    },
+    handler=handle_lsp_get_diagnostics
+))
+
+ToolRegistry.register(ToolDefinition(
+    name="lsp.get_symbol_graph",
+    description=(
+        "Language Server Protocol: Generates the in-memory symbol reference graph of the repository (Callers, Callees, Classes, Methods, Exports, and Imports)."
+    ),
+    risk_level=RiskLevel.LOW,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "repo_path": {"type": "string", "description": "Optional workspace path (default: current workspace)."}
+        }
+    },
+    handler=handle_lsp_get_symbol_graph
 ))
 
 ToolRegistry.register(ToolDefinition(

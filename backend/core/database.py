@@ -42,6 +42,36 @@ if is_sqlite:
             cursor.execute("PRAGMA busy_timeout=30000")
             cursor.execute("PRAGMA cache_size=-16000")
             cursor.execute("PRAGMA temp_store=MEMORY")
+            res = cursor.execute("PRAGMA table_info(audit_logs)").fetchall()
+            if res:
+                existing_cols = {row[1] for row in res}
+                soc2_cols = [
+                    ("organization_id", "VARCHAR"),
+                    ("actor_role", "VARCHAR(32)"),
+                    ("session_id", "VARCHAR(64)"),
+                    ("mission_id", "VARCHAR(64)"),
+                    ("project_id", "VARCHAR(64)"),
+                    ("category", "VARCHAR(64) DEFAULT 'AUTH'"),
+                    ("severity", "VARCHAR(16) DEFAULT 'INFO'"),
+                    ("status", "VARCHAR(32) DEFAULT 'SUCCESS'"),
+                    ("resource_type", "VARCHAR(64)"),
+                    ("resource_id", "VARCHAR(128)"),
+                    ("file_path", "VARCHAR(1024)"),
+                    ("command_executed", "TEXT"),
+                    ("code_change_hash", "VARCHAR(64)"),
+                    ("content_hash", "VARCHAR(64)"),
+                    ("sequence_number", "INTEGER DEFAULT 1"),
+                    ("prev_hash", "VARCHAR(64) DEFAULT '0000000000000000000000000000000000000000000000000000000000000000'"),
+                    ("entry_hash", "VARCHAR(64) DEFAULT ''"),
+                    ("hmac_signature", "VARCHAR(64) DEFAULT ''"),
+                ]
+                added = False
+                for col_name, col_type in soc2_cols:
+                    if col_name not in existing_cols:
+                        cursor.execute(f"ALTER TABLE audit_logs ADD COLUMN {col_name} {col_type}")
+                        added = True
+                if added:
+                    dbapi_connection.commit()
             cursor.close()
         except Exception:
             pass

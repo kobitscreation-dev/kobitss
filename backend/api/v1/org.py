@@ -523,3 +523,566 @@ async def get_dashboard(
     }
 
     return base
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ENTERPRISE RBAC (Admin, Lead Engineer, Read-Only Reviewer) & SOC2 AUDIT
+# ═══════════════════════════════════════════════════════════════════════════
+
+from fastapi import Request, status
+from pydantic import BaseModel, Field
+from backend.api.deps import get_current_org_member
+from backend.models.organization import (
+    ENTERPRISE_ROLES,
+    ROLE_HIERARCHY,
+    ROLE_PERMISSIONS,
+    OrgRole,
+    Permission,
+)
+from backend.models.audit_log import (
+    AuditCategory,
+    AuditEvent,
+    AuditLog,
+    normalize_audit_timestamp,
+)
+from backend.services.auth_service import (
+    enforce_permission_with_audit,
+    enforce_role_with_audit,
+)
+from backend.services.soc2_audit_service import SOC2AuditService
+
+rbac_router = APIRouter()
+audit_router = APIRouter()
+
+
+class MemberRoleAssignRequest(BaseModel):
+    user_id: Optional[str] = None
+    email: Optional[str] = None
+    role: str = Field(..., description="Enterprise role: ADMIN ('Admin'), LEAD_ENGINEER ('Lead Engineer'), or READ_ONLY_REVIEWER ('Read-Only Reviewer')")
+
+
+class MemberRoleUpdateRequest(BaseModel):
+    role: str = Field(..., description="Target enterprise role")
+
+
+class SOC2OperationalEventRequest(BaseModel):
+    event_type: str = Field(..., description="file_read | command_executed | ip_access | code_change")
+    file_path: Optional[str] = None
+    content: Optional[str] = None
+    before_content: Optional[str] = None
+    after_content: Optional[str] = None
+    operation: str = "write"
+    command: Optional[str] = None
+    exit_code: int = 0
+    output_snippet: Optional[str] = None
+    blocked: bool = False
+    ip_address: Optional[str] = None
+    endpoint_or_url: Optional[str] = None
+    method: str = "GET"
+    session_id: Optional[str] = None
+    mission_id: Optional[str] = None
+    project_id: Optional[str] = None
+    detail: Optional[Dict[str, Any]] = None
+
+
+def _serialize_member(member: OrganizationMember, user_obj: Optional[User] = None) -> Dict[str, Any]:
+    role_enum = OrgRole.normalize(member.role)
+    return {
+        "id": member.id,
+        "user_id": member.user_id,
+        "organization_id": member.organization_id,
+        "email": user_obj.email if user_obj else None,
+        "full_name": user_obj.full_name if user_obj else None,
+        "role": role_enum.value,
+        "display_name": role_enum.display_name,
+        "rank": role_enum.rank,
+        "is_read_only": role_enum.is_read_only,
+        "permissions": sorted(p.value for p in role_enum.permissions),
+    }
+
+
+def _serialize_audit_log(entry: AuditLog) -> Dict[str, Any]:
+    return {
+        "id": entry.id,
+        "sequence_number": entry.sequence_number,
+        "prev_hash": entry.prev_hash,
+        "entry_hash": entry.entry_hash,
+        "hmac_signature": entry.hmac_signature,
+        "organization_id": entry.organization_id,
+        "user_id": entry.user_id,
+        "actor_role": entry.actor_role,
+        "session_id": entry.session_id,
+        "mission_id": entry.mission_id,
+        "project_id": entry.project_id,
+        "event": entry.event,
+        "category": entry.category,
+        "severity": entry.severity,
+        "status": entry.status,
+        "ip_address": entry.ip_address,
+        "user_agent": entry.user_agent,
+        "resource_type": entry.resource_type,
+        "resource_id": entry.resource_id,
+        "file_path": entry.file_path,
+        "command_executed": entry.command_executed,
+        "code_change_hash": entry.code_change_hash,
+        "content_hash": entry.content_hash,
+        "detail": entry.detail,
+        "occurred_at": normalize_audit_timestamp(entry.occurred_at),
+    }
+
+
+@router.get("/rbac/roles")
+@rbac_router.get("/roles")
+async def get_rbac_roles(
+    current_user: User = Depends(get_current_active_user),
+):
+    """Return the Enterprise RBAC role hierarchy and granular permission matrix."""
+    roles_payload = []
+    for role_enum in OrgRole:
+        roles_payload.append(
+            {
+                "role": role_enum.value,
+                "display_name": role_enum.display_name,
+                "rank": ROLE_HIERARCHY[role_enum],
+                "is_enterprise_tier": role_enum in ENTERPRISE_ROLES,
+                "is_read_only": role_enum.is_read_only,
+                "permissions": sorted(p.value for p in ROLE_PERMISSIONS[role_enum]),
+            }
+        )
+    return {
+        "enterprise_roles": [
+            {
+                "role": r.value,
+                "display_name": r.display_name,
+                "rank": r.rank,
+                "is_read_only": r.is_read_only,
+                "permissions": sorted(p.value for p in r.permissions),
+            }
+            for r in ENTERPRISE_ROLES
+        ],
+        "all_roles": roles_payload,
+    }
+
+
+@router.get("/rbac/me")
+@rbac_router.get("/me")
+async def get_my_rbac_profile(
+    request: Request,
+    membership: OrganizationMember = Depends(get_current_org_member),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Return the authenticated user's active organization role and permissions."""
+    return _serialize_member(membership, current_user)
+
+
+@router.get("/members")
+@rbac_router.get("/members")
+async def list_org_members(
+    request: Request,
+    membership: OrganizationMember = Depends(get_current_org_member),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all members and their RBAC roles in the active organization."""
+    await enforce_permission_with_audit(
+        db,
+        membership,
+        Permission.RBAC_READ,
+        request=request,
+        action="list_org_members",
+    )
+    stmt = (
+        select(OrganizationMember, User)
+        .join(User, OrganizationMember.user_id == User.id)
+        .where(OrganizationMember.organization_id == membership.organization_id)
+    )
+    rows = (await db.execute(stmt)).all()
+    return {
+        "organization_id": membership.organization_id,
+        "members": [_serialize_member(m, u) for m, u in rows],
+    }
+
+
+@router.post("/members", status_code=status.HTTP_201_CREATED)
+@rbac_router.post("/members", status_code=status.HTTP_201_CREATED)
+async def add_or_assign_org_member(
+    payload: MemberRoleAssignRequest,
+    request: Request,
+    membership: OrganizationMember = Depends(get_current_org_member),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Assign or add a user to the organization with an Enterprise RBAC role.
+    Restricted to ADMIN / OWNER (`Permission.RBAC_ASSIGN`).
+    """
+    actor_role = await enforce_permission_with_audit(
+        db,
+        membership,
+        Permission.RBAC_ASSIGN,
+        request=request,
+        action="assign_org_member_role",
+    )
+    try:
+        target_role = OrgRole.normalize(payload.role)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    target_user: Optional[User] = None
+    if payload.user_id:
+        target_user = await db.get(User, payload.user_id)
+    elif payload.email:
+        target_user = (
+            await db.execute(select(User).where(User.email == payload.email.strip()))
+        ).scalar_one_or_none()
+
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Target user not found")
+
+    existing = (
+        await db.execute(
+            select(OrganizationMember).where(
+                OrganizationMember.organization_id == membership.organization_id,
+                OrganizationMember.user_id == target_user.id,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if existing:
+        previous_role = OrgRole.normalize(existing.role).value
+        existing.role = target_role
+        audit_ev = AuditEvent.RBAC_ROLE_UPDATED
+        member_record = existing
+    else:
+        previous_role = None
+        member_record = OrganizationMember(
+            user_id=target_user.id,
+            organization_id=membership.organization_id,
+            role=target_role,
+        )
+        db.add(member_record)
+        await db.flush()
+        audit_ev = AuditEvent.RBAC_MEMBER_ADDED
+
+    await SOC2AuditService.log_rbac_event(
+        db,
+        event=audit_ev,
+        user_id=current_user.id,
+        organization_id=membership.organization_id,
+        actor_role=actor_role.value,
+        target_user_id=target_user.id,
+        target_role=target_role.value,
+        detail={"previous_role": previous_role, "new_role": target_role.value},
+        request=request,
+    )
+    await db.commit()
+    await db.refresh(member_record)
+    return _serialize_member(member_record, target_user)
+
+
+@router.patch("/members/{target_user_id}")
+@router.put("/members/{target_user_id}/role")
+@rbac_router.patch("/members/{target_user_id}")
+@rbac_router.put("/members/{target_user_id}/role")
+async def update_org_member_role(
+    target_user_id: str,
+    payload: MemberRoleUpdateRequest,
+    request: Request,
+    membership: OrganizationMember = Depends(get_current_org_member),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update an existing organization member's Enterprise RBAC role (Admin only)."""
+    actor_role = await enforce_permission_with_audit(
+        db,
+        membership,
+        Permission.RBAC_ASSIGN,
+        request=request,
+        action="update_org_member_role",
+    )
+    try:
+        target_role = OrgRole.normalize(payload.role)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    target_member = (
+        await db.execute(
+            select(OrganizationMember).where(
+                OrganizationMember.organization_id == membership.organization_id,
+                OrganizationMember.user_id == target_user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not target_member:
+        raise HTTPException(status_code=404, detail="Member not found in organization")
+
+    previous_role = OrgRole.normalize(target_member.role).value
+    target_member.role = target_role
+
+    await SOC2AuditService.log_rbac_event(
+        db,
+        event=AuditEvent.RBAC_ROLE_UPDATED,
+        user_id=current_user.id,
+        organization_id=membership.organization_id,
+        actor_role=actor_role.value,
+        target_user_id=target_user_id,
+        target_role=target_role.value,
+        detail={"previous_role": previous_role, "new_role": target_role.value},
+        request=request,
+    )
+    await db.commit()
+    await db.refresh(target_member)
+    target_user = await db.get(User, target_user_id)
+    return _serialize_member(target_member, target_user)
+
+
+@router.delete("/members/{target_user_id}")
+@rbac_router.delete("/members/{target_user_id}")
+async def remove_org_member(
+    target_user_id: str,
+    request: Request,
+    membership: OrganizationMember = Depends(get_current_org_member),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove a member from the organization (Admin only)."""
+    actor_role = await enforce_permission_with_audit(
+        db,
+        membership,
+        Permission.RBAC_ASSIGN,
+        request=request,
+        action="remove_org_member",
+    )
+    target_member = (
+        await db.execute(
+            select(OrganizationMember).where(
+                OrganizationMember.organization_id == membership.organization_id,
+                OrganizationMember.user_id == target_user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not target_member:
+        raise HTTPException(status_code=404, detail="Member not found in organization")
+
+    removed_role = OrgRole.normalize(target_member.role).value
+    await db.delete(target_member)
+    await SOC2AuditService.log_rbac_event(
+        db,
+        event=AuditEvent.RBAC_MEMBER_REMOVED,
+        user_id=current_user.id,
+        organization_id=membership.organization_id,
+        actor_role=actor_role.value,
+        target_user_id=target_user_id,
+        target_role=removed_role,
+        request=request,
+    )
+    await db.commit()
+    return {"removed": True, "user_id": target_user_id, "previous_role": removed_role}
+
+
+# ── SOC2 Type II Tamper-Evident Audit Endpoints ───────────────────────────
+
+@router.get("/audit-logs")
+@audit_router.get("/logs")
+@audit_router.get("")
+async def list_soc2_audit_logs(
+    request: Request,
+    category: Optional[str] = None,
+    event: Optional[str] = None,
+    user_id: Optional[str] = None,
+    actor_role: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    file_path: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    membership: OrganizationMember = Depends(get_current_org_member),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Query tamper-evident SOC2 Type II hash-chained audit logs for the organization.
+    Accessible to Admin, Lead Engineer, and Read-Only Reviewer (`Permission.AUDIT_READ`).
+    """
+    await enforce_permission_with_audit(
+        db,
+        membership,
+        Permission.AUDIT_READ,
+        request=request,
+        action="list_soc2_audit_logs",
+    )
+
+    stmt = select(AuditLog).where(AuditLog.organization_id == membership.organization_id)
+    if category:
+        stmt = stmt.where(AuditLog.category == category.upper())
+    if event:
+        stmt = stmt.where(AuditLog.event == event)
+    if user_id:
+        stmt = stmt.where(AuditLog.user_id == user_id)
+    if actor_role:
+        stmt = stmt.where(AuditLog.actor_role == OrgRole.normalize(actor_role).value)
+    if status_filter:
+        stmt = stmt.where(AuditLog.status == status_filter.upper())
+    if file_path:
+        stmt = stmt.where(AuditLog.file_path == file_path.replace("\\", "/"))
+
+    stmt = stmt.order_by(AuditLog.sequence_number.asc()).offset(max(0, offset)).limit(max(1, min(limit, 500)))
+    entries = list((await db.execute(stmt)).scalars().all())
+    serialized = [_serialize_audit_log(e) for e in entries]
+    return {
+        "organization_id": membership.organization_id,
+        "count": len(serialized),
+        "total": len(serialized),
+        "logs": serialized,
+        "items": serialized,
+    }
+
+
+@router.post("/audit-logs/events", status_code=status.HTTP_201_CREATED)
+@audit_router.post("/events", status_code=status.HTTP_201_CREATED)
+async def record_soc2_operational_event(
+    payload: SOC2OperationalEventRequest,
+    request: Request,
+    membership: OrganizationMember = Depends(get_current_org_member),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Record an explicit signed SOC2 operational audit event (file_read, command_executed,
+    ip_access, or code_change). Restricted to non-read-only engineering/admin roles
+    for mutating events (`command_executed`, `code_change`).
+    """
+    actor_role = OrgRole.normalize(membership.role)
+    ev_kind = payload.event_type.strip().lower()
+
+    if ev_kind in ("code_change", "code.change", "code_write", "code_edit", "code_delete"):
+        await enforce_permission_with_audit(
+            db, membership, Permission.CODE_WRITE, request=request, action="audit_code_change"
+        )
+        entry = await SOC2AuditService.log_code_change(
+            db,
+            file_path=payload.file_path or "unknown",
+            before_content=payload.before_content,
+            after_content=payload.after_content if payload.after_content is not None else payload.content,
+            operation=payload.operation,
+            user_id=current_user.id,
+            organization_id=membership.organization_id,
+            actor_role=actor_role.value,
+            session_id=payload.session_id,
+            mission_id=payload.mission_id,
+            project_id=payload.project_id,
+            ip_address=payload.ip_address,
+            detail=payload.detail,
+            request=request,
+        )
+    elif ev_kind in ("command_executed", "command.execute", "command"):
+        await enforce_permission_with_audit(
+            db, membership, Permission.COMMAND_EXECUTE, request=request, action="audit_command_execute"
+        )
+        entry = await SOC2AuditService.log_command_executed(
+            db,
+            command=payload.command or "",
+            exit_code=payload.exit_code,
+            output_snippet=payload.output_snippet,
+            blocked=payload.blocked,
+            user_id=current_user.id,
+            organization_id=membership.organization_id,
+            actor_role=actor_role.value,
+            session_id=payload.session_id,
+            mission_id=payload.mission_id,
+            project_id=payload.project_id,
+            ip_address=payload.ip_address,
+            detail=payload.detail,
+            request=request,
+        )
+    elif ev_kind in ("ip_access", "ip.access", "network"):
+        await enforce_permission_with_audit(
+            db, membership, Permission.FILE_READ, request=request, action="audit_ip_access"
+        )
+        entry = await SOC2AuditService.log_ip_access(
+            db,
+            ip_address=payload.ip_address or SOC2AuditService.extract_client_ip(request) or "127.0.0.1",
+            endpoint_or_url=payload.endpoint_or_url,
+            method=payload.method,
+            user_id=current_user.id,
+            organization_id=membership.organization_id,
+            actor_role=actor_role.value,
+            session_id=payload.session_id,
+            mission_id=payload.mission_id,
+            project_id=payload.project_id,
+            detail=payload.detail,
+            request=request,
+        )
+    elif ev_kind in ("file_read", "file.read", "file"):
+        await enforce_permission_with_audit(
+            db, membership, Permission.FILE_READ, request=request, action="audit_file_read"
+        )
+        entry = await SOC2AuditService.log_file_read(
+            db,
+            file_path=payload.file_path or "unknown",
+            content=payload.content,
+            user_id=current_user.id,
+            organization_id=membership.organization_id,
+            actor_role=actor_role.value,
+            session_id=payload.session_id,
+            mission_id=payload.mission_id,
+            project_id=payload.project_id,
+            ip_address=payload.ip_address,
+            detail=payload.detail,
+            request=request,
+        )
+    else:
+        raise HTTPException(status_code=422, detail=f"Unsupported SOC2 event_type: {payload.event_type!r}")
+
+    await db.commit()
+    await db.refresh(entry)
+    return _serialize_audit_log(entry)
+
+
+@router.get("/audit-logs/verify")
+@router.post("/audit-logs/verify")
+@audit_router.get("/verify")
+@audit_router.post("/verify")
+async def verify_soc2_audit_chain(
+    request: Request,
+    membership: OrganizationMember = Depends(get_current_org_member),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Cryptographically verify the organization's entire append-only SHA-256 hash chain
+    and HMAC-SHA256 signatures (`Permission.AUDIT_VERIFY`).
+    """
+    await enforce_permission_with_audit(
+        db,
+        membership,
+        Permission.AUDIT_VERIFY,
+        request=request,
+        action="verify_soc2_audit_chain",
+    )
+    return await SOC2AuditService.verify_audit_chain(
+        db,
+        organization_id=membership.organization_id,
+    )
+
+
+@router.get("/audit-logs/soc2-report")
+@audit_router.get("/soc2-report")
+async def get_soc2_compliance_report(
+    request: Request,
+    membership: OrganizationMember = Depends(get_current_org_member),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Generate a cryptographically signed SOC2 Type II compliance report covering
+    hash-chain integrity, file reads, commands executed, IPs accessed, signed
+    code changes, and RBAC access denials (`Permission.AUDIT_READ`).
+    """
+    await enforce_permission_with_audit(
+        db,
+        membership,
+        Permission.AUDIT_READ,
+        request=request,
+        action="get_soc2_compliance_report",
+    )
+    return await SOC2AuditService.generate_soc2_report(
+        db,
+        organization_id=membership.organization_id,
+    )
+

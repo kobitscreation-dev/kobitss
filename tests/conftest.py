@@ -3,14 +3,31 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
-# 1. Force the application to use a test database before any internal modules import config
+# 1. Force the application to use a test database and mock LLM provider
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test_kobits.db"
+os.environ["KOBITS_DEV_MODE"] = "true"
+os.environ["REAL_AI_TEST"] = "0"
+os.environ["LLM_PROVIDER"] = "mock"
+os.environ.pop("USE_ONLY_CLAUDE", None)
+os.environ.pop("AWS_BEDROCK_API_KEY", None)
 os.environ.pop("E2B_API_KEY", None)
+
+from backend.core.config import settings
+settings.LLM_PROVIDER = "mock"
+settings.AWS_BEDROCK_API_KEY = None
 
 # Now we can safely import backend modules
 from backend.core.database import engine, AsyncSessionLocal
 import backend.models
 from backend.models.base import Base
+try:
+    from backend.services.agent_executor import agent_executor
+    from backend.services.llm import get_llm_provider
+    agent_executor.provider = get_llm_provider()
+    agent_executor._default_provider = agent_executor.provider
+except Exception:
+    pass
+
 
 @pytest_asyncio.fixture(autouse=True, scope="function")
 async def setup_db():
@@ -55,7 +72,11 @@ def isolate_test_state():
 
     yield
     os.environ.clear()
-    os.environ.update(orig_env)
+    for k, v in orig_env.items():
+        if len(v) < 32760:
+            os.environ[k] = v
+        else:
+            os.environ[k] = v[:32750]
     settings.LLM_PROVIDER = orig_llm
     settings.ANTHROPIC_API_KEY = orig_anthropic_key
     settings.DEEPSEEK_API_KEY = orig_deepseek_key

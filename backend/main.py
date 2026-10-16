@@ -31,6 +31,7 @@ from backend.models.audit_log import AuditLog
 from backend.models.password_reset import PasswordResetToken
 from backend.models.waitlist import WaitlistLead
 from backend.models.durable_job import DurableJob, JobStatus
+from backend.models.webhook import OutboxEvent, WebhookEndpoint, WebhookMessageState
 
 
 from backend.api.v1 import auth, projects, agents, github, missions, memory, tools
@@ -870,6 +871,8 @@ app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytic
 
 from backend.api.v1 import org
 app.include_router(org.router, prefix="/api/v1/org", tags=["Organisation"])
+app.include_router(org.rbac_router, prefix="/api/v1/rbac", tags=["Enterprise RBAC"])
+app.include_router(org.audit_router, prefix="/api/v1/audit", tags=["SOC2 Type II Audit"])
 
 from backend.api.v1 import profile
 app.include_router(profile.router, prefix="/api/v1/profile", tags=["User Profile"])
@@ -888,6 +891,12 @@ app.include_router(waitlist.router, prefix="/api/v1", tags=["Waitlist"])
 
 from backend.api.v1 import extension
 app.include_router(extension.router, prefix="/api/v1/extension", tags=["VS Code & IDE Extension"])
+
+try:
+    from backend.api import webhooks as notification_webhooks
+    app.include_router(notification_webhooks.router)
+except Exception as _wh_err:
+    pass
 
 
 

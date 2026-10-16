@@ -20,14 +20,17 @@ async def test_agent_executor_scrubbing_and_auth_fail():
     agent_run = AgentRun(id=str(uuid.uuid4()), task_id="task", project_id="proj", agent_id="agent", organization_id="org")
     input_data = {}
     
-    res = await executor.execute_run(agent_run, AgentType.BACKEND_ENGINEER, input_data)
-    
-    assert res["status"] == "FAILED", f"Expected FAILED, got {res['status']}"
-    assert "Authentication Error" in res["summary"] or "not configured" in res["summary"] or "Provider error" in res["summary"] or "401" in res["summary"] or "Provider error" in res["summary"] or "401" in res["summary"] or "Provider error" in res["summary"] or "401" in res["summary"] or "Provider error" in res["summary"] or "401" in res["summary"] or "Provider error" in res["summary"] or "401" in res["summary"] or "Provider error" in res["summary"] or "401" in res["summary"] or "Provider error" in res["summary"] or "401" in res["summary"], f"Summary was: {res['summary']}"
-    
-    # Reset
-    settings.LLM_PROVIDER = "mock"
-    settings.ANTHROPIC_API_KEY = None
+    orig_bedrock = settings.AWS_BEDROCK_API_KEY
+    settings.AWS_BEDROCK_API_KEY = None
+    try:
+        res = await executor.execute_run(agent_run, AgentType.BACKEND_ENGINEER, input_data)
+        assert res["status"] == "FAILED", f"Expected FAILED, got {res['status']}"
+        assert "Authentication Error" in res["summary"] or "not configured" in res["summary"] or "Provider error" in res["summary"] or "401" in res["summary"], f"Summary was: {res['summary']}"
+    finally:
+        # Reset
+        settings.LLM_PROVIDER = "mock"
+        settings.ANTHROPIC_API_KEY = None
+        settings.AWS_BEDROCK_API_KEY = orig_bedrock
     
     print("Agent executor reliability tests PASS.")
 

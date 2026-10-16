@@ -295,7 +295,28 @@ async def login(
     _set_session_cookie(response, access_token)
 
     from backend.services.auth_service import get_user_default_org
-    await get_user_default_org(db, user.id)
+    membership = await get_user_default_org(db, user.id)
+    try:
+        from backend.services.soc2_audit_service import SOC2AuditService
+        from backend.models.audit_log import AuditEventType, AuditSeverity
+        client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "127.0.0.1")
+        await SOC2AuditService.log_event(
+            db,
+            event_type=AuditEventType.USER_LOGIN,
+            action="auth.login",
+            organization_id=membership.organization_id,
+            actor_user_id=user.id,
+            actor_email=user.email,
+            actor_role=membership.role.value if hasattr(membership.role, "value") else str(membership.role),
+            severity=AuditSeverity.INFO,
+            status="SUCCESS",
+            ip_address=client_ip,
+            endpoint="/api/v1/auth/login",
+            http_method="POST",
+            auto_commit=True,
+        )
+    except Exception:
+        pass
 
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -629,9 +650,11 @@ async def create_api_key_endpoint(
     request: Request = None,
 ):
     from backend.api.deps import get_current_active_user
-    from backend.services.auth_service import get_user_default_org, create_api_key
+    from backend.models.organization import Permission
+    from backend.services.auth_service import get_user_default_org, create_api_key, enforce_permission_with_audit
     user = await get_current_active_user(request=request, db=db)
     membership = await get_user_default_org(db, user.id, preferred_org_id=getattr(user, "_active_org_id", None))
+    await enforce_permission_with_audit(db, membership, Permission.API_KEY_MANAGE, action="create_api_key")
 
     api_key_obj, raw_key = await create_api_key(
         db=db,
@@ -641,6 +664,25 @@ async def create_api_key_endpoint(
         scopes=req.scopes,
         expires_in_days=req.expires_in_days,
     )
+
+    try:
+        from backend.services.soc2_audit_service import SOC2AuditService
+        from backend.models.audit_log import AuditEventType, AuditSeverity
+        await SOC2AuditService.log_event(
+            db,
+            event_type=AuditEventType.API_KEY_CREATED,
+            action="auth.api_key.create",
+            organization_id=membership.organization_id,
+            actor_user_id=user.id,
+            actor_email=user.email,
+            actor_role=membership.role.value if hasattr(membership.role, "value") else str(membership.role),
+            severity=AuditSeverity.INFO,
+            status="SUCCESS",
+            metadata={"key_id": api_key_obj.id, "key_prefix": api_key_obj.key_prefix, "scopes": api_key_obj.scopes},
+            auto_commit=True,
+        )
+    except Exception:
+        pass
 
     return {
         "id": api_key_obj.id,
@@ -686,13 +728,34 @@ async def revoke_api_key_endpoint(
     request: Request = None,
 ):
     from backend.api.deps import get_current_active_user
-    from backend.services.auth_service import get_user_default_org, revoke_api_key
+    from backend.models.organization import Permission
+    from backend.services.auth_service import get_user_default_org, revoke_api_key, enforce_permission_with_audit
     user = await get_current_active_user(request=request, db=db)
     membership = await get_user_default_org(db, user.id, preferred_org_id=getattr(user, "_active_org_id", None))
+    await enforce_permission_with_audit(db, membership, Permission.API_KEY_MANAGE, action="revoke_api_key")
 
     success = await revoke_api_key(db=db, key_id=key_id, organization_id=membership.organization_id)
     if not success:
         raise HTTPException(status_code=404, detail="API key not found")
+
+    try:
+        from backend.services.soc2_audit_service import SOC2AuditService
+        from backend.models.audit_log import AuditEventType, AuditSeverity
+        await SOC2AuditService.log_event(
+            db,
+            event_type=AuditEventType.API_KEY_REVOKED,
+            action="auth.api_key.revoke",
+            organization_id=membership.organization_id,
+            actor_user_id=user.id,
+            actor_email=user.email,
+            actor_role=membership.role.value if hasattr(membership.role, "value") else str(membership.role),
+            severity=AuditSeverity.WARNING,
+            status="SUCCESS",
+            metadata={"key_id": key_id},
+            auto_commit=True,
+        )
+    except Exception:
+        pass
     return {"status": "success", "message": "API key revoked"}
 
 

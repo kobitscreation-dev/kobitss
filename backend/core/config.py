@@ -126,6 +126,11 @@ class Settings(BaseSettings):
     JIRA_API_TOKEN: Optional[str] = None
     LINEAR_API_KEY: Optional[str] = None
 
+    # Enterprise RBAC & SOC2 Type II Tamper-Evident Audit Logging
+    AUDIT_HMAC_SECRET: Optional[str] = None
+    KOBITS_AUDIT_HMAC_SECRET: Optional[str] = None
+    AUDIT_HMAC_PREVIOUS_SECRETS: Optional[str] = None
+
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True, extra="ignore")
 
 settings = Settings()

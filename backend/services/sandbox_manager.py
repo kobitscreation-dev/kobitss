@@ -332,12 +332,15 @@ class SandboxManager:
                         _run_git(sandbox_dir, "checkout", base_commit_sha)
                     _run_git(sandbox_dir, "checkout", "-b", branch_name)
             else:
-                shutil.rmtree(sandbox_dir, ignore_errors=True)
-                _run_git(cls.SANDBOX_ROOT, "clone", clone_url, f"sandbox-{session_id}")
-                cls._init_git_excludes(sandbox_dir)
-                if base_commit_sha:
-                    _run_git(sandbox_dir, "checkout", base_commit_sha)
-                _run_git(sandbox_dir, "checkout", "-b", branch_name)
+                if not (cloud_sb or CloudMicroVMSandbox.is_cloud_native()):
+                    shutil.rmtree(sandbox_dir, ignore_errors=True)
+                    _run_git(cls.SANDBOX_ROOT, "clone", clone_url, f"sandbox-{session_id}")
+                    cls._init_git_excludes(sandbox_dir)
+                    if base_commit_sha:
+                        _run_git(sandbox_dir, "checkout", base_commit_sha)
+                    _run_git(sandbox_dir, "checkout", "-b", branch_name)
+                else:
+                    os.makedirs(sandbox_dir, exist_ok=True)
         else:
             repo_root = Path(__file__).resolve().parent.parent.parent
             is_greenfield = (
@@ -347,10 +350,14 @@ class SandboxManager:
             )
             if is_greenfield:
                 os.makedirs(sandbox_dir, exist_ok=True)
-                _run_git(sandbox_dir, "init")
-                cls._init_git_excludes(sandbox_dir)
-                _run_git(sandbox_dir, "commit", "--allow-empty", "-m", "Initial commit for greenfield mission")
-                _run_git(sandbox_dir, "checkout", "-b", branch_name)
+                if not (cloud_sb or CloudMicroVMSandbox.is_cloud_native()):
+                    _run_git(sandbox_dir, "init")
+                    cls._init_git_excludes(sandbox_dir)
+                    _run_git(sandbox_dir, "commit", "--allow-empty", "-m", "Initial commit for greenfield mission")
+                    _run_git(sandbox_dir, "checkout", "-b", branch_name)
+                else:
+                    if cloud_sb:
+                        cloud_sb.run_command(f"git init /workspace && cd /workspace && git checkout -b {branch_name} 2>/dev/null || true")
             elif not cls._create_git_worktree_sandbox(sandbox_dir, branch_name, source_dir=project_root):
                 os.makedirs(sandbox_dir, exist_ok=True)
                 ignore = shutil.ignore_patterns(
@@ -1196,6 +1203,17 @@ class SandboxManager:
                         sliced = all_lines[s_line - 1 : e_line] if total_lines > 0 else []
                         sliced_content = "\n".join(sliced)
                         numbered = "\n".join(f"{s_line + idx}: {ln}" for idx, ln in enumerate(sliced))
+                        audit_entry = None
+                        try:
+                            from backend.services.soc2_audit_service import SOC2AuditService
+                            audit_entry = SOC2AuditService.record_file_read_sync(
+                                file_path=rel_path,
+                                content=sliced_content,
+                                session_id=session_id,
+                                project_id=getattr(session, "project_id", None),
+                            )
+                        except Exception:
+                            pass
                         return {
                             "type": "file",
                             "path": rel_path,
@@ -1205,6 +1223,8 @@ class SandboxManager:
                             "end_line": e_line,
                             "total_lines": total_lines,
                             "driver": "cloud_microvm",
+                            "content_hash": getattr(audit_entry, "content_hash", None),
+                            "audit_entry_hash": getattr(audit_entry, "entry_hash", None),
                         }
                     MAX_READ_CHARS = 60000
                     truncated = False
@@ -1214,6 +1234,17 @@ class SandboxManager:
                             + f"\n... [TRUNCATED AT {MAX_READ_CHARS} CHARS — USE start_line/end_line TO READ SPECIFIC RANGES]"
                         )
                         truncated = True
+                    audit_entry = None
+                    try:
+                        from backend.services.soc2_audit_service import SOC2AuditService
+                        audit_entry = SOC2AuditService.record_file_read_sync(
+                            file_path=rel_path,
+                            content=remote_content,
+                            session_id=session_id,
+                            project_id=getattr(session, "project_id", None),
+                        )
+                    except Exception:
+                        pass
                     return {
                         "type": "file",
                         "content": remote_content,
@@ -1221,6 +1252,8 @@ class SandboxManager:
                         "total_lines": total_lines,
                         "truncated": truncated,
                         "driver": "cloud_microvm",
+                        "content_hash": getattr(audit_entry, "content_hash", None),
+                        "audit_entry_hash": getattr(audit_entry, "entry_hash", None),
                     }
                 else:
                     # Check if remote_path is a directory in MicroVM
@@ -1251,6 +1284,17 @@ class SandboxManager:
                 sliced = all_lines[s_line - 1 : e_line]
                 sliced_content = "\n".join(sliced)
                 numbered = "\n".join(f"{s_line + idx}: {ln}" for idx, ln in enumerate(sliced))
+                audit_entry = None
+                try:
+                    from backend.services.soc2_audit_service import SOC2AuditService
+                    audit_entry = SOC2AuditService.record_file_read_sync(
+                        file_path=rel_path,
+                        content=sliced_content,
+                        session_id=session_id,
+                        project_id=getattr(session, "project_id", None),
+                    )
+                except Exception:
+                    pass
                 return {
                     "type": "file",
                     "path": rel_path,
@@ -1259,6 +1303,8 @@ class SandboxManager:
                     "start_line": s_line,
                     "end_line": e_line,
                     "total_lines": total_lines,
+                    "content_hash": getattr(audit_entry, "content_hash", None),
+                    "audit_entry_hash": getattr(audit_entry, "entry_hash", None),
                 }
 
             MAX_READ_CHARS = 60000
@@ -1270,12 +1316,26 @@ class SandboxManager:
                 )
                 truncated = True
 
+            audit_entry = None
+            try:
+                from backend.services.soc2_audit_service import SOC2AuditService
+                audit_entry = SOC2AuditService.record_file_read_sync(
+                    file_path=rel_path,
+                    content=full_content,
+                    session_id=session_id,
+                    project_id=getattr(session, "project_id", None),
+                )
+            except Exception:
+                pass
+
             return {
                 "type": "file",
                 "content": full_content,
                 "path": rel_path,
                 "total_lines": total_lines,
                 "truncated": truncated,
+                "content_hash": getattr(audit_entry, "content_hash", None),
+                "audit_entry_hash": getattr(audit_entry, "entry_hash", None),
             }
         except Exception as e:
             return {"error": str(e)}
@@ -1780,16 +1840,38 @@ class SandboxManager:
 
         os.makedirs(os.path.dirname(abs_path), exist_ok=True)
         try:
+            before_content = None
+            if os.path.isfile(abs_path):
+                try:
+                    with open(abs_path, "r", encoding="utf-8", errors="replace") as bf:
+                        before_content = bf.read()
+                except Exception:
+                    before_content = None
             with open(abs_path, "w", encoding="utf-8") as f:
                 f.write(content)
             if rel_path not in session.files_changed:
                 session.files_changed.append(rel_path)
             cls._persist_session(session)
             syn = cls._validate_file_syntax(rel_path, content)
+            audit_entry = None
+            try:
+                from backend.services.soc2_audit_service import SOC2AuditService
+                audit_entry = SOC2AuditService.record_code_change_sync(
+                    file_path=rel_path,
+                    before_content=before_content,
+                    after_content=content,
+                    operation="write",
+                    session_id=session_id,
+                    project_id=getattr(session, "project_id", None),
+                )
+            except Exception:
+                pass
             res = {
                 "success": True,
                 "path": rel_path,
                 "syntax_valid": syn["syntax_valid"],
+                "code_change_hash": getattr(audit_entry, "code_change_hash", None),
+                "audit_entry_hash": getattr(audit_entry, "entry_hash", None),
             }
             if not syn["syntax_valid"]:
                 res["syntax_error"] = syn["syntax_error"]
@@ -1999,6 +2081,18 @@ class SandboxManager:
                 cloud_sb = CloudMicroVMSandbox.get_or_create(session_id)
                 clean_rel = rel_path.lstrip("/\\")
                 remote_path = f"/workspace/{clean_rel}"
+                before_content = None
+                if os.path.isfile(abs_path):
+                    try:
+                        with open(abs_path, "r", encoding="utf-8", errors="replace") as bf:
+                            before_content = bf.read()
+                    except Exception:
+                        before_content = None
+                if before_content is None:
+                    try:
+                        before_content = cloud_sb.read_file(remote_path)
+                    except Exception:
+                        before_content = None
                 cloud_res = cloud_sb.edit_file(
                     remote_path,
                     old_string=old_string,
@@ -2009,14 +2103,29 @@ class SandboxManager:
                 if cloud_res.get("success"):
                     if rel_path not in session.files_changed:
                         session.files_changed.append(rel_path)
-                    if os.path.exists(abs_path):
-                        try:
-                            updated_text = cloud_sb.read_file(remote_path)
+                    updated_text = None
+                    try:
+                        updated_text = cloud_sb.read_file(remote_path)
+                        if os.path.exists(abs_path) and updated_text is not None:
                             with open(abs_path, "w", encoding="utf-8") as lf:
                                 lf.write(updated_text)
-                        except Exception:
-                            pass
+                    except Exception:
+                        pass
                     cls._persist_session(session)
+                    try:
+                        from backend.services.soc2_audit_service import SOC2AuditService
+                        audit_entry = SOC2AuditService.record_code_change_sync(
+                            file_path=rel_path,
+                            before_content=before_content,
+                            after_content=updated_text,
+                            operation="edit",
+                            session_id=session_id,
+                            project_id=getattr(session, "project_id", None),
+                        )
+                        cloud_res["code_change_hash"] = getattr(audit_entry, "code_change_hash", None)
+                        cloud_res["audit_entry_hash"] = getattr(audit_entry, "entry_hash", None)
+                    except Exception:
+                        pass
                     return cloud_res
                 elif not os.path.exists(abs_path):
                     return cloud_res
@@ -2093,6 +2202,19 @@ class SandboxManager:
             cls._persist_session(session)
 
             syn = cls._validate_file_syntax(rel_path, working_norm)
+            audit_entry = None
+            try:
+                from backend.services.soc2_audit_service import SOC2AuditService
+                audit_entry = SOC2AuditService.record_code_change_sync(
+                    file_path=rel_path,
+                    before_content=original_text,
+                    after_content=final_text,
+                    operation="edit",
+                    session_id=session_id,
+                    project_id=getattr(session, "project_id", None),
+                )
+            except Exception:
+                pass
             result_payload = {
                 "success": True,
                 "path": rel_path,
@@ -2104,6 +2226,8 @@ class SandboxManager:
                 "matched_via_whitespace_normalization": any(t != "exact" for t in match_tiers),
                 "syntax_valid": syn["syntax_valid"],
                 "snippet": "\n---\n".join(snippets),
+                "code_change_hash": getattr(audit_entry, "code_change_hash", None),
+                "audit_entry_hash": getattr(audit_entry, "entry_hash", None),
             }
             if not syn["syntax_valid"]:
                 result_payload["syntax_error"] = syn["syntax_error"]
@@ -2160,12 +2284,37 @@ class SandboxManager:
             if rel_path not in session.files_changed:
                 session.files_changed.append(rel_path)
             cls._persist_session(session)
-            return {"success": True, "path": rel_path, "deleted": True}
+            audit_entry = None
+            try:
+                from backend.services.soc2_audit_service import SOC2AuditService
+                audit_entry = SOC2AuditService.record_code_change_sync(
+                    file_path=rel_path,
+                    before_content=None,
+                    after_content=None,
+                    operation="delete",
+                    session_id=session_id,
+                    project_id=getattr(session, "project_id", None),
+                )
+            except Exception:
+                pass
+            return {
+                "success": True,
+                "path": rel_path,
+                "deleted": True,
+                "code_change_hash": getattr(audit_entry, "code_change_hash", None),
+                "audit_entry_hash": getattr(audit_entry, "entry_hash", None),
+            }
 
         if os.path.isdir(abs_path):
             return {"error": f"Cannot delete directory with repository.delete: {rel_path}"}
 
         try:
+            before_content = None
+            try:
+                with open(abs_path, "r", encoding="utf-8", errors="replace") as bf:
+                    before_content = bf.read()
+            except Exception:
+                before_content = None
             os.remove(abs_path)
             # Prune empty parent directories up to sandbox_abs
             parent_dir = os.path.dirname(abs_path)
@@ -2182,10 +2331,25 @@ class SandboxManager:
             if rel_path not in session.files_changed:
                 session.files_changed.append(rel_path)
             cls._persist_session(session)
+            audit_entry = None
+            try:
+                from backend.services.soc2_audit_service import SOC2AuditService
+                audit_entry = SOC2AuditService.record_code_change_sync(
+                    file_path=rel_path,
+                    before_content=before_content,
+                    after_content=None,
+                    operation="delete",
+                    session_id=session_id,
+                    project_id=getattr(session, "project_id", None),
+                )
+            except Exception:
+                pass
             return {
                 "success": True,
                 "path": rel_path,
                 "deleted": True,
+                "code_change_hash": getattr(audit_entry, "code_change_hash", None),
+                "audit_entry_hash": getattr(audit_entry, "entry_hash", None),
             }
         except Exception as e:
             return {"error": str(e)}
@@ -2254,6 +2418,24 @@ class SandboxManager:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
         cls._persist_session(session)
+        try:
+            from backend.services.soc2_audit_service import SOC2AuditService
+            audit_entry = SOC2AuditService.record_command_executed_sync(
+                command=command,
+                exit_code=res.get("exit_code", 1),
+                output_snippet=(res.get("stdout") or res.get("stderr") or "")[:256],
+                blocked=bool(
+                    res.get("blocked")
+                    or "security block" in err_str
+                    or "blocked " in stderr_str
+                    or res.get("kernel_intercept") in ("privilege_guard", "mount_namespace_guard")
+                ),
+                session_id=session_id,
+                project_id=getattr(session, "project_id", None),
+            )
+            res["audit_entry_hash"] = audit_entry.entry_hash
+        except Exception:
+            pass
         return res
 
     @classmethod

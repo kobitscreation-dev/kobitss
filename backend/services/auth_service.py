@@ -1,8 +1,25 @@
-from typing import Optional, List, Tuple
+import contextvars
+from typing import Optional, List, Tuple, Union
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from fastapi import HTTPException, status
-from backend.models.organization import User, OrganizationMember, OrgRole
+from fastapi import HTTPException, Request, status
+from backend.models.organization import (
+    User,
+    OrganizationMember,
+    OrgRole,
+    Permission,
+    ROLE_HIERARCHY,
+    ROLE_PERMISSIONS,
+)
+
+_active_org_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "_active_org_id_var", default=None
+)
+
+
+def set_active_org_context(org_id: Optional[str]) -> None:
+    """Set the active organization ID for the current async request context."""
+    _active_org_id_var.set(org_id.strip() if org_id and org_id.strip() else None)
 
 
 async def get_user_org_membership(
@@ -28,16 +45,23 @@ async def get_user_default_org(
     db: AsyncSession, user_id: str, preferred_org_id: Optional[str] = None
 ) -> OrganizationMember:
     """Get the organization a user belongs to (default workspace), auto-provisioning one if missing."""
-    if preferred_org_id:
+    explicit_ctx_org = _active_org_id_var.get(None)
+    effective_preferred = preferred_org_id or explicit_ctx_org
+    if effective_preferred:
         result = await db.execute(
             select(OrganizationMember).where(
                 OrganizationMember.user_id == user_id,
-                OrganizationMember.organization_id == preferred_org_id,
+                OrganizationMember.organization_id == effective_preferred,
             )
         )
         membership = result.scalars().first()
         if membership:
             return membership
+        if explicit_ctx_org and explicit_ctx_org == effective_preferred:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this organization",
+            )
 
     result = await db.execute(
         select(OrganizationMember).where(OrganizationMember.user_id == user_id)
@@ -64,19 +88,223 @@ async def get_user_default_org(
     return membership
 
 
-def require_role(membership: OrganizationMember, minimum_role: OrgRole):
-    """Check user has at least the minimum required role. Owner > Admin > Member > Viewer."""
-    role_hierarchy = {
-        OrgRole.OWNER: 4,
-        OrgRole.ADMIN: 3,
-        OrgRole.MEMBER: 2,
-        OrgRole.VIEWER: 1,
-    }
-    if role_hierarchy.get(membership.role, 0) < role_hierarchy.get(minimum_role, 0):
+def require_role(membership: OrganizationMember, minimum_role: Union[OrgRole, str]) -> OrgRole:
+    """
+    Check user has at least the minimum required role.
+    Hierarchy: OWNER (50) > ADMIN (40) > LEAD_ENGINEER (30) > MEMBER (20) > READ_ONLY_REVIEWER / VIEWER (10).
+    """
+    actor_role = OrgRole.normalize(membership.role)
+    target_role = OrgRole.normalize(minimum_role)
+    if ROLE_HIERARCHY.get(actor_role, 0) < ROLE_HIERARCHY.get(target_role, 0):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Requires at least {minimum_role.value} role",
+            detail=f"Requires at least {target_role.value} role (current role: {actor_role.value})",
         )
+    return actor_role
+
+
+def require_permission(membership: OrganizationMember, permission: Union[Permission, str]) -> Permission:
+    """Check user's role grants the specified granular Permission."""
+    actor_role = OrgRole.normalize(membership.role)
+    perm = Permission(permission) if not isinstance(permission, Permission) else permission
+    if not actor_role.has_permission(perm):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Role {actor_role.value} lacks required permission '{perm.value}'",
+        )
+    return perm
+
+
+async def enforce_role_with_audit(
+    db: AsyncSession,
+    membership: OrganizationMember,
+    minimum_role: Union[OrgRole, str],
+    *,
+    request: Optional[Request] = None,
+    action: Optional[str] = None,
+) -> OrgRole:
+    """Enforce minimum RBAC role and record a signed SOC2 audit log entry on denial."""
+    actor_role = OrgRole.normalize(membership.role)
+    target_role = OrgRole.normalize(minimum_role)
+    if ROLE_HIERARCHY.get(actor_role, 0) < ROLE_HIERARCHY.get(target_role, 0):
+        from backend.models.audit_log import AuditEvent
+        from backend.services.soc2_audit_service import SOC2AuditService
+
+        await SOC2AuditService.log_rbac_event(
+            db,
+            event=AuditEvent.RBAC_ACCESS_DENIED,
+            user_id=membership.user_id,
+            organization_id=membership.organization_id,
+            actor_role=actor_role.value,
+            required_role_or_permission=target_role.value,
+            detail={"action": action or "role_check", "reason": "insufficient_role"},
+            request=request,
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Requires at least {target_role.value} role (current role: {actor_role.value})",
+        )
+    return actor_role
+
+
+async def enforce_permission_with_audit(
+    db: AsyncSession,
+    membership: OrganizationMember,
+    permission: Union[Permission, str],
+    *,
+    request: Optional[Request] = None,
+    action: Optional[str] = None,
+) -> OrgRole:
+    """Enforce granular Permission and record a signed SOC2 audit log entry on denial."""
+    actor_role = OrgRole.normalize(membership.role)
+    perm = Permission(permission) if not isinstance(permission, Permission) else permission
+    if not actor_role.has_permission(perm):
+        from backend.models.audit_log import AuditEvent
+        from backend.services.soc2_audit_service import SOC2AuditService
+
+        await SOC2AuditService.log_rbac_event(
+            db,
+            event=AuditEvent.RBAC_ACCESS_DENIED,
+            user_id=membership.user_id,
+            organization_id=membership.organization_id,
+            actor_role=actor_role.value,
+            required_role_or_permission=perm.value,
+            detail={"action": action or "permission_check", "reason": "missing_permission"},
+            request=request,
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Role {actor_role.value} lacks required permission '{perm.value}'",
+        )
+    return actor_role
+
+
+READ_ONLY_TOOLS = frozenset({
+    "repository_read",
+    "repository.read",
+    "read_file",
+    "list_directory",
+    "search_code",
+    "codebase_search",
+    "codebase.search",
+    "memory_retrieve",
+    "memory.retrieve",
+    "git_status",
+    "git.status",
+    "git_log",
+    "git.log",
+    "git_diff",
+    "git.diff",
+    "browser_screenshot",
+    "browser.screenshot",
+    "lsp_find_definition",
+    "lsp.find_definition",
+    "lsp_goto_definition",
+    "lsp.goto_definition",
+    "lsp_find_references",
+    "lsp.find_references",
+    "lsp_get_diagnostics",
+    "lsp.get_diagnostics",
+    "lsp_get_symbol_graph",
+    "lsp.get_symbol_graph",
+    "lsp_document_symbols",
+    "lsp.document_symbols",
+})
+
+CODE_WRITE_TOOLS = frozenset({
+    "repository_write",
+    "repository.write",
+    "write_file",
+    "repository_edit",
+    "repository.edit",
+    "edit_file_block",
+    "repository_delete",
+    "repository.delete",
+    "delete_file",
+    "git_commit",
+    "git.commit",
+    "git_branch",
+    "git.branch",
+    "git_checkout",
+    "git.checkout",
+    "git_stash",
+    "git.stash",
+})
+
+COMMAND_EXECUTION_TOOLS = frozenset({
+    "terminal_execute",
+    "terminal.execute",
+    "run_command",
+    "tests_run",
+    "tests.run",
+    "sandbox_exec",
+    "sandbox.exec",
+    "git_run",
+    "git.run",
+    "git_push",
+    "git.push",
+    "git_pull",
+    "git.pull",
+    "git_PR_create",
+    "github.create_pr",
+    "database.query",
+    "database_query",
+    "browser_click",
+    "browser.click",
+    "browser_type",
+    "browser.type",
+})
+
+IP_ACCESS_TOOLS = frozenset({
+    "browser_navigate",
+    "browser.navigate",
+    "web_search",
+    "web.search",
+})
+
+
+def check_tool_rbac(
+    actor_role: Union[OrgRole, str, None],
+    tool_name: str,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Validate whether `actor_role` is authorized to execute `tool_name`.
+    If `actor_role` is None (e.g. internal background system worker), execution is permitted.
+    """
+    if actor_role is None:
+        return True, None
+
+    role_enum = OrgRole.normalize(actor_role)
+    normalized_tool = (tool_name or "").strip()
+    underscored_tool = normalized_tool.replace(".", "_")
+
+    if normalized_tool in READ_ONLY_TOOLS or underscored_tool in READ_ONLY_TOOLS:
+        if role_enum.has_permission(Permission.FILE_READ):
+            return True, None
+        return False, f"Role {role_enum.value} is not permitted to read repository files ({tool_name})"
+
+    if normalized_tool in CODE_WRITE_TOOLS or underscored_tool in CODE_WRITE_TOOLS:
+        if role_enum.has_permission(Permission.CODE_WRITE):
+            return True, None
+        return False, f"Role {role_enum.value} is read-only and cannot modify code via '{tool_name}'"
+
+    if normalized_tool in COMMAND_EXECUTION_TOOLS or underscored_tool in COMMAND_EXECUTION_TOOLS:
+        if role_enum.has_permission(Permission.COMMAND_EXECUTE):
+            return True, None
+        return False, f"Role {role_enum.value} is not permitted to execute commands via '{tool_name}'"
+
+    if normalized_tool in IP_ACCESS_TOOLS or underscored_tool in IP_ACCESS_TOOLS:
+        if role_enum.has_permission(Permission.IP_ACCESS):
+            return True, None
+        return False, f"Role {role_enum.value} is not permitted to initiate external IP/network access via '{tool_name}'"
+
+    if role_enum.has_permission(Permission.TOOL_EXECUTE):
+        return True, None
+    return False, f"Role {role_enum.value} is not permitted to execute tool '{tool_name}'"
+
+
 
 
 # ═════════════════════════════════════════════════════════════════════

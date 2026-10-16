@@ -213,7 +213,7 @@ class _MockE2BCommands:
                     if "failing" in path.lower() or "detects wrong result" in code.lower() or "tobe(999)" in code.lower() or "assert.fail" in code.lower():
                         is_failing = True
                         break
-            if is_failing:
+            if is_failing or "failing" in norm_cmd.lower():
                 return _Result(cmd, stdout="", stderr="FAIL failing suite > detects wrong result\nAssertionError: expected 6 to be 999\n", exit_code=1)
             return _Result(cmd, stdout="# tests 1\n# pass 1\n# fail 0\n# ok\n", stderr="", exit_code=0)
 
@@ -378,6 +378,8 @@ class CloudMicroVMSandbox:
 
         try:
             from e2b import Sandbox
+            if self.api_key:
+                os.environ["E2B_API_KEY"] = self.api_key
             start_ts = time.perf_counter()
             # Initialize Sandbox with timeout (default 10 minutes)
             if hasattr(Sandbox, "create"):
@@ -400,8 +402,8 @@ class CloudMicroVMSandbox:
             return self.sandbox_id
 
     def ensure_synced(self, local_dir: str, remote_dir: str = "/workspace") -> None:
-        """Syncs files from the local directory to the MicroVM once per session."""
-        if self._synced or not local_dir or not os.path.isdir(local_dir):
+        """Syncs files from the local directory to the MicroVM."""
+        if not local_dir or not os.path.isdir(local_dir):
             return
         self.sync_local_to_microvm(local_dir, remote_dir)
         self._synced = True

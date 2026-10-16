@@ -39,8 +39,14 @@ async def get_provider_health():
             status_info["model"] = settings.DEEPSEEK_MODEL
             
         elif provider_name in ["bedrock", "aws", "aws_bedrock", "claude"]:
-            status_info["configured"] = getattr(provider, "configured", False) or bool(
-                settings.AWS_BEDROCK_API_KEY or settings.ANTHROPIC_API_KEY or (settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY)
+            status_info["configured"] = (
+                getattr(provider, "configured", False)
+                or os.environ.get("USE_ONLY_CLAUDE") == "1"
+                or bool(
+                    getattr(settings, "AWS_BEDROCK_API_KEY", None)
+                    or getattr(settings, "ANTHROPIC_API_KEY", None)
+                    or (getattr(settings, "AWS_ACCESS_KEY_ID", None) and getattr(settings, "AWS_SECRET_ACCESS_KEY", None))
+                )
             )
             status_info["available"] = status_info["configured"]
             status_info["model"] = getattr(provider, "default_model", settings.BEDROCK_MODEL)

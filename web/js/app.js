@@ -1537,24 +1537,35 @@ async function openMissionInspector(missionId, autoFocusApply = false) {
       });
     };
 
-    const runApply = async (dryRun) => {
+    const runApply = async (dryRun, force = false) => {
       try {
-        const res = await post(`/missions/${encodeURIComponent(missionId)}/apply`, { dry_run: dryRun, force: false });
+        const res = await post(`/missions/${encodeURIComponent(missionId)}/apply`, { dry_run: dryRun, force: force });
         const appliedCount = res.applied_count ?? (res.applied || []).length;
         const skippedCount = res.skipped_count ?? (res.skipped || []).length;
         const conflictCount = res.conflict_count ?? (res.conflicts || []).length;
+        const hasConflicts = conflictCount > 0;
         const banner = `
-          <div class="ky-card" style="margin:10px 0;border-color:var(--accent-border);background:var(--bg-elevated)">
-            <div class="ky-eyebrow">${dryRun ? 'DRY-RUN MERGE PREVIEW' : 'SANDBOX APPLIED TO WORKSPACE'} · DONE</div>
+          <div class="ky-card" style="margin:10px 0;border-color:${hasConflicts ? 'var(--err-fg, #ef4444)' : 'var(--accent-border)'};background:var(--bg-elevated)">
+            <div class="ky-eyebrow" style="color:${hasConflicts ? 'var(--err-fg, #ef4444)' : 'inherit'}">${dryRun ? 'DRY-RUN MERGE PREVIEW' : 'SANDBOX APPLIED TO WORKSPACE'} · ${hasConflicts ? 'CONFLICT DETECTED' : 'DONE'}</div>
             <div style="font-family:var(--font-mono);font-size:12px;margin-top:6px">
               Applied: ${appliedCount} · Unchanged/Skipped: ${skippedCount} · Conflicts: ${conflictCount}
               ${res.workspace_dir ? `<div style="color:var(--text-3);margin-top:4px">Target: ${esc(res.workspace_dir)}</div>` : ''}
+              ${hasConflicts ? `
+                <div style="margin-top:8px;padding:8px 10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:4px;color:var(--err-fg, #ef4444)">
+                  <strong>Conflicts detected in ${conflictCount} file(s):</strong>
+                  <ul style="margin:4px 0 8px 16px;padding:0;font-size:11.5px">
+                    ${(res.conflicts || []).map(c => `<li><code>${esc(c.path)}</code> — ${esc(c.reason || 'content conflict')}</li>`).join('')}
+                  </ul>
+                  <button type="button" class="ky-btn ky-btn-primary ky-btn-xs" id="ky-act-force-apply" style="background:#ef4444;border-color:#dc2626">Force Apply (Overwrite Conflicting Files)</button>
+                </div>
+              ` : ''}
             </div>
           </div>
         `;
-        notify(dryRun ? `Dry-run: ${appliedCount} file(s) ready to apply` : `Applied ${appliedCount} file(s) to workspace`);
+        notify(dryRun ? `Dry-run: ${appliedCount} file(s) ready${hasConflicts ? ` (${conflictCount} conflict)` : ''}` : (hasConflicts ? `Apply blocked by ${conflictCount} conflict(s)` : `Applied ${appliedCount} file(s) to workspace`));
         renderBody(banner);
-        if (!dryRun) await fetchDashboard(true);
+        document.getElementById('ky-act-force-apply')?.addEventListener('click', () => runApply(false, true));
+        if (!dryRun && !hasConflicts) await fetchDashboard(true);
       } catch (err) {
         notify(err.message || 'Apply failed', 'error');
       }

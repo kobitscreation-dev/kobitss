@@ -338,27 +338,9 @@ async def _get_delivery_info(db: AsyncSession, mission: Mission) -> dict:
 
 
 async def get_user_default_org(db: AsyncSession, user_id: str) -> OrganizationMember:
-    stmt = select(OrganizationMember).where(OrganizationMember.user_id == user_id)
-    result = await db.execute(stmt)
-    membership = result.scalars().first()
-    if not membership:
-        from backend.models.organization import Organization, OrgRole
-        org = Organization(
-            id=str(uuid.uuid4()),
-            name="Personal Workspace",
-            credit_balance=50,
-        )
-        db.add(org)
-        await db.flush()
-        membership = OrganizationMember(
-            user_id=user_id,
-            organization_id=org.id,
-            role=OrgRole.OWNER,
-        )
-        db.add(membership)
-        await db.commit()
-        await db.refresh(membership)
-    return membership
+    from backend.services.auth_service import get_user_default_org as _get_default_org
+    return await _get_default_org(db, user_id)
+
 
 
 async def _resolve_owned_project(db: AsyncSession, project_ref: Optional[Union[str, dict]], org_id: str, user_id: Optional[str] = None) -> Project:
@@ -578,9 +560,12 @@ async def ingest_epic_endpoint(
     ordered Milestone DAG.
     """
     from backend.services.epic_ingestion import EpicIngestionEngine
-    dag = EpicIngestionEngine.ingest_payload(payload)
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
 
     membership = await get_user_default_org(db, current_user.id)
+    await enforce_permission_with_audit(db, membership, Permission.MISSION_EXECUTE, request=request, action="ingest_epic")
+    dag = EpicIngestionEngine.ingest_payload(payload)
     project_ref = payload.get("project_id")
     if not project_ref:
         raw_proj = payload.get("project")
@@ -672,7 +657,11 @@ async def create_mission(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+
     membership = await get_user_default_org(db, current_user.id)
+    await enforce_permission_with_audit(db, membership, Permission.MISSION_EXECUTE, action="create_mission")
     project = await _resolve_owned_project(db, project_id, membership.organization_id, current_user.id)
     resolved_pid = project.id
 
@@ -1008,7 +997,11 @@ async def approve_mission(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+
     membership = await get_user_default_org(db, current_user.id)
+    await enforce_permission_with_audit(db, membership, Permission.MISSION_APPROVE, action="approve_mission")
     mission = await _resolve_owned_mission(db, mission_id, membership.organization_id)
 
     if mission.status != MissionStatus.AWAITING_APPROVAL and mission.phase != WorkflowPhase.DELIVERY_REVIEW:
@@ -1061,7 +1054,11 @@ async def reject_mission(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+
     membership = await get_user_default_org(db, current_user.id)
+    await enforce_permission_with_audit(db, membership, Permission.MISSION_APPROVE, action="reject_mission")
     mission = await _resolve_owned_mission(db, mission_id, membership.organization_id)
 
     if mission.status == MissionStatus.COMPLETED:
@@ -1126,7 +1123,11 @@ async def update_mission(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+
     membership = await get_user_default_org(db, current_user.id)
+    await enforce_permission_with_audit(db, membership, Permission.MISSION_EXECUTE, action="update_mission")
     mission = await _resolve_owned_mission(db, mission_id, membership.organization_id)
 
     if update_data.title is not None:
@@ -1146,7 +1147,11 @@ async def cancel_mission(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+
     membership = await get_user_default_org(db, current_user.id)
+    await enforce_permission_with_audit(db, membership, Permission.MISSION_EXECUTE, action="cancel_mission")
     mission = await _resolve_owned_mission(db, mission_id, membership.organization_id)
 
     if mission.status in [MissionStatus.COMPLETED, MissionStatus.CANCELLED]:
@@ -1197,7 +1202,11 @@ async def retry_mission(
     current_user: User = Depends(get_current_active_user)
 ):
     """Retry a FAILED/BLOCKED/CANCELLED (or stalled ACTIVE) mission."""
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+
     membership = await get_user_default_org(db, current_user.id)
+    await enforce_permission_with_audit(db, membership, Permission.MISSION_EXECUTE, action="retry_mission")
     mission = await _resolve_owned_mission(db, mission_id, membership.organization_id)
 
     if mission.status == MissionStatus.COMPLETED:
@@ -1351,7 +1360,12 @@ async def deliver_mission(
     Persist durable Changeset row in SQLite, push the sandbox branch (`kobits/mission/<id>`),
     open/upsert a GitHub PullRequest row, and dispatch outbound webhook notification.
     """
-    mission = await _get_owned_mission(db, mission_id, current_user.id)
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+
+    membership = await get_user_default_org(db, current_user.id)
+    await enforce_permission_with_audit(db, membership, Permission.CODE_WRITE, action="deliver_mission")
+    mission = await _resolve_owned_mission(db, mission_id, membership.organization_id)
     push_pr = True if request is None else bool(request.push_and_open_pr)
     from backend.services.sandbox_review import persist_mission_deliverable
     deliverable = await persist_mission_deliverable(db, mission, push_and_open_pr=push_pr)
@@ -1421,7 +1435,12 @@ async def apply_mission_changes(
     current_user: User = Depends(get_current_active_user)
 ):
     """3-way merge sandbox changes into the project's local workspace (same engine as `kobits apply`)."""
-    mission = await _get_owned_mission(db, mission_id, current_user.id)
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+
+    membership = await get_user_default_org(db, current_user.id)
+    await enforce_permission_with_audit(db, membership, Permission.CODE_WRITE, action="apply_mission_changes")
+    mission = await _resolve_owned_mission(db, mission_id, membership.organization_id)
     project = await db.get(Project, mission.project_id)
     from backend.services.sandbox_review import apply_mission, resolve_workspace_dir, persist_mission_deliverable
     # Ensure durable Changeset is recorded in SQLite when applying
@@ -1536,7 +1555,11 @@ async def steer_mission(
 ):
     """Inject live human steering instruction into a mission (matches `kobits steer`)."""
     from backend.models.project import TaskPriority
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+
     membership = await get_user_default_org(db, current_user.id)
+    await enforce_permission_with_audit(db, membership, Permission.MISSION_EXECUTE, action="steer_mission")
     mission = await _resolve_owned_mission(db, mission_id, membership.organization_id)
 
     if mission.status in (MissionStatus.COMPLETED, MissionStatus.CANCELLED):
@@ -1608,7 +1631,11 @@ async def resume_mission(
     current_user: User = Depends(get_current_active_user)
 ):
     """Resume a BLOCKED mission with a human comment."""
+    from backend.models.organization import Permission
+    from backend.services.auth_service import enforce_permission_with_audit
+
     membership = await get_user_default_org(db, current_user.id)
+    await enforce_permission_with_audit(db, membership, Permission.MISSION_EXECUTE, action="resume_mission")
     mission = await _resolve_owned_mission(db, mission_id, membership.organization_id)
 
     if mission.status not in (MissionStatus.BLOCKED, MissionStatus.FAILED):

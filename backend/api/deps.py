@@ -123,10 +123,23 @@ async def get_current_user(token: str = None, db: AsyncSession = Depends(get_db)
 
 async def get_current_user_from_request(request: Request, db: AsyncSession = Depends(get_db)) -> User:
     """Extract the API key, JWT Bearer, or cookie, then resolve the user."""
+    from backend.services.auth_service import set_active_org_context
+
+    explicit_org = (
+        request.headers.get("X-Organization-Id")
+        or request.headers.get("x-organization-id")
+        or request.headers.get("X-Org-Id")
+        or request.headers.get("x-org-id")
+    )
+    set_active_org_context(explicit_org)
+
     # 1. High-priority API Key header (CLI, VS Code extension, CI/CD)
     api_key_header = request.headers.get("X-API-Key") or request.headers.get("x-api-key")
     if api_key_header and api_key_header.strip():
-        return await get_current_user(token=api_key_header.strip(), db=db)
+        user = await get_current_user(token=api_key_header.strip(), db=db)
+        if explicit_org and explicit_org.strip():
+            setattr(user, "_active_org_id", explicit_org.strip())
+        return user
 
     # 2. Authorization header (Bearer token or Bearer kb_live_...)
     auth_header = request.headers.get("Authorization", "").strip()
@@ -135,11 +148,17 @@ async def get_current_user_from_request(request: Request, db: AsyncSession = Dep
             token = auth_header[7:].strip()
         else:
             token = auth_header
-        return await get_current_user(token=token, db=db)
+        user = await get_current_user(token=token, db=db)
+        if explicit_org and explicit_org.strip():
+            setattr(user, "_active_org_id", explicit_org.strip())
+        return user
 
     # 3. Cookie fallback (Browser sessions)
     token = request.cookies.get(settings.SESSION_COOKIE_NAME)
-    return await get_current_user(token=token, db=db)
+    user = await get_current_user(token=token, db=db)
+    if explicit_org and explicit_org.strip():
+        setattr(user, "_active_org_id", explicit_org.strip())
+    return user
 
 
 async def get_current_active_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
@@ -165,3 +184,78 @@ async def get_any_user(request: Request, db: AsyncSession = Depends(get_db)) -> 
     Regular API routes MUST use get_current_active_user instead.
     """
     return await get_current_user_from_request(request=request, db=db)
+
+
+async def get_current_org_member(
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Resolve the user's active OrganizationMember context.
+    Honors an explicit `X-Organization-Id` header (with strict membership check)
+    or falls back to the user's active/default organization workspace.
+    """
+    from backend.services.auth_service import get_user_default_org, get_user_org_membership
+
+    explicit_org_id = request.headers.get("X-Organization-Id") or request.headers.get("x-organization-id")
+    if explicit_org_id and explicit_org_id.strip():
+        membership = await get_user_org_membership(db, current_user.id, explicit_org_id.strip())
+    else:
+        preferred = getattr(current_user, "_active_org_id", None)
+        membership = await get_user_default_org(db, current_user.id, preferred_org_id=preferred)
+
+    setattr(current_user, "_active_org_id", membership.organization_id)
+    setattr(current_user, "_active_role", membership.role)
+    return membership
+
+
+class RoleChecker:
+    """
+    FastAPI dependency enforcing Enterprise RBAC minimum role and/or granular Permission.
+    Automatically records a signed SOC2 `rbac.access_denied` audit log entry on 403.
+    """
+
+    def __init__(self, minimum_role=None, required_permission=None) -> None:
+        self.minimum_role = minimum_role
+        self.required_permission = required_permission
+
+    async def __call__(
+        self,
+        request: Request,
+        current_user: User = Depends(get_current_active_user),
+        db: AsyncSession = Depends(get_db),
+    ):
+        from backend.services.auth_service import (
+            enforce_permission_with_audit,
+            enforce_role_with_audit,
+        )
+
+        membership = await get_current_org_member(request=request, current_user=current_user, db=db)
+        action = f"{request.method} {request.url.path}"
+        if self.minimum_role is not None:
+            await enforce_role_with_audit(
+                db,
+                membership,
+                self.minimum_role,
+                request=request,
+                action=action,
+            )
+        if self.required_permission is not None:
+            await enforce_permission_with_audit(
+                db,
+                membership,
+                self.required_permission,
+                request=request,
+                action=action,
+            )
+        return membership
+
+
+from backend.models.organization import OrgRole, Permission  # noqa: E402
+
+require_admin = RoleChecker(minimum_role=OrgRole.ADMIN)
+require_lead_engineer = RoleChecker(minimum_role=OrgRole.LEAD_ENGINEER)
+require_member = RoleChecker(minimum_role=OrgRole.MEMBER)
+require_reviewer = RoleChecker(minimum_role=OrgRole.READ_ONLY_REVIEWER)
+

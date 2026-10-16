@@ -58,12 +58,37 @@ KYROS_CORE_TOOLS = [
     "finish_mission",
 ]
 
+LSP_TOOLS = [
+    "lsp.find_definition",
+    "lsp.find_references",
+    "lsp.get_diagnostics",
+    "lsp.get_symbol_graph",
+    "lsp.goto_definition",
+    "lsp.document_symbols",
+]
+
+LSP_ENABLED_AGENTS = {
+    AgentType.ORCHESTRATOR,       # Nexus
+    AgentType.PRODUCT_MANAGER,    # Forge
+    AgentType.TECHNICAL_LEAD,     # Forge
+    AgentType.SOLUTION_ARCHITECT, # Axiom
+    AgentType.QA_ENGINEER,        # Sentinel
+    AgentType.BACKEND_ENGINEER,   # Core
+    AgentType.FRONTEND_ENGINEER,  # Pixel
+    AgentType.SECURITY_ENGINEER,  # Aegis
+    AgentType.CODE_REVIEWER,      # Review
+}
+
 AGENT_REGISTRY: Dict[AgentType, AgentDefinition] = {}
 
 def register_agent(agent: AgentDefinition):
     for tool in KYROS_CORE_TOOLS:
         if tool not in agent.allowed_tools:
             agent.allowed_tools.append(tool)
+    if agent.type in LSP_ENABLED_AGENTS:
+        for tool in LSP_TOOLS:
+            if tool not in agent.allowed_tools:
+                agent.allowed_tools.append(tool)
     AGENT_REGISTRY[agent.type] = agent
 
 # ── 01. ORCHESTRATOR ──

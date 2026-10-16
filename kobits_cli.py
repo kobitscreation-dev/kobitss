@@ -2258,6 +2258,33 @@ def apply_sandbox_to_workspace(
                 })
                 continue
 
+            # Intelligent package marker reconciliation (__init__.py)
+            is_init_py = rel_p.endswith("__init__.py") or rel_p == "__init__.py"
+            if is_init_py:
+                # If host is empty, adopt sandbox content safely
+                if not host_norm.strip():
+                    planned_ops.append({
+                        "op": "copy",
+                        "rel_p": rel_p,
+                        "src_path": src_path,
+                        "dst_path": dst_path,
+                        "action": "CREATED",
+                        "added": added_cnt,
+                        "removed": removed_cnt,
+                    })
+                    continue
+                # If sandbox is empty or just a package docstring, preserve host content without blocking conflict
+                if not sandbox_norm.strip() or sandbox_norm.strip().startswith(b'"""') or sandbox_norm.strip().startswith(b"'''"):
+                    planned_ops.append({
+                        "op": "noop_create",
+                        "rel_p": rel_p,
+                        "dst_path": dst_path,
+                        "action": "CREATED",
+                        "added": added_cnt,
+                        "removed": removed_cnt,
+                    })
+                    continue
+
             if not force:
                 reason = (
                     f"3-way add/add conflict: '{rel_p}' was created in the sandbox, "
@@ -3600,14 +3627,81 @@ def build_parser() -> argparse.ArgumentParser:
     p_logs = sub.add_parser("logs", parents=[common], help="Stream live WebSocket terminal logs or view mission activity logs")
     p_logs.add_argument("mission_id", nargs="?", help="Optional mission ID or 8-char prefix (defaults to latest mission)")
 
+    # kobits audit
+    p_audit = sub.add_parser("audit", parents=[common], help="Inspect, verify, or export SOC2 Type II tamper-evident HMAC-SHA256 audit logs")
+    p_audit.add_argument("--verify", action="store_true", help="Verify cryptographic SHA-256 hash chain and HMAC signatures")
+    p_audit.add_argument("--report", action="store_true", help="Generate full signed SOC2 Type II compliance report")
+    p_audit.add_argument("-n", "--limit", type=int, default=25, help="Maximum audit entries to display (default: 25)")
+
+    # kobits rbac
+    p_rbac = sub.add_parser("rbac", parents=[common], help="Inspect Enterprise RBAC roles (Admin, Lead Engineer, Read-Only Reviewer) and permissions")
+    p_rbac.add_argument("--json", action="store_true", help="Output RBAC matrix as JSON")
+
     return parser
+
+
+async def cmd_audit(args: argparse.Namespace) -> int:
+    from backend.core.database import AsyncSessionLocal
+    from backend.services.soc2_audit_service import SOC2AuditService
+
+    _, org_id = await _ensure_local_db_and_identity()
+    async with AsyncSessionLocal() as db:
+        if getattr(args, "report", False):
+            report = await SOC2AuditService.generate_soc2_report(db, organization_id=org_id)
+            print(json.dumps(report, indent=2))
+            return 0 if report.get("chain_integrity", {}).get("valid", True) else 1
+
+        verification = await SOC2AuditService.verify_audit_chain(db, organization_id=org_id)
+        if getattr(args, "verify", False):
+            print(json.dumps(verification, indent=2))
+            return 0 if verification.get("valid", False) else 1
+
+        entries, _ = await SOC2AuditService.list_audit_logs(
+            db, organization_id=org_id, limit=getattr(args, "limit", 25)
+        )
+        v_badge = (
+            f"{GREEN}{BOLD}✓ VERIFIED{RESET}"
+            if verification.get("valid")
+            else f"{RED}{BOLD}✗ TAMPERED{RESET}"
+        )
+        print(f"\n{CYAN}{BOLD}⚡ KOBITS SOC2 TYPE II CRYPTOGRAPHIC AUDIT LEDGER{RESET}")
+        print(f"  {GRAY}Chain Status :{RESET} {v_badge} ({verification.get('total_entries', 0)} entries checked)")
+        head_digest = verification.get("head_hash") or verification.get("head_entry_hash") or "—"
+        print(f"  {GRAY}Head Hash    :{RESET} {DIM}{head_digest}{RESET}\n")
+        for item in entries:
+            print(
+                f"  #{item.sequence_number or 0:04d}  [{CYAN}{item.category or '':<18}{RESET}] "
+                f"{BOLD}{item.event or ''}{RESET}  "
+                f"{GRAY}sig:{RESET}{DIM}{(item.hmac_signature or '')[:16]}…{RESET}"
+            )
+        print()
+        return 0
+
+
+async def cmd_rbac(args: argparse.Namespace) -> int:
+    from backend.models.organization import get_role_matrix_summary
+
+    matrix = get_role_matrix_summary()
+    if getattr(args, "json", False):
+        print(json.dumps(matrix, indent=2))
+        return 0
+
+    print(f"\n{CYAN}{BOLD}⚡ KOBITS ENTERPRISE RBAC POLICY MATRIX{RESET}")
+    for role_name in ("ADMIN", "LEAD_ENGINEER", "READ_ONLY_REVIEWER", "OWNER", "MEMBER", "VIEWER"):
+        info = matrix["roles"].get(role_name)
+        if not info:
+            continue
+        ent_tag = f"{GREEN}[ENTERPRISE]{RESET}" if info["is_enterprise_tier"] else f"{DIM}[LEGACY]{RESET}"
+        print(f"  • {BOLD}{role_name:<20}{RESET} {ent_tag} — {len(info['permissions'])} permissions")
+    print()
+    return 0
 
 
 KNOWN_COMMANDS = {
     "run", "connect", "search", "repl", "chat", "status", "missions", "agents", "projects",
     "approve", "retry", "resume", "reject", "cancel", "steer", "diff", "apply", "worker",
     "dataset", "data", "setup", "doctor", "goal", "teamwork-preview", "preview", "teamwork",
-    "boost", "turbo", "learn", "learning", "logs",
+    "boost", "turbo", "learn", "learning", "logs", "audit", "rbac",
 }
 
 _VALUE_FLAGS = {"-w", "--workspace", "-R", "--repo", "--provider", "-m", "--model", "-p", "--project", "-t", "--title", "-b", "--branch"}
@@ -3721,6 +3815,8 @@ async def async_main() -> int:
         "learn": cmd_learn,
         "learning": cmd_learn,
         "logs": cmd_logs,
+        "audit": cmd_audit,
+        "rbac": cmd_rbac,
     }
     handler = dispatch.get(args.command)
     if not handler:
