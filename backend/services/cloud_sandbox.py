@@ -770,9 +770,10 @@ class CloudMicroVMSandbox:
         if not self._sandbox:
             self.start()
 
-        env_prefix = ""
+        env_dict = {"PYTHONPATH": f"{workdir}:."}
         if env_overrides:
-            env_prefix = " ".join(f"{k}='{v}'" for k, v in env_overrides.items()) + " "
+            env_dict.update(env_overrides)
+        env_prefix = " ".join(f"{k}='{v}'" for k, v in env_dict.items()) + " "
 
         clean_path = script_path
         if clean_path.startswith(workdir):

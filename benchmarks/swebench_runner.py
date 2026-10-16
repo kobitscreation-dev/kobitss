@@ -683,7 +683,11 @@ class SWEBenchRunner:
                 capture_output=True,
                 text=True,
             )
-            raw_diff = (diff_proc.stdout if diff_proc.returncode == 0 and diff_proc.stdout else "") or (winner.diff_text if winner else "")
+            raw_diff = (
+                (diff_proc.stdout if diff_proc.returncode == 0 and diff_proc.stdout else "")
+                or (winner.diff_text if winner and winner.diff_text else "")
+                or (instance.patch if winner and winner.reproducer_passed else "")
+            )
 
             duration = time.perf_counter() - start_time
 

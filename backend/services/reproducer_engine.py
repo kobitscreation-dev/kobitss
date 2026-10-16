@@ -201,6 +201,12 @@ class ReproducerEngine:
             )
             if is_cloud and CloudMicroVMSandbox.is_configured():
                 cloud_sb = CloudMicroVMSandbox.get_or_create(sid)
+                if sandbox_dir and os.path.isdir(sandbox_dir):
+                    cloud_sb.sync_local_to_microvm(sandbox_dir, remote_dir="/workspace")
+                    # Ensure git is initialized in /workspace so checkpoints and rollbacks succeed
+                    cloud_sb.run_command(
+                        "cd /workspace && (git status >/dev/null 2>&1 || (git init -q && git config user.name 'Kobits' && git config user.email 'bot@kobits.ai' && git add -A && git commit -q -m 'base' --allow-empty))"
+                    )
                 if sandbox_dir and os.path.isabs(script_path):
                     try:
                         clean_rel = os.path.relpath(script_path, sandbox_dir).replace("\\", "/")

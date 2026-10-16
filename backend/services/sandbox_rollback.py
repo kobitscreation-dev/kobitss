@@ -87,7 +87,44 @@ class SandboxRollbackManager:
         clean_step = str(step_name).strip() or "pre_task"
         commit_msg = f"checkpoint: {clean_step}"
 
-        # Cloud MicroVM remote git checkpoint routing for zero-local footprint
+        # 1. Commit locally if sandbox_dir is a git workspace
+        local_sha = None
+        if sandbox_dir and cls._is_git_repo(sandbox_dir):
+            git_cmd = [
+                "git",
+                "-c", "user.name=Kobits",
+                "-c", "user.email=bot@kobits.ai",
+            ]
+            try:
+                subprocess.run(
+                    git_cmd + ["add", "-A"],
+                    cwd=sandbox_dir,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=15,
+                )
+                subprocess.run(
+                    git_cmd + ["reset", "-q", "--", ".kobits_rootfs", ".kobits_sandbox.json"],
+                    cwd=sandbox_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                subprocess.run(
+                    git_cmd + ["commit", "--allow-empty", "-m", commit_msg],
+                    cwd=sandbox_dir,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=15,
+                )
+                local_sha = cls.get_current_sha(sandbox_dir)
+                logger.info(f"Created local git checkpoint '{clean_step}' -> {local_sha} in {sandbox_dir}")
+            except Exception as e:
+                logger.debug(f"Local checkpoint error in {sandbox_dir}: {e}")
+
+        # 2. Cloud MicroVM remote git checkpoint routing for zero-local footprint
         try:
             from backend.services.cloud_sandbox import CloudMicroVMSandbox
             from backend.services.sandbox_manager import SandboxManager
@@ -105,59 +142,11 @@ class SandboxRollbackManager:
                     cloud_sha = res["stdout"].strip().splitlines()[-1]
                     if len(cloud_sha) == 40:
                         logger.info(f"Created cloud microvm git checkpoint '{clean_step}' -> {cloud_sha}")
-                        return cloud_sha
+                        return local_sha or cloud_sha
         except Exception as e:
             logger.debug(f"Cloud MicroVM checkpoint error: {e}")
 
-        if not sandbox_dir or not cls._is_git_repo(sandbox_dir):
-            logger.debug(f"Sandbox {sandbox_dir} is not a git repository. Checkpoint skipped.")
-            return None
-
-        git_cmd = [
-            "git",
-            "-c", "user.name=Kobits",
-            "-c", "user.email=bot@kobits.ai",
-        ]
-
-        try:
-            # 1. Stage all changes
-            subprocess.run(
-                git_cmd + ["add", "-A"],
-                cwd=sandbox_dir,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=15,
-            )
-
-            # 2. Unstage internal metadata files if present
-            subprocess.run(
-                git_cmd + ["reset", "-q", "--", ".kobits_rootfs", ".kobits_sandbox.json"],
-                cwd=sandbox_dir,
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-
-            # 3. Commit with allow-empty to guarantee a checkpoint SHA even if clean
-            subprocess.run(
-                git_cmd + ["commit", "--allow-empty", "-m", commit_msg],
-                cwd=sandbox_dir,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=15,
-            )
-
-            sha = cls.get_current_sha(sandbox_dir)
-            logger.info(f"Created git checkpoint '{clean_step}' -> {sha} in {sandbox_dir}")
-            return sha
-        except subprocess.CalledProcessError as cpe:
-            logger.warning(f"Failed to create git checkpoint in {sandbox_dir}: {cpe.stderr or cpe.stdout}")
-            return None
-        except Exception as e:
-            logger.warning(f"Unexpected error creating checkpoint in {sandbox_dir}: {e}")
-            return None
+        return local_sha
 
     @classmethod
     def rollback(cls, sandbox_dir: str, checkpoint_sha: str) -> bool:
@@ -170,8 +159,19 @@ class SandboxRollbackManager:
             return False
 
         target_sha = checkpoint_sha.strip()
+        local_ok = False
 
-        # Cloud MicroVM remote rollback routing for zero-local footprint
+        # 1. Rollback locally if sandbox_dir is a git workspace
+        if sandbox_dir and cls._is_git_repo(sandbox_dir):
+            try:
+                subprocess.run(["git", "reset", "--hard", target_sha], cwd=sandbox_dir, capture_output=True, timeout=10)
+                subprocess.run(["git", "clean", "-fdx"], cwd=sandbox_dir, capture_output=True, timeout=10)
+                local_ok = True
+                logger.info(f"Successfully rolled back local sandbox {sandbox_dir} to {target_sha}")
+            except Exception as e:
+                logger.debug(f"Local rollback error in {sandbox_dir}: {e}")
+
+        # 2. Cloud MicroVM remote rollback routing for zero-local footprint
         try:
             from backend.services.cloud_sandbox import CloudMicroVMSandbox
             from backend.services.sandbox_manager import SandboxManager
@@ -180,52 +180,13 @@ class SandboxRollbackManager:
                 sid = session.session_id if session else "default"
                 cloud_sb = CloudMicroVMSandbox.get_or_create(sid)
                 res = cloud_sb.run_command(
-                    f"git -C /workspace reset --hard {target_sha} && git -C /workspace clean -fdx"
+                    f"git -C /workspace reset --hard {target_sha} 2>/dev/null || git -C /workspace reset --hard HEAD; "
+                    f"git -C /workspace clean -fdx"
                 )
                 if res.get("exit_code") == 0:
                     logger.info(f"Successfully rolled back cloud MicroVM /workspace to {target_sha}")
-                    if sandbox_dir and cls._is_git_repo(sandbox_dir):
-                        try:
-                            subprocess.run(["git", "reset", "--hard", target_sha], cwd=sandbox_dir, timeout=10)
-                            subprocess.run(["git", "clean", "-fdx"], cwd=sandbox_dir, timeout=10)
-                        except Exception:
-                            pass
                     return True
         except Exception as e:
             logger.debug(f"Cloud MicroVM rollback error: {e}")
 
-        if not sandbox_dir or not cls._is_git_repo(sandbox_dir):
-            logger.warning(f"Cannot rollback: {sandbox_dir} is not a valid git repository.")
-            return False
-
-        try:
-            # 1. Hard reset to checkpoint
-            subprocess.run(
-                ["git", "reset", "--hard", target_sha],
-                cwd=sandbox_dir,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=20,
-            )
-
-            # 2. Clean untracked files and directories
-            subprocess.run(
-                ["git", "clean", "-fdx"],
-                cwd=sandbox_dir,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=20,
-            )
-
-            logger.info(f"Successfully rolled back sandbox {sandbox_dir} to checkpoint {target_sha}")
-            return True
-        except subprocess.CalledProcessError as cpe:
-            logger.error(
-                f"Rollback failed in {sandbox_dir} to {target_sha}: {cpe.stderr or cpe.stdout}"
-            )
-            return False
-        except Exception as e:
-            logger.error(f"Unexpected error during rollback in {sandbox_dir}: {e}")
-            return False
+        return local_ok
