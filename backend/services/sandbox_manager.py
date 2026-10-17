@@ -1809,8 +1809,14 @@ class SandboxManager:
         )
 
     @classmethod
-    def write_file(cls, session_id: str, rel_path: str, content: str) -> dict:
-        """Write a file inside the sandbox workspace with instant AST/syntax validation."""
+    def write_file(
+        cls,
+        session_id: str,
+        rel_path: str,
+        content: str,
+        rollback_on_syntax_error: bool = False,
+    ) -> dict:
+        """Write a file inside the sandbox workspace with automatic git checkpoint tracking and instant AST/syntax validation."""
         session = cls.get_session(session_id)
         if not session:
             return {"error": "Sandbox session not found"}
@@ -1821,6 +1827,16 @@ class SandboxManager:
         abs_path = os.path.realpath(os.path.join(sandbox_abs, rel_path))
         if not (abs_path == sandbox_abs or abs_path.startswith(sandbox_abs + os.sep)):
             return {"error": "Security Block: Path traversal attempt detected."}
+
+        checkpoint_sha = None
+        try:
+            from backend.services.sandbox_rollback import SandboxRollbackManager
+            checkpoint_sha = SandboxRollbackManager.get_current_sha(sandbox_abs) or session.base_commit_sha
+            if rollback_on_syntax_error and SandboxRollbackManager._is_git_repo(sandbox_abs):
+                checkpoint_sha = SandboxRollbackManager.create_checkpoint(sandbox_abs, f"pre_write_{rel_path}") or checkpoint_sha
+            session.last_checkpoint_sha = checkpoint_sha
+        except Exception:
+            checkpoint_sha = session.base_commit_sha
 
         # Cloud MicroVM remote routing for 100% remote execution
         from backend.services.cloud_sandbox import CloudMicroVMSandbox
@@ -1841,7 +1857,8 @@ class SandboxManager:
         os.makedirs(os.path.dirname(abs_path), exist_ok=True)
         try:
             before_content = None
-            if os.path.isfile(abs_path):
+            existed_before = os.path.isfile(abs_path)
+            if existed_before:
                 try:
                     with open(abs_path, "r", encoding="utf-8", errors="replace") as bf:
                         before_content = bf.read()
@@ -1870,12 +1887,30 @@ class SandboxManager:
                 "success": True,
                 "path": rel_path,
                 "syntax_valid": syn["syntax_valid"],
+                "checkpoint_sha": checkpoint_sha,
                 "code_change_hash": getattr(audit_entry, "code_change_hash", None),
                 "audit_entry_hash": getattr(audit_entry, "entry_hash", None),
             }
             if not syn["syntax_valid"]:
                 res["syntax_error"] = syn["syntax_error"]
                 res["warning"] = f"File written, but syntax check reported an error: {syn['syntax_error']}. Fix immediately."
+                if rollback_on_syntax_error or os.environ.get("KOBITS_STRICT_SYNTAX_ROLLBACK") == "1":
+                    rolled = False
+                    try:
+                        from backend.services.sandbox_rollback import SandboxRollbackManager
+                        if checkpoint_sha:
+                            rolled = SandboxRollbackManager.rollback(sandbox_abs, checkpoint_sha)
+                        if not rolled:
+                            if existed_before and before_content is not None:
+                                with open(abs_path, "w", encoding="utf-8") as rf:
+                                    rf.write(before_content)
+                                rolled = True
+                            elif not existed_before and os.path.isfile(abs_path):
+                                os.remove(abs_path)
+                                rolled = True
+                    except Exception:
+                        pass
+                    res["rolled_back"] = rolled
             return res
         except Exception as e:
             return {"error": str(e)}
@@ -2863,14 +2898,16 @@ def _run_git(cwd: str, *args: str) -> str:
 
         
     try:
-        cmd_list = ["git"] + list(args)
-        if os.name == 'nt':
-            cmd_list = " ".join(f'"{c}"' if " " in c else c for c in cmd_list)
+        cmd_list = ["git"] + [str(c) for c in args]
         result = subprocess.run(
             cmd_list,
-            cwd=cwd, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=30,
-            shell=True if os.name == 'nt' else False
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            shell=False,
         )
         if result.returncode != 0:
             logger.warning(f"Git command failed: {cmd_list}\nstderr: {result.stderr}")

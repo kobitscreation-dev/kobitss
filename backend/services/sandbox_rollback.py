@@ -192,3 +192,88 @@ class SandboxRollbackManager:
             logger.debug(f"Cloud MicroVM rollback error: {e}")
 
         return local_ok
+
+    @classmethod
+    def checkpoint_and_apply(
+        cls,
+        sandbox_dir: str,
+        apply_fn,
+        verify_fn=None,
+        step_name: str = "pre_file_write",
+    ) -> dict:
+        """
+        Creates an automatic git checkpoint before an agent writes a file change,
+        applies the change, validates syntax and optional verification tests,
+        and immediately rolls back to the clean checkpoint if syntax is broken or tests fail.
+        """
+        from backend.services.sandbox_manager import SandboxManager
+
+        checkpoint_sha = cls.create_checkpoint(sandbox_dir, step_name=step_name)
+        try:
+            apply_res = apply_fn()
+        except Exception as exc:
+            rolled = cls.rollback(sandbox_dir, checkpoint_sha) if checkpoint_sha else False
+            return {
+                "success": False,
+                "rolled_back": rolled,
+                "checkpoint_sha": checkpoint_sha,
+                "reason": f"Exception during file write: {exc}",
+            }
+
+        # Check if apply_res reported a syntax error
+        if isinstance(apply_res, dict) and apply_res.get("syntax_valid") is False:
+            rolled = cls.rollback(sandbox_dir, checkpoint_sha) if checkpoint_sha else False
+            return {
+                "success": False,
+                "rolled_back": rolled,
+                "checkpoint_sha": checkpoint_sha,
+                "reason": f"Syntax validation failed: {apply_res.get('syntax_error')}",
+                "apply_result": apply_res,
+            }
+
+        # Scan modified Python files in sandbox_dir for broken syntax
+        if sandbox_dir and os.path.isdir(sandbox_dir):
+            for root, dirs, files in os.walk(sandbox_dir):
+                dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ("node_modules", "__pycache__", "venv", ".venv")]
+                for fname in files:
+                    if fname.endswith(".py"):
+                        fpath = os.path.join(root, fname)
+                        rel = os.path.relpath(fpath, sandbox_dir).replace("\\", "/")
+                        try:
+                            with open(fpath, "r", encoding="utf-8") as rf:
+                                syn = SandboxManager._validate_file_syntax(rel, rf.read())
+                            if not syn.get("syntax_valid", True):
+                                rolled = cls.rollback(sandbox_dir, checkpoint_sha) if checkpoint_sha else False
+                                return {
+                                    "success": False,
+                                    "rolled_back": rolled,
+                                    "checkpoint_sha": checkpoint_sha,
+                                    "reason": f"Broken syntax in {rel}: {syn.get('syntax_error')}",
+                                }
+                        except Exception:
+                            pass
+
+        # Run optional test verification callback
+        if callable(verify_fn):
+            ver_res = verify_fn()
+            ver_ok = (
+                ver_res.get("exit_code", 1) == 0
+                if isinstance(ver_res, dict) and "exit_code" in ver_res
+                else bool(ver_res)
+            )
+            if not ver_ok:
+                rolled = cls.rollback(sandbox_dir, checkpoint_sha) if checkpoint_sha else False
+                return {
+                    "success": False,
+                    "rolled_back": rolled,
+                    "checkpoint_sha": checkpoint_sha,
+                    "reason": "Verification test failed after file change",
+                    "verification": ver_res,
+                }
+
+        return {
+            "success": True,
+            "rolled_back": False,
+            "checkpoint_sha": checkpoint_sha,
+            "apply_result": apply_res,
+        }

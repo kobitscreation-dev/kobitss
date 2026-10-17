@@ -57,6 +57,8 @@ from backend.models.project import (
     TaskStatus,
 )
 from backend.services.codebase_auditor import CodebaseAuditor
+from backend.services.soc2_audit_service import AuditEvent, SOC2AuditService
+from app.ai.sanitizer import PromptSanitizer
 
 router = APIRouter(tags=["client-portal"])
 
@@ -130,6 +132,25 @@ async def _resolve_authorized_tenant(
                 detail=f"Project '{requested_project_id}' not found.",
             )
         if target_org_id and project.organization_id != target_org_id:
+            await SOC2AuditService.log_rbac_event(
+                db,
+                event=AuditEvent.RBAC_ACCESS_DENIED,
+                user_id=current_user.id,
+                organization_id=project.organization_id,
+                actor_role="NON_MEMBER",
+                resource_type="project",
+                resource_id=requested_project_id,
+                status="DENIED",
+                detail={
+                    "action": "resolve_authorized_tenant",
+                    "reason": "cross_tenant_project_access_attempt",
+                    "severity": "HIGH",
+                    "requested_project_id": requested_project_id,
+                    "requested_org_id": target_org_id,
+                    "actual_project_org_id": project.organization_id,
+                },
+            )
+            await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Cross-tenant access denied: project does not belong to the requested organization.",
@@ -169,6 +190,22 @@ async def _resolve_authorized_tenant(
     return org, membership, project
 
 
+def _compute_single_seal_hash(mission_id: str, commit_sha: str, seal_key: str, seal_data: Dict[str, Any]) -> str:
+    canonical_seal = json.dumps(
+        {
+            "mission_id": mission_id,
+            "commit_sha": commit_sha,
+            "seal_key": seal_key,
+            "id": seal_data.get("id"),
+            "agent": seal_data.get("agent"),
+            "status": seal_data.get("status"),
+            "metrics": seal_data.get("metrics", {}),
+        },
+        sort_keys=True,
+    )
+    return hashlib.sha256(canonical_seal.encode("utf-8")).hexdigest()
+
+
 def build_consensus_seals(
     mission_id: str,
     commit_sha: Optional[str] = None,
@@ -182,7 +219,7 @@ def build_consensus_seals(
     3. Ruler (Architecture Verified): Nexus confirmed clean modular boundaries.
     """
     sha_token = (commit_sha or hashlib.sha1(mission_id.encode("utf-8")).hexdigest())[:12]
-    seals = {
+    seals: Dict[str, Dict[str, Any]] = {
         "security": {
             "id": "security_seal",
             "icon": "shield",
@@ -214,24 +251,84 @@ def build_consensus_seals(
             "metrics": {"cyclic_dependencies": 0, "boundary_violations": 0, "files_reviewed": max(files_changed, 1)},
         },
     }
+    for key, seal_entry in seals.items():
+        digest = _compute_single_seal_hash(mission_id, sha_token, key, seal_entry)
+        seal_entry["seal_hash"] = f"sha256:{digest[:24]}"
+        seal_entry["full_seal_hash"] = digest
+
     canonical = json.dumps(
         {
             "mission_id": mission_id,
             "commit_sha": sha_token,
             "security": seals["security"]["status"],
+            "security_hash": seals["security"]["full_seal_hash"],
             "qa": seals["qa"]["status"],
+            "qa_hash": seals["qa"]["full_seal_hash"],
             "architecture": seals["architecture"]["status"],
+            "architecture_hash": seals["architecture"]["full_seal_hash"],
         },
         sort_keys=True,
     )
     seal_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return {
+        "mission_id": mission_id,
+        "commit_sha": sha_token,
         "seals": seals,
         "seal_count": 3,
         "all_verified": True,
         "consensus_seal_hash": f"sha256:{seal_hash[:24]}",
         "full_hash": seal_hash,
     }
+
+
+def verify_consensus_seals(seals_payload: Dict[str, Any]) -> bool:
+    """
+    Cryptographically verifies all 3 Consensus Review Seals (Aegis, Sentinel, Nexus)
+    and the aggregate consensus_seal_hash against tampering.
+    """
+    if not isinstance(seals_payload, dict):
+        return False
+    seals = seals_payload.get("seals")
+    if not isinstance(seals, dict):
+        return False
+    required_keys = ("security", "qa", "architecture")
+    if any(k not in seals for k in required_keys):
+        return False
+
+    mission_id = str(seals_payload.get("mission_id") or "")
+    commit_sha = str(seals_payload.get("commit_sha") or "")
+    if not mission_id or not commit_sha:
+        return False
+
+    for key in required_keys:
+        seal_entry = seals[key]
+        if seal_entry.get("status") != "VERIFIED":
+            return False
+        expected_digest = _compute_single_seal_hash(mission_id, commit_sha, key, seal_entry)
+        if seal_entry.get("full_seal_hash") != expected_digest:
+            return False
+        if seal_entry.get("seal_hash") != f"sha256:{expected_digest[:24]}":
+            return False
+
+    canonical = json.dumps(
+        {
+            "mission_id": mission_id,
+            "commit_sha": commit_sha,
+            "security": seals["security"]["status"],
+            "security_hash": seals["security"]["full_seal_hash"],
+            "qa": seals["qa"]["status"],
+            "qa_hash": seals["qa"]["full_seal_hash"],
+            "architecture": seals["architecture"]["status"],
+            "architecture_hash": seals["architecture"]["full_seal_hash"],
+        },
+        sort_keys=True,
+    )
+    expected_full_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return (
+        seals_payload.get("full_hash") == expected_full_hash
+        and seals_payload.get("consensus_seal_hash") == f"sha256:{expected_full_hash[:24]}"
+        and bool(seals_payload.get("all_verified"))
+    )
 
 
 def _extract_retainer_metadata(org: Organization) -> Dict[str, Any]:
@@ -798,11 +895,18 @@ async def submit_client_intake_request(
         mission_priority = MissionPriority.MEDIUM
 
     mid = str(uuid.uuid4())
+    clean_title = PromptSanitizer.sanitize(payload.title.strip(), strict=False)[0].strip()
+    clean_description = PromptSanitizer.sanitize(payload.description.strip(), strict=False)[0].strip()
+    wrapped_objective = PromptSanitizer.wrap_user_instruction(
+        payload.description.strip(),
+        source="client_portal_intake",
+        strict=False,
+    )
     mission = Mission(
         id=mid,
-        title=payload.title.strip(),
-        objective=payload.description.strip(),
-        description=payload.description.strip(),
+        title=clean_title,
+        objective=wrapped_objective,
+        description=clean_description,
         status=MissionStatus.AWAITING_APPROVAL,
         priority=mission_priority,
         phase=WorkflowPhase.DELIVERY_REVIEW,
@@ -818,6 +922,7 @@ async def submit_client_intake_request(
                 "submitted_by_user_id": current_user.id,
                 "submitted_by_email": current_user.email,
                 "client_priority": payload.priority,
+                "sanitized_instruction": wrapped_objective,
                 "consensus_seals": build_consensus_seals(
                     mission_id=mid,
                     tests_passed=28,

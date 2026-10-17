@@ -1405,7 +1405,7 @@ async def get_systems_console_telemetry(
     roster_21 = _build_21_agent_roster(runs, decisions, tasks)
 
     # Cgroup & Egress Firewall Telemetry from ContainerSecurityManager
-    limits = ResourceLimits(memory_limit="512m", memory_swap="512m", cpu_quota=1.0, pids_limit=64)
+    limits = ResourceLimits.strict_sandbox_quotas()
     egress_policy = EgressSecurityPolicy()
     sec_mgr = ContainerSecurityManager(limits=limits, egress_policy=egress_policy)
     sec_audit = sec_mgr.get_security_posture_report() if hasattr(sec_mgr, "get_security_posture_report") else {}
@@ -1421,12 +1421,12 @@ async def get_systems_console_telemetry(
                     "driver": "firecracker_microvm",
                     "status": "RUNNING",
                     "memory_usage_mb": 318,
-                    "memory_limit_mb": 512,
-                    "memory_pct": 62.1,
+                    "memory_limit_mb": 2048,
+                    "memory_pct": 15.5,
                     "cpu_utilization_pct": 38.4,
                     "cpu_quota_cores": 1.0,
                     "pid_count": 19,
-                    "pid_limit": 64,
+                    "pid_limit": 200,
                     "egress_firewall": "ACTIVE (RFC1918 + IMDS Blocked)",
                     "seccomp_profile": "strict-non-root-uid-10001",
                 }
@@ -1440,12 +1440,12 @@ async def get_systems_console_telemetry(
                 "driver": "firecracker_microvm",
                 "status": "READY",
                 "memory_usage_mb": 294,
-                "memory_limit_mb": 512,
-                "memory_pct": 57.4,
+                "memory_limit_mb": 2048,
+                "memory_pct": 14.4,
                 "cpu_utilization_pct": 24.5,
                 "cpu_quota_cores": 1.0,
                 "pid_count": 14,
-                "pid_limit": 64,
+                "pid_limit": 200,
                 "egress_firewall": "ACTIVE (RFC1918 + IMDS Blocked)",
                 "seccomp_profile": "strict-non-root-uid-10001",
             }

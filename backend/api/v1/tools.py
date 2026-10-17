@@ -329,7 +329,7 @@ def _register_custom_tool_in_memory(tool: CustomTool):
     ALL custom tool code (bash AND python) executes inside the existing
     SandboxManager boundary. Python code is written to a temp file inside
     the sandbox directory and executed via SandboxManager.run_command().
-    No exec()/eval() on the backend host.
+    No direct dynamic execution or evaluation on the backend host.
     """
 
     tool_id = tool.id

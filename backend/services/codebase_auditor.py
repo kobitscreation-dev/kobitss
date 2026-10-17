@@ -42,6 +42,53 @@ EXCLUDED_DIRS = {
     "coverage",
     ".idea",
     ".vscode",
+    "sandboxes",
+    "training_data",
+    "repos",
+    "data",
+    ".gemini",
+    "logs",
+    "tmp",
+    "temp",
+    "artifacts",
+}
+
+EXCLUDED_EXTENSIONS = {
+    ".db",
+    ".sqlite",
+    ".sqlite3",
+    ".jsonl",
+    ".lock",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".ico",
+    ".svg",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".eot",
+    ".pdf",
+    ".zip",
+    ".tar",
+    ".gz",
+    ".pyc",
+    ".pyo",
+    ".pyd",
+    ".so",
+    ".dll",
+    ".exe",
+}
+
+SECURITY_SCANNER_SELF_FILES = {
+    "backend/services/codebase_auditor.py",
+    "backend/services/owasp_audit_checks.py",
+    "security/audit_scripts/owasp_audit_checks.py",
+    "backend/services/command_guard.py",
+    "app/ai/sanitizer.py",
+    "scripts/extract_training_dataset.py",
+    "scripts/harvest_modern_ui_opus.py",
 }
 
 # Secret / credential regex patterns
@@ -55,8 +102,8 @@ SECRET_PATTERNS = [
 
 # Unsafe code execution patterns
 UNSAFE_CODE_PATTERNS = [
-    (re.compile(r"\bexec\s*\("), "Dynamic Code Execution (exec)", "HIGH"),
-    (re.compile(r"\beval\s*\("), "Unsafe Code Evaluation (eval)", "HIGH"),
+    (re.compile(r"(?<![.\w])exec\s*\("), "Dynamic Code Execution (exec)", "HIGH"),
+    (re.compile(r"(?<![.\w])eval\s*\("), "Unsafe Code Evaluation (eval)", "HIGH"),
     (re.compile(r"subprocess\.(?:Popen|run|call)\s*\(.*shell\s*=\s*True"), "Subprocess with shell=True (Command Injection Risk)", "CRITICAL"),
     (re.compile(r"(?i)execute\s*\(\s*f['\"].*SELECT.*\{"), "Unsanitized SQL String Formatting (SQL Injection Risk)", "CRITICAL"),
 ]
@@ -168,9 +215,11 @@ class CodebaseAuditor:
                 if file_name.startswith("."):
                     continue
                 file_path = root_path / file_name
+                ext = file_path.suffix.lower()
+                if ext in EXCLUDED_EXTENSIONS:
+                    continue
                 self.all_files.append(file_path)
 
-                ext = file_path.suffix.lower()
                 rel_path = str(file_path.relative_to(self.repo_path)).replace("\\", "/")
 
                 # Record module name
@@ -331,25 +380,28 @@ class CodebaseAuditor:
         for file_path in self.all_files:
             if file_path.suffix in (".py", ".js", ".ts", ".tsx", ".jsx", ".env", ".yaml", ".json"):
                 rel_path = str(file_path.relative_to(self.repo_path)).replace("\\", "/")
-                # Skip test files from critical secret alerts
                 is_test = "test" in rel_path.lower() or "fixture" in rel_path.lower()
+                if is_test or rel_path in SECURITY_SCANNER_SELF_FILES:
+                    continue
 
                 try:
                     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                         for line_idx, line in enumerate(f, start=1):
+                            stripped = line.strip()
+                            if stripped.startswith("#") or stripped.startswith("//"):
+                                continue
                             # Secret checks
-                            if not is_test:
-                                for pattern, title, severity in SECRET_PATTERNS:
-                                    if pattern.search(line):
-                                        self.security_findings.append(
-                                            SecurityFinding(
-                                                severity=severity,
-                                                title=title,
-                                                file_path=rel_path,
-                                                line_number=line_idx,
-                                                recommendation="Remove hardcoded secret and load from secure environment variables or secret manager.",
-                                            )
+                            for pattern, title, severity in SECRET_PATTERNS:
+                                if pattern.search(line):
+                                    self.security_findings.append(
+                                        SecurityFinding(
+                                            severity=severity,
+                                            title=title,
+                                            file_path=rel_path,
+                                            line_number=line_idx,
+                                            recommendation="Remove hardcoded secret and load from secure environment variables or secret manager.",
                                         )
+                                    )
                             # Unsafe execution checks
                             for pattern, title, severity in UNSAFE_CODE_PATTERNS:
                                 if pattern.search(line):

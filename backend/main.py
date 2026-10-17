@@ -411,6 +411,32 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Enterprise HTTP Security Headers Middleware (Layer 2 Hardening):
+      - X-Content-Type-Options: nosniff
+      - X-Frame-Options: SAMEORIGIN (with isolated frame permissions for the live preview drawer)
+      - Strict-Transport-Security: max-age=31536000; includeSubDomains
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        response.headers.setdefault(
+            "Strict-Transport-Security",
+            "max-age=31536000; includeSubDomains",
+        )
+        path = request.url.path or ""
+        if path.startswith("/api/v1/preview") or path.startswith("/preview/"):
+            response.headers.setdefault(
+                "Content-Security-Policy",
+                "frame-ancestors 'self'; sandbox allow-scripts allow-forms allow-same-origin",
+            )
+            response.headers.setdefault("X-Preview-Frame-Isolation", "sandboxed-sameorigin")
+        return response
+
+
 app = FastAPI(
     title="Kobits API",
     description="Backend foundation of an AI software product engineering platform.",
@@ -478,6 +504,9 @@ app.add_middleware(
     window_seconds=60,
     exempt_paths=("/api/health",),
 )
+
+# Enterprise HTTP security headers middleware (Layer 2)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # ══════════════════════════════════════════
 #  API ROUTES

@@ -72,9 +72,9 @@ BLOCKED_METADATA_HOSTNAMES = {
 @dataclass
 class ResourceLimits:
     """Cgroup memory, CPU, PID, and filesystem limits for container execution."""
-    memory_limit: str = "2g"              # Hard memory limit (e.g. 2g, 4g)
+    memory_limit: str = "2g"              # Hard memory limit (e.g. 2g, 2048m)
     memory_swap: str = "2g"               # Memory + swap limit (matching memory_limit disables swap)
-    cpu_quota: float = 2.0                # Max CPU cores (e.g. 2.0 = 2 cores)
+    cpu_quota: float = 2.0                # Max CPU cores (e.g. 2.0 = 2 cores, 1.0 = 1 vCPU)
     pids_limit: int = 256                 # Max concurrent process IDs (fork bomb defense)
     disk_quota: str = "10g"               # Disk storage limit
     read_only_rootfs: bool = True         # Mount root filesystem read-only
@@ -83,11 +83,35 @@ class ResourceLimits:
     add_capabilities: list[str] = field(default_factory=lambda: ["CHOWN", "SETUID", "SETGID"])
     seccomp_profile: Optional[str] = "default"  # "default" or path to seccomp.json
 
+    @classmethod
+    def strict_sandbox_quotas(cls) -> "ResourceLimits":
+        """
+        Enforces strict Linux cgroup quotas for untrusted sandbox execution:
+        2048 MB RAM, 1 vCPU, and 200 PIDs.
+        """
+        return cls(
+            memory_limit="2048m",
+            memory_swap="2048m",
+            cpu_quota=1.0,
+            pids_limit=200,
+        )
+
+    @property
+    def memory_mb(self) -> int:
+        raw = str(self.memory_limit).strip().lower()
+        if raw.endswith("g") or raw.endswith("gb"):
+            return int(float(raw.rstrip("gb")) * 1024)
+        if raw.endswith("m") or raw.endswith("mb"):
+            return int(float(raw.rstrip("mb")))
+        return 2048
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "memory_limit": self.memory_limit,
             "memory_swap": self.memory_swap,
+            "memory_mb": self.memory_mb,
             "cpu_quota": self.cpu_quota,
+            "vcpu_limit": self.cpu_quota,
             "pids_limit": self.pids_limit,
             "disk_quota": self.disk_quota,
             "read_only_rootfs": self.read_only_rootfs,
@@ -108,6 +132,7 @@ class EgressSecurityPolicy:
         "files.pythonhosted.org",
         "registry.npmjs.org",
         "crates.io",
+        "api.github.com",
         "github.com",
         "raw.githubusercontent.com",
         "objects.githubusercontent.com",
@@ -119,6 +144,33 @@ class EgressSecurityPolicy:
         "1.0.0.1",
     ])
     enforce_domain_whitelist: bool = False  # If True, only allow traffic to allowed_registries
+
+    def validate_destination(
+        self,
+        host_or_ip: str,
+        resolve_dns: bool = False,
+        require_registry_allowlist: bool = True,
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Validates destination against Cloud Metadata (169.254.169.254), RFC 1918 private
+        networks, and the approved package/VCS registry allowlist.
+        """
+        clean_target = (host_or_ip or "").strip().lower()
+        if ":" in clean_target and not clean_target.startswith("["):
+            clean_target = clean_target.split(":", 1)[0]
+        if not clean_target:
+            return False, "Blocked: empty destination host"
+
+        allowed, reason = NetworkEgressEnforcer.validate_destination(clean_target, resolve_dns=resolve_dns)
+        if not allowed:
+            return False, f"Blocked: {reason}"
+
+        if require_registry_allowlist or self.enforce_domain_whitelist:
+            allowed_domains = [d.lower() for d in self.allowed_registries]
+            if not any(clean_target == d or clean_target.endswith(f".{d}") for d in allowed_domains):
+                return False, f"Blocked: destination '{clean_target}' is not in the sandbox egress allowlist"
+
+        return True, "Allowed by sandbox egress policy"
 
 
 class SyscallInterceptionEngine:

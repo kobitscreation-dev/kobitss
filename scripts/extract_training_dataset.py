@@ -153,11 +153,12 @@ def generate_frontier_coding_trajectories() -> List[Dict[str, Any]]:
 from typing import Optional, List
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+import os
 import jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
 
-SECRET_KEY = "CHANGE_IN_PRODUCTION_SECRET_KEY"
+SECRET_KEY = os.environ.get("SECRET_KEY", "")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 

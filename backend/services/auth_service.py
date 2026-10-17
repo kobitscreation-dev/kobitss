@@ -32,7 +32,7 @@ def set_active_org_context(org_id: Optional[str]) -> None:
 async def get_user_org_membership(
     db: AsyncSession, user_id: str, organization_id: str
 ) -> OrganizationMember:
-    """Verify user belongs to the organization. Raises 403 if not."""
+    """Verify user belongs to the organization. Logs high-severity SOC-2 alert and raises 403 if not."""
     result = await db.execute(
         select(OrganizationMember).where(
             OrganizationMember.user_id == user_id,
@@ -41,6 +41,26 @@ async def get_user_org_membership(
     )
     membership = result.scalar_one_or_none()
     if not membership:
+        try:
+            from backend.models.audit_log import AuditEvent
+            from backend.services.soc2_audit_service import SOC2AuditService
+
+            await SOC2AuditService.log_rbac_event(
+                db,
+                event=AuditEvent.RBAC_ACCESS_DENIED,
+                user_id=user_id,
+                organization_id=organization_id,
+                actor_role="NON_MEMBER",
+                required_role_or_permission="ORGANIZATION_MEMBER",
+                detail={
+                    "reason": "cross_tenant_access_attempt",
+                    "severity": "HIGH",
+                    "target_organization_id": organization_id,
+                },
+            )
+            await db.commit()
+        except Exception:
+            pass
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have access to this organization",
@@ -65,6 +85,26 @@ async def get_user_default_org(
         if membership:
             return membership
         if explicit_ctx_org and explicit_ctx_org == effective_preferred:
+            try:
+                from backend.models.audit_log import AuditEvent
+                from backend.services.soc2_audit_service import SOC2AuditService
+
+                await SOC2AuditService.log_rbac_event(
+                    db,
+                    event=AuditEvent.RBAC_ACCESS_DENIED,
+                    user_id=user_id,
+                    organization_id=effective_preferred,
+                    actor_role="NON_MEMBER",
+                    required_role_or_permission="ORGANIZATION_MEMBER",
+                    detail={
+                        "reason": "cross_tenant_access_attempt",
+                        "severity": "HIGH",
+                        "target_organization_id": effective_preferred,
+                    },
+                )
+                await db.commit()
+            except Exception:
+                pass
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have access to this organization",

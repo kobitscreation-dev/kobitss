@@ -741,9 +741,10 @@ class ContractExecutor:
         start_time = datetime.now(timezone.utc)
         evidence_list: List[VerificationEvidence] = []
         try:
+            import shlex
             res = subprocess.run(
-                contract.verification_command,
-                shell=True,
+                shlex.split(contract.verification_command),
+                shell=False,
                 cwd=str(self.worktree_path),
                 capture_output=True,
                 text=True,

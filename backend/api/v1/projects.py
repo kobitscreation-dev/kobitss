@@ -23,8 +23,52 @@ from backend.services.auth_service import (
     enforce_role_with_audit,
 )
 from backend.services.activity_service import log_activity
+from backend.services.soc2_audit_service import AuditEvent, SOC2AuditService
 
 router = APIRouter()
+
+
+async def _get_authorized_project(
+    db: AsyncSession,
+    project_id: str,
+    membership: OrganizationMember,
+    action: str = "access_project",
+) -> Project:
+    """
+    Fetches a Project and enforces strict multi-tenant organization_id isolation.
+    Raises HTTP 404 if the project does not exist, or HTTP 403 Forbidden + logs
+    a high-severity SOC-2 audit event if the project belongs to another tenant.
+    """
+    project = (
+        await db.execute(select(Project).where(Project.id == project_id))
+    ).scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.organization_id != membership.organization_id:
+        await SOC2AuditService.log_rbac_event(
+            db,
+            event=AuditEvent.RBAC_ACCESS_DENIED,
+            user_id=membership.user_id,
+            organization_id=project.organization_id,
+            actor_role=membership.role.value if hasattr(membership.role, "value") else str(membership.role),
+            resource_type="project",
+            resource_id=project_id,
+            status="DENIED",
+            detail={
+                "action": action,
+                "reason": "cross_tenant_project_access_attempt",
+                "severity": "HIGH",
+                "requested_project_id": project_id,
+                "caller_organization_id": membership.organization_id,
+                "target_organization_id": project.organization_id,
+            },
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cross-tenant access denied: project belongs to another organization",
+        )
+    return project
 
 
 # ══════════════════════════════════════════
@@ -132,16 +176,7 @@ async def get_project(
         await db.refresh(default_proj)
         return default_proj
 
-    result = await db.execute(
-        select(Project).where(
-            Project.id == clean_pid,
-            Project.organization_id == membership.organization_id,
-        )
-    )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
+    return await _get_authorized_project(db, clean_pid, membership, action="get_project")
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
@@ -153,16 +188,7 @@ async def update_project(
 ):
     membership = await get_user_default_org(db, current_user.id)
     await enforce_permission_with_audit(db, membership, Permission.PROJECT_WRITE, action="update_project")
-
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.organization_id == membership.organization_id,
-        )
-    )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await _get_authorized_project(db, project_id, membership, action="update_project")
 
     update_data = project_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -190,16 +216,7 @@ async def delete_project(
 ):
     membership = await get_user_default_org(db, current_user.id)
     await enforce_permission_with_audit(db, membership, Permission.PROJECT_DELETE, action="delete_project")
-
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.organization_id == membership.organization_id,
-        )
-    )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await _get_authorized_project(db, project_id, membership, action="delete_project")
 
     await db.delete(project)
     await db.commit()
@@ -219,16 +236,7 @@ async def create_task(
     membership = await get_user_default_org(db, current_user.id)
     await enforce_permission_with_audit(db, membership, Permission.PROJECT_WRITE, action="create_task")
 
-    # Verify user has access to this project
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.organization_id == membership.organization_id,
-        )
-    )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    await _get_authorized_project(db, project_id, membership, action="create_task")
 
     task = Task(
         project_id=project_id,
@@ -262,16 +270,7 @@ async def list_tasks(
     db: AsyncSession = Depends(get_db),
 ):
     membership = await get_user_default_org(db, current_user.id)
-
-    # Verify org access via project
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.organization_id == membership.organization_id,
-        )
-    )
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
+    await _get_authorized_project(db, project_id, membership, action="list_tasks")
 
     result = await db.execute(
         select(Task)
@@ -289,16 +288,7 @@ async def get_task(
     db: AsyncSession = Depends(get_db),
 ):
     membership = await get_user_default_org(db, current_user.id)
-
-    # Verify org access via project
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.organization_id == membership.organization_id,
-        )
-    )
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
+    await _get_authorized_project(db, project_id, membership, action="get_task")
 
     result = await db.execute(
         select(Task).where(
@@ -321,14 +311,7 @@ async def cancel_task(
 ):
     membership = await get_user_default_org(db, current_user.id)
     await enforce_permission_with_audit(db, membership, Permission.PROJECT_WRITE, action="cancel_task")
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.organization_id == membership.organization_id,
-        )
-    )
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
+    await _get_authorized_project(db, project_id, membership, action="cancel_task")
 
     result = await db.execute(
         select(Task).where(
@@ -358,6 +341,7 @@ async def list_project_activities(
     db: AsyncSession = Depends(get_db),
 ):
     membership = await get_user_default_org(db, current_user.id)
+    await _get_authorized_project(db, project_id, membership, action="list_project_activities")
 
     result = await db.execute(
         select(Activity)
@@ -418,6 +402,7 @@ async def get_approval_requests(
 ):
     """Get all human approval requests for the project."""
     membership = await get_user_org_membership(db, current_user.id, (await get_user_default_org(db, current_user.id)).organization_id)
+    await _get_authorized_project(db, project_id, membership, action="get_approval_requests")
     
     stmt = select(ApprovalRequest).where(
         ApprovalRequest.project_id == project_id,
@@ -438,6 +423,7 @@ async def resolve_approval_request(
     """Approve or reject a pending agent action."""
     membership = await get_user_org_membership(db, current_user.id, (await get_user_default_org(db, current_user.id)).organization_id)
     await enforce_permission_with_audit(db, membership, Permission.MISSION_APPROVE, action="resolve_approval_request")
+    await _get_authorized_project(db, project_id, membership, action="resolve_approval_request")
     
     stmt = select(ApprovalRequest).where(
         ApprovalRequest.id == approval_id,
@@ -476,32 +462,6 @@ async def resolve_approval_request(
     await db.refresh(approval)
     return approval
 
-@router.get("/{project_id}/activities", response_model=List[ActivityResponse])
-async def list_project_activities(
-    project_id: str,
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
-):
-    membership = await get_user_default_org(db, current_user.id)
-    
-    # Verify project
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.organization_id == membership.organization_id
-        )
-    )
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
-        
-    result = await db.execute(
-        select(Activity)
-        .where(Activity.project_id == project_id)
-        .order_by(Activity.created_at.desc())
-        .limit(100)
-    )
-    return result.scalars().all()
-
 
 from pydantic import BaseModel, Field
 import json
@@ -520,9 +480,7 @@ async def plan_project(
 ):
     membership = await get_user_default_org(db, current_user.id)
     await enforce_permission_with_audit(db, membership, Permission.MISSION_EXECUTE, action="plan_project")
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await _get_authorized_project(db, project_id, membership, action="plan_project")
         
     provider = get_llm_provider()
     
@@ -606,9 +564,7 @@ async def create_milestone(
 ):
     membership = await get_user_default_org(db, current_user.id)
     await enforce_permission_with_audit(db, membership, Permission.PROJECT_WRITE, action="create_milestone")
-    project = await db.get(Project, project_id)
-    if not project or project.organization_id != membership.organization_id:
-        raise HTTPException(status_code=404, detail="Project not found")
+    await _get_authorized_project(db, project_id, membership, action="create_milestone")
 
     milestone = Milestone(
         id=str(uuid.uuid4()),
@@ -631,9 +587,7 @@ async def list_milestones(
     db: AsyncSession = Depends(get_db),
 ):
     membership = await get_user_default_org(db, current_user.id)
-    project = await db.get(Project, project_id)
-    if not project or project.organization_id != membership.organization_id:
-        raise HTTPException(status_code=404, detail="Project not found")
+    await _get_authorized_project(db, project_id, membership, action="list_milestones")
 
     result = await db.execute(select(Milestone).where(Milestone.project_id == project_id).order_by(Milestone.order))
     return result.scalars().all()

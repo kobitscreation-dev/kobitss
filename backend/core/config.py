@@ -2,17 +2,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 from typing import Optional
 import os
+import secrets
 import logging
 import warnings
+from app.config import resolve_secret
 
 logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Kobits API"
-    DATABASE_URL: str = "sqlite+aiosqlite:///./kobits.db"
-    # Secret key for JWT. In production, this MUST be ≥32 cryptographically random bytes.
-    # Generate with: python -c "import secrets; print(secrets.token_hex(32))"
-    SECRET_KEY: str = "super-secret-key-change-me"
+    DATABASE_URL: str = resolve_secret("DATABASE_URL", "sqlite+aiosqlite:///./kobits.db")
+    # Secret key for JWT. Loaded from environment variable or Google Cloud Run Secret Manager.
+    SECRET_KEY: str = resolve_secret("SECRET_KEY", default=secrets.token_hex(32))
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week
 

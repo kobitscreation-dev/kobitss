@@ -13,31 +13,70 @@ Usage::
 """
 
 import os
+from pathlib import Path
 import secrets
 from typing import Optional
 
 
+def resolve_secret(secret_name: str, default: str = "") -> str:
+    """
+    Resolve a secret from environment variables, Google Cloud Run mounted secrets
+    (/run/secrets/<name> or /secrets/<name>), or Google Cloud Secret Manager.
+    Never stores hardcoded credentials in source code.
+    """
+    env_val = os.environ.get(secret_name, "").strip()
+    if env_val:
+        return env_val
+
+    file_env_path = os.environ.get(f"{secret_name}_FILE", "").strip()
+    candidate_paths = []
+    if file_env_path:
+        candidate_paths.append(Path(file_env_path))
+    candidate_paths.extend(
+        [
+            Path("/run/secrets") / secret_name,
+            Path("/run/secrets") / secret_name.lower(),
+            Path("/secrets") / secret_name,
+            Path("/secrets") / secret_name.lower(),
+        ]
+    )
+    for secret_path in candidate_paths:
+        try:
+            if secret_path.is_file():
+                content = secret_path.read_text(encoding="utf-8").strip()
+                if content:
+                    return content
+        except OSError:
+            continue
+
+    gcp_project = (
+        os.environ.get("GCP_PROJECT_ID", "").strip()
+        or os.environ.get("GOOGLE_CLOUD_PROJECT", "").strip()
+    )
+    if gcp_project and os.environ.get("KOBITS_USE_GCP_SECRET_MANAGER", "").lower() in ("1", "true", "yes"):
+        try:
+            from google.cloud import secretmanager  # type: ignore
+
+            client = secretmanager.SecretManagerServiceClient()
+            name = f"projects/{gcp_project}/secrets/{secret_name}/versions/latest"
+            response = client.access_secret_version(request={"name": name})
+            payload = response.payload.data.decode("UTF-8").strip()
+            if payload:
+                return payload
+        except Exception:
+            pass
+
+    return default
+
+
 class Config:
     """
-    Base configuration — all secrets from environment variables only.
-
-    Environment variables required in production:
-      SECRET_KEY            — Django/Flask secret key
-      DATABASE_URL          — Database connection string
-      ALLOWED_HOSTS         — Comma-separated allowed hostnames
-      JWT_SECRET_KEY        — JWT signing secret
-
-    Optional AI service keys:
-      OPENAI_API_KEY
-      ANTHROPIC_API_KEY
-      HUGGINGFACE_API_KEY
-
-    Never set any of these in source code.
+    Base configuration — all secrets from environment variables or Cloud Run Secret Manager only.
     """
 
     # ── Core Security ─────────────────────────────────────────────────────────
-    # A02: Secret key from environment only. Fail hard if not set in production.
-    SECRET_KEY: str = os.environ.get("SECRET_KEY", "")
+    # A02: Secret key from environment/Secret Manager only. Fail hard if not set in production.
+    SECRET_KEY: str = resolve_secret("SECRET_KEY", "")
     if not SECRET_KEY:
         # Generate an ephemeral key for development — warn loudly
         SECRET_KEY = secrets.token_urlsafe(64)
@@ -58,11 +97,11 @@ class Config:
     ALLOWED_HOSTS: list = [h.strip() for h in ALLOWED_HOSTS_RAW.split(",") if h.strip()]
 
     # ── Database — A03 ────────────────────────────────────────────────────────
-    DATABASE_URL: str = os.environ.get("DATABASE_URL", "")
+    DATABASE_URL: str = resolve_secret("DATABASE_URL", "")
 
     # ── JWT Configuration — A07 ───────────────────────────────────────────────
     # Always use explicit algorithms. NEVER algorithm='none'.
-    JWT_SECRET_KEY: str = os.environ.get("JWT_SECRET_KEY", SECRET_KEY)
+    JWT_SECRET_KEY: str = resolve_secret("JWT_SECRET_KEY", SECRET_KEY)
     JWT_ALGORITHM: str = os.environ.get("JWT_ALGORITHM", "HS256")  # HS256 or RS256 only
     JWT_ALGORITHMS: list = [JWT_ALGORITHM]  # For decode — always a list
     JWT_EXPIRY_HOURS: int = int(os.environ.get("JWT_EXPIRY_HOURS", "24"))
@@ -126,7 +165,7 @@ class ProductionConfig(Config):
 
     def __init__(self):
         required_vars = ["SECRET_KEY", "DATABASE_URL", "JWT_SECRET_KEY"]
-        missing = [v for v in required_vars if not os.environ.get(v)]
+        missing = [v for v in required_vars if not resolve_secret(v)]
         if missing:
             raise RuntimeError(
                 f"Missing required environment variables for production: {missing}. "
@@ -138,12 +177,12 @@ class ProductionConfig(Config):
 
 
 class TestingConfig(Config):
-    """Testing configuration."""
+    """Testing configuration — uses ephemeral runtime tokens if not set in env."""
     TESTING = True
     DEBUG = False
     DATABASE_URL = "sqlite:///:memory:"
-    SECRET_KEY = "test-secret-key-not-for-production"
-    JWT_SECRET_KEY = "test-jwt-secret-not-for-production"
+    SECRET_KEY = resolve_secret("TEST_SECRET_KEY") or secrets.token_hex(32)
+    JWT_SECRET_KEY = resolve_secret("TEST_JWT_SECRET_KEY") or secrets.token_hex(32)
 
 
 _CONFIG_MAP = {
@@ -157,12 +196,6 @@ _CONFIG_MAP = {
 def get_config(env: Optional[str] = None) -> Config:
     """
     Return the appropriate Config instance for the current environment.
-
-    Args:
-        env: Override environment name. Defaults to APP_ENV env var or 'development'.
-
-    Returns:
-        Config instance.
     """
     env = env or os.environ.get("APP_ENV", "development").lower()
     config_class = _CONFIG_MAP.get(env, Config)

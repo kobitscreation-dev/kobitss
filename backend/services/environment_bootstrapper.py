@@ -35,9 +35,9 @@ SENSITIVE_ENV_KEYS = {
 }
 
 DEFAULT_RESOURCE_LIMITS = {
-    "memory_mb": 1024,
-    "cpus": 2.0,
-    "pids_limit": 256,
+    "memory_mb": 2048,
+    "cpus": 1.0,
+    "pids_limit": 200,
     "network_mode": "none",
     "disk_quota_mb": 2048,
 }
@@ -255,9 +255,171 @@ class EnvironmentBootstrapper:
 
         return hasher.hexdigest()[:12]
 
-    @staticmethod
-    def _build_docker_image(sandbox_dir: str, fingerprint: str) -> str:
-        """Build or reuse a Docker image containing the project's dependencies."""
+    # Known high/critical CVEs blocked deterministically before installation (defense-in-depth alongside pip-audit & npm audit)
+    KNOWN_VULNERABLE_PYTHON_PACKAGES: Dict[str, Tuple[str, str]] = {
+        "pyyaml==5.3": ("CVE-2020-14343", "5.4"),
+        "pyyaml==5.3.1": ("CVE-2020-14343", "5.4"),
+        "urllib3==1.25.8": ("CVE-2021-33503", "1.26.5"),
+        "requests==2.19.0": ("CVE-2018-18074", "2.20.0"),
+        "django==2.2.0": ("CVE-2019-19844", "2.2.28"),
+        "pillow==8.1.0": ("CVE-2021-25287", "8.2.0"),
+        "cryptography==3.3.1": ("CVE-2020-36242", "3.3.2"),
+        "jinja2==2.10": ("CVE-2019-10906", "2.11.3"),
+    }
+    KNOWN_VULNERABLE_NPM_PACKAGES: Dict[str, Tuple[str, str]] = {
+        "lodash@4.17.15": ("CVE-2020-8203", "4.17.21"),
+        "lodash@4.17.11": ("CVE-2019-10744", "4.17.21"),
+        "minimist@0.0.8": ("CVE-2020-7598", "1.2.6"),
+        "minimist@1.2.5": ("CVE-2021-44906", "1.2.6"),
+        "axios@0.21.0": ("CVE-2021-3749", "0.21.2"),
+        "express@4.16.0": ("CVE-2022-24999", "4.18.2"),
+        "jsonwebtoken@8.5.1": ("CVE-2022-23529", "9.0.0"),
+    }
+
+    @classmethod
+    def audit_dependencies(cls, sandbox_dir: str, block_on_cve: bool = True) -> Dict[str, Any]:
+        """
+        Enforces automated supply-chain package audits (`pip-audit` for Python and
+        `npm audit` for JavaScript) on sandbox manifests before/during sandbox builds
+        to block known vulnerable packages (CVEs) before installation.
+        """
+        import json
+
+        sandbox_abs = os.path.realpath(sandbox_dir)
+        vulnerabilities: List[Dict[str, str]] = []
+        audits_executed: List[str] = []
+
+        # 1. Python manifest & pip-audit check
+        req_files = [
+            os.path.join(sandbox_abs, "requirements.txt"),
+            os.path.join(sandbox_abs, "backend", "requirements.txt"),
+        ]
+        for req_path in req_files:
+            if os.path.isfile(req_path):
+                audits_executed.append("pip-audit")
+                try:
+                    with open(req_path, "r", encoding="utf-8", errors="ignore") as rf:
+                        for raw_line in rf:
+                            clean = raw_line.split("#", 1)[0].strip().lower().replace(" ", "")
+                            if not clean:
+                                continue
+                            if clean in cls.KNOWN_VULNERABLE_PYTHON_PACKAGES:
+                                cve_id, fixed_ver = cls.KNOWN_VULNERABLE_PYTHON_PACKAGES[clean]
+                                vulnerabilities.append({
+                                    "ecosystem": "pip",
+                                    "package": clean,
+                                    "cve": cve_id,
+                                    "fixed_version": fixed_ver,
+                                    "manifest": os.path.relpath(req_path, sandbox_abs),
+                                })
+                except OSError:
+                    pass
+
+                pip_audit_bin = shutil.which("pip-audit")
+                if pip_audit_bin:
+                    try:
+                        pa_res = subprocess.run(
+                            [pip_audit_bin, "-r", req_path, "--format", "json", "--progress-spinner", "off"],
+                            cwd=sandbox_abs,
+                            capture_output=True,
+                            text=True,
+                            timeout=20,
+                            shell=False,
+                        )
+                        if pa_res.returncode != 0 and pa_res.stdout:
+                            try:
+                                pa_data = json.loads(pa_res.stdout)
+                                for dep in pa_data.get("dependencies", []):
+                                    for vuln in dep.get("vulns", []):
+                                        vulnerabilities.append({
+                                            "ecosystem": "pip",
+                                            "package": f"{dep.get('name')}=={dep.get('version')}",
+                                            "cve": vuln.get("id", "CVE-UNKNOWN"),
+                                            "fixed_version": ",".join(vuln.get("fix_versions", [])),
+                                            "manifest": os.path.relpath(req_path, sandbox_abs),
+                                        })
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+        # 2. JavaScript package.json & npm audit check
+        pkg_json_path = os.path.join(sandbox_abs, "package.json")
+        if os.path.isfile(pkg_json_path):
+            audits_executed.append("npm-audit")
+            try:
+                with open(pkg_json_path, "r", encoding="utf-8", errors="ignore") as pf:
+                    pkg_data = json.load(pf)
+                all_deps = {}
+                if isinstance(pkg_data, dict):
+                    all_deps.update(pkg_data.get("dependencies") or {})
+                    all_deps.update(pkg_data.get("devDependencies") or {})
+                for pkg_name, ver_spec in all_deps.items():
+                    clean_ver = str(ver_spec).lstrip("^~=").strip()
+                    key = f"{pkg_name.lower()}@{clean_ver}"
+                    if key in cls.KNOWN_VULNERABLE_NPM_PACKAGES:
+                        cve_id, fixed_ver = cls.KNOWN_VULNERABLE_NPM_PACKAGES[key]
+                        vulnerabilities.append({
+                            "ecosystem": "npm",
+                            "package": key,
+                            "cve": cve_id,
+                            "fixed_version": fixed_ver,
+                            "manifest": "package.json",
+                        })
+            except Exception:
+                pass
+
+            npm_bin = shutil.which("npm")
+            lock_path = os.path.join(sandbox_abs, "package-lock.json")
+            if npm_bin and os.path.isfile(lock_path):
+                try:
+                    na_res = subprocess.run(
+                        [npm_bin, "audit", "--json", "--audit-level=high"],
+                        cwd=sandbox_abs,
+                        capture_output=True,
+                        text=True,
+                        timeout=20,
+                        shell=False,
+                    )
+                    if na_res.returncode != 0 and na_res.stdout:
+                        try:
+                            na_data = json.loads(na_res.stdout)
+                            vulns_map = na_data.get("vulnerabilities") or {}
+                            for v_pkg, v_info in vulns_map.items():
+                                sev = str(v_info.get("severity", "")).lower()
+                                if sev in ("high", "critical"):
+                                    vulnerabilities.append({
+                                        "ecosystem": "npm",
+                                        "package": v_pkg,
+                                        "cve": f"NPM-{sev.upper()}",
+                                        "fixed_version": "latest",
+                                        "manifest": "package-lock.json",
+                                    })
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+        passed = len(vulnerabilities) == 0
+        result = {
+            "passed": passed,
+            "blocked": (not passed) and block_on_cve,
+            "audits_executed": list(dict.fromkeys(audits_executed)),
+            "vulnerabilities": vulnerabilities,
+        }
+        if not passed and block_on_cve:
+            cve_summary = ", ".join(f"{v['package']} ({v['cve']})" for v in vulnerabilities)
+            raise PermissionError(
+                f"Supply-Chain Security Gate Blocked Vulnerable Packages: {cve_summary}"
+            )
+        return result
+
+    @classmethod
+    def _build_docker_image(cls, sandbox_dir: str, fingerprint: str) -> str:
+        """Build or reuse a Docker image containing the project's dependencies after running pip-audit / npm audit."""
+        # Enforce supply-chain CVE check before building sandbox image
+        cls.audit_dependencies(sandbox_dir, block_on_cve=True)
+
         image_tag = f"kobits-sandbox:{fingerprint}"
 
         check_cmd = ["docker", "image", "inspect", image_tag]
@@ -279,7 +441,8 @@ class EnvironmentBootstrapper:
             dockerfile_content = """FROM node:20-slim
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm install
+RUN npm audit --audit-level=high || true
+RUN npm install --no-audit
 ENV NODE_PATH=/app/node_modules
 ENV PATH=/app/node_modules/.bin:$PATH
 WORKDIR /workspace
@@ -290,7 +453,7 @@ WORKDIR /app
 RUN python -m venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 COPY requirements.txt* pyproject.toml* backend/requirements.txt* ./
-RUN if [ -f "requirements.txt" ]; then pip install -r requirements.txt pytest; elif [ -f "backend/requirements.txt" ]; then pip install -r backend/requirements.txt pytest; elif [ -f "pyproject.toml" ]; then pip install pytest; fi
+RUN pip install --no-cache-dir pip-audit && if [ -f "requirements.txt" ]; then pip-audit -r requirements.txt && pip install -r requirements.txt pytest; elif [ -f "backend/requirements.txt" ]; then pip-audit -r backend/requirements.txt && pip install -r backend/requirements.txt pytest; elif [ -f "pyproject.toml" ]; then pip install pytest; fi
 WORKDIR /workspace
 """
         else:
@@ -348,15 +511,17 @@ WORKDIR /workspace
         fingerprint = cls._fingerprint_environment(sandbox_dir)
         try:
             image_tag = cls._build_docker_image(sandbox_dir, fingerprint)
+        except PermissionError:
+            raise
         except Exception as e:
             logger.warning(f"Falling back to python:3.12-slim for {container_name}: {e}")
             image_tag = "python:3.12-slim"
 
         has_services = os.path.exists(os.path.join(sandbox_dir, "docker-compose.yml"))
         network_mode = limits.get("network_mode") or ("bridge" if has_services else "none")
-        mem_mb = int(limits.get("memory_mb", 1024))
-        cpus = float(limits.get("cpus", 2.0))
-        pids_limit = int(limits.get("pids_limit", 256))
+        mem_mb = int(limits.get("memory_mb", 2048))
+        cpus = float(limits.get("cpus", 1.0))
+        pids_limit = int(limits.get("pids_limit", 200))
 
         boot_cmd = [
             "docker", "run", "-d",
@@ -711,8 +876,53 @@ WORKDIR /workspace
             intercepted["duration_ms"] = dur_ms
             return intercepted
 
+        # Supply-chain audit gate on pip install / npm install commands inside sandbox
+        lower_cmd = (command or "").strip().lower()
+        if re.search(r"\b(?:pip|pip3)\s+install\b", lower_cmd) or re.search(r"\bnpm\s+(?:install|i|ci)\b", lower_cmd):
+            for vuln_pkg, (cve_id, fixed_ver) in {
+                **cls.KNOWN_VULNERABLE_PYTHON_PACKAGES,
+                **cls.KNOWN_VULNERABLE_NPM_PACKAGES,
+            }.items():
+                if vuln_pkg in lower_cmd.replace(" ", ""):
+                    dur_ms = int((time.perf_counter() - start_ts) * 1000)
+                    msg = (
+                        f"Security Block (pip-audit / npm audit): Package '{vuln_pkg}' is blocked due to "
+                        f"known vulnerability {cve_id} (upgrade to >= {fixed_ver})."
+                    )
+                    return {
+                        "error": msg,
+                        "stdout": "",
+                        "stderr": msg,
+                        "exit_code": 126,
+                        "blocked": True,
+                        "driver": driver,
+                        "vm_id": vm_id,
+                        "duration_ms": dur_ms,
+                        "isolated": True,
+                    }
+            try:
+                cls.audit_dependencies(sandbox_abs, block_on_cve=True)
+            except PermissionError as cve_err:
+                dur_ms = int((time.perf_counter() - start_ts) * 1000)
+                return {
+                    "error": str(cve_err),
+                    "stdout": "",
+                    "stderr": str(cve_err),
+                    "exit_code": 126,
+                    "blocked": True,
+                    "driver": driver,
+                    "vm_id": vm_id,
+                    "duration_ms": dur_ms,
+                    "isolated": True,
+                }
+
         isolated_env = cls.build_isolated_env(sandbox_abs, extra_env=extra_env)
         normalized_cmd = cls.normalize_command_for_sandbox(sandbox_abs, command, is_docker=False)
+
+        if os.name == "nt":
+            exec_argv = [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c", normalized_cmd]
+        else:
+            exec_argv = [shutil.which("sh") or "/bin/sh", "-c", normalized_cmd]
 
         popen_kwargs: Dict[str, Any] = {
             "cwd": sandbox_abs,
@@ -722,7 +932,7 @@ WORKDIR /workspace
             "text": True,
             "encoding": "utf-8",
             "errors": "replace",
-            "shell": True,
+            "shell": False,
         }
         if os.name == "nt":
             popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
@@ -731,7 +941,7 @@ WORKDIR /workspace
 
         proc = None
         try:
-            proc = subprocess.Popen(normalized_cmd, **popen_kwargs)
+            proc = subprocess.Popen(exec_argv, **popen_kwargs)
             stdout, stderr = proc.communicate(timeout=timeout)
             dur_ms = int((time.perf_counter() - start_ts) * 1000)
             return {
@@ -782,6 +992,8 @@ WORKDIR /workspace
             fingerprint = cls._fingerprint_environment(sandbox_abs)
             try:
                 image_tag = cls._build_docker_image(sandbox_abs, fingerprint)
+            except PermissionError:
+                raise
             except Exception:
                 image_tag = "python:3.12-slim"
 
@@ -793,9 +1005,9 @@ WORKDIR /workspace
             network_mode = "bridge" if has_services else "none"
             exec_cmd = [
                 "docker", "run", "--rm",
-                "--memory", "1024m",
-                "--cpus", "2.0",
-                "--pids-limit", "256",
+                "--memory", "2048m",
+                "--cpus", "1.0",
+                "--pids-limit", "200",
                 "--security-opt", "no-new-privileges",
                 "--network", network_mode,
                 "-v", f"{sandbox_abs}:/workspace",
@@ -810,10 +1022,10 @@ WORKDIR /workspace
             venv_activate = os.path.join(sandbox_abs, ".venv", "Scripts", "activate.bat")
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(f"@echo off\r\nif exist \"{venv_activate}\" call \"{venv_activate}\"\r\n{command}\r\n")
-            return script_path, True, script_path
+            return [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c", script_path], False, script_path
         else:
             script_path = os.path.join(sandbox_abs, ".kobits_run.sh")
             venv_activate = os.path.join(sandbox_abs, ".venv", "bin", "activate")
             with open(script_path, "w", encoding="utf-8", newline="\n") as f:
                 f.write(f"#!/bin/sh\n[ -f \"{venv_activate}\" ] && . \"{venv_activate}\"\n{command}\n")
-            return f"sh {script_path}", True, script_path
+            return [shutil.which("sh") or "/bin/sh", script_path], False, script_path

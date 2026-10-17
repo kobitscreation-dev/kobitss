@@ -247,9 +247,22 @@ async def sync_repository_background(repository_id: str, org_id: str):
                 
             os.makedirs(target_dir, exist_ok=True)
             
-            # Clone it
-            clone_cmd = f"git clone --branch {repo.selected_branch} --single-branch {auth_clone_url} {target_dir}"
-            proc = subprocess.Popen(clone_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            # Clone it using shell=False argument vector (never shell=True)
+            clone_args = [
+                "git",
+                "clone",
+                "--branch",
+                str(repo.selected_branch),
+                "--single-branch",
+                auth_clone_url,
+                target_dir,
+            ]
+            proc = subprocess.Popen(
+                clone_args,
+                shell=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
             stdout, stderr = proc.communicate(timeout=120)
             
             if proc.returncode != 0:
@@ -257,9 +270,9 @@ async def sync_repository_background(repository_id: str, org_id: str):
                 await db.commit()
                 return
                 
-            # Get latest SHA
-            sha_cmd = f"git -C {target_dir} rev-parse HEAD"
-            proc = subprocess.Popen(sha_cmd, shell=True, stdout=subprocess.PIPE)
+            # Get latest SHA using shell=False argument vector
+            sha_args = ["git", "-C", target_dir, "rev-parse", "HEAD"]
+            proc = subprocess.Popen(sha_args, shell=False, stdout=subprocess.PIPE)
             stdout, _ = proc.communicate()
             head_sha = stdout.decode().strip()
             
@@ -509,14 +522,21 @@ async def github_events_webhook(
                 pr.review_status = "changes_requested"
                 pr.status = PullRequestStatus.CHANGES_REQUESTED
                 
-                # Gate 11: Review Feedback to Findings
+                # Gate 11: Review Feedback to Findings (sanitized with <user_instruction> boundary tags)
+                from app.ai.sanitizer import PromptSanitizer
                 from backend.services.orchestrator_decision import OrchestratorDecision
+                raw_review_body = review_data.get("body") or "Changes requested"
+                safe_review_body = PromptSanitizer.wrap_user_instruction(
+                    raw_review_body,
+                    source="github_pr_review",
+                    strict=False,
+                )
                 await OrchestratorDecision.handle_pr_feedback(
                     db=db,
                     mission_id=pr.mission_id,
                     project_id=pr.project_id,
-                    title=f"PR Feedback: {review_data.get('body', 'Changes requested')}",
-                    description=review_data.get("body", "Changes requested")
+                    title=f"PR Feedback: {PromptSanitizer.sanitize(raw_review_body[:200], strict=False)}",
+                    description=safe_review_body,
                 )
                 
             await db.commit()
@@ -786,15 +806,21 @@ async def github_events_webhook(
             except Exception:
                 pass
 
-        # Clean prompt
+        # Clean & wrap untrusted PR review comment with <user_instruction> boundary tags
+        from app.ai.sanitizer import PromptSanitizer
         cleaned_prompt = re.sub(r"@kobits(-ai)?(\[bot\])?", "", comment_body, flags=re.IGNORECASE).strip()
         if not cleaned_prompt:
             cleaned_prompt = comment_body
+        delimited_prompt = PromptSanitizer.wrap_user_instruction(
+            cleaned_prompt,
+            source="github_pr_review_comment",
+            strict=False,
+        )
 
         objective = (
             f"Address PR #{pr_number} review comment from @{sender_login} on `{file_path}`"
             f"{f' (line {line_num})' if line_num else ''}:\n\n"
-            f"Instruction: {cleaned_prompt}\n\n"
+            f"Instruction: {delimited_prompt}\n\n"
             f"Diff Context:\n```\n{diff_hunk}\n```"
         )
 
@@ -990,10 +1016,16 @@ async def github_events_webhook(
             except Exception:
                 pass
 
-        # Extract prompt
+        # Extract & wrap untrusted issue/comment prompt in <user_instruction> boundary tags
+        from app.ai.sanitizer import PromptSanitizer
         cleaned_prompt = re.sub(r"@kobits(-ai)?(\[bot\])?", "", raw_text or "", flags=re.IGNORECASE).strip()
         if not cleaned_prompt or len(cleaned_prompt) < 2:
             cleaned_prompt = issue_title
+        delimited_prompt = PromptSanitizer.wrap_user_instruction(
+            cleaned_prompt,
+            source="github_issue_comment" if event_type == "issue_comment" else "github_issue",
+            strict=False,
+        )
 
         from backend.models.mission import WorkflowPhase
         from backend.models.project import Task, TaskStatus, TaskPriority, Activity, ActivityType
@@ -1011,10 +1043,10 @@ async def github_events_webhook(
                     id=task_id,
                     project_id=mission.project_id,
                     mission_id=mission.id,
-                    title=f"[PR #{issue_num} Comment] {cleaned_prompt[:80]}",
+                    title=f"[PR #{issue_num} Comment] {PromptSanitizer.sanitize(cleaned_prompt[:80], strict=False)}",
                     description=(
                         f"Address feedback from @{sender_login} on PR #{issue_num}:\n\n"
-                        f"{cleaned_prompt}\n\n"
+                        f"{delimited_prompt}\n\n"
                         f"Implement changes, run verification gates, and push directly to `{mission.active_branch}`."
                     ),
                     status=TaskStatus.PENDING,
@@ -1083,14 +1115,16 @@ async def github_events_webhook(
         # Otherwise, standard GitHub Issue intake
         active_branch = f"kobits/issue-{issue_num}-{uuid.uuid4().hex[:6]}"
         creator_id = conn.user_id if conn else "system_automator"
+        safe_issue_title = PromptSanitizer.sanitize(issue_title[:100], strict=False)
+        safe_raw_text = PromptSanitizer.wrap_user_instruction(raw_text or "", source="github_issue_body", strict=False)
 
         mission = Mission(
             project_id=repo.project_id,
             organization_id=repo.organization_id,
             created_by=creator_id,
-            title=f"[Issue #{issue_num}] {issue_title[:100]}",
-            objective=cleaned_prompt,
-            description=f"Automated engineering mission dispatched from GitHub Issue #{issue_num} by @{sender_login}.\n\nRaw prompt:\n{raw_text}",
+            title=f"[Issue #{issue_num}] {safe_issue_title}",
+            objective=delimited_prompt,
+            description=f"Automated engineering mission dispatched from GitHub Issue #{issue_num} by @{sender_login}.\n\nRaw prompt:\n{safe_raw_text}",
             status=MissionStatus.PLANNING,
             phase=WorkflowPhase.INTAKE,
             active_branch=active_branch,
