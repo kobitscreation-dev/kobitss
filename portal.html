@@ -858,7 +858,10 @@
           if (data && data.access_token) {
             localStorage.setItem('kobits_token', data.access_token);
           }
-          window.location.replace('/web/index.html#overview');
+          const role = String(data?.role || data?.user?.role || '').toUpperCase();
+          const defaultHash = (role === 'READ_ONLY_REVIEWER' || role === 'VIEWER' || role === 'CLIENT') ? '#portal' : '#overview';
+          const targetHash = ['#portal', '#admin', '#console', '#overview'].includes(curHash) ? curHash : defaultHash;
+          window.location.replace('/web/index.html' + targetHash);
           return;
         } else if (res.status === 401 && savedToken) {
           localStorage.removeItem('kobits_token');
@@ -866,8 +869,9 @@
       } catch (_) {}
     })();
 
-    if (window.location.hash === '#dashboard' || window.location.hash === '#overview') {
-      window.location.replace('/web/index.html#overview');
+    if (['#dashboard', '#overview', '#portal', '#admin', '#console'].includes(window.location.hash)) {
+      const targetHash = window.location.hash === '#dashboard' ? '#overview' : window.location.hash;
+      window.location.replace('/web/index.html' + targetHash);
     }
 
     let isSignUp = window.location.hash === '#register';
@@ -895,9 +899,10 @@
     };
 
     function updateAuthMode() {
-      if (window.location.hash === '#dashboard' || window.location.hash === '#overview') {
+      if (['#dashboard', '#overview', '#portal', '#admin', '#console'].includes(window.location.hash)) {
         const tok = localStorage.getItem('kobits_token');
-        const target = tok ? `/dashboard?session_token=${encodeURIComponent(tok)}#overview` : '/dashboard#overview';
+        const targetHash = window.location.hash === '#dashboard' ? '#overview' : window.location.hash;
+        const target = tok ? `/dashboard?session_token=${encodeURIComponent(tok)}${targetHash}` : `/dashboard${targetHash}`;
         window.location.replace(target);
         return;
       }
@@ -1038,12 +1043,15 @@
             localStorage.setItem('kobits_user', JSON.stringify(data));
           }
           const sessionParam = data?.access_token ? `session_token=${encodeURIComponent(data.access_token)}` : '';
+          const userRole = String(data?.role || data?.user?.role || '').toUpperCase();
+          const isClientRole = userRole === 'READ_ONLY_REVIEWER' || userRole === 'VIEWER' || userRole === 'CLIENT';
+          const defaultDestHash = isClientRole ? '#portal' : '#overview';
           if (isSignUp) {
             // Trigger first-time onboarding walkthrough for real newly registered users
             localStorage.removeItem('kobits.onboarded');
-            window.location.href = `/dashboard?onboarding=true${sessionParam ? '&' + sessionParam : ''}#overview`;
+            window.location.href = `/dashboard?onboarding=true${sessionParam ? '&' + sessionParam : ''}${defaultDestHash}`;
           } else {
-            window.location.href = `/dashboard${sessionParam ? '?' + sessionParam : ''}#overview`;
+            window.location.href = `/dashboard${sessionParam ? '?' + sessionParam : ''}${defaultDestHash}`;
           }
         } else {
           if (errBox && errText) {

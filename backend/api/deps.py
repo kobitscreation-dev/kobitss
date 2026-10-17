@@ -266,3 +266,29 @@ require_member = RoleChecker(minimum_role=OrgRole.MEMBER)
 require_reviewer = RoleChecker(minimum_role=OrgRole.READ_ONLY_REVIEWER)
 
 
+async def log_audit_event(
+    db: AsyncSession,
+    *,
+    org_id: str | None = None,
+    user_id: str | None = None,
+    action: str,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    details: dict | str | None = None,
+    request: Request | None = None,
+):
+    """Record a cryptographically hash-chained and HMAC-SHA256 signed SOC-2 AuditLog entry."""
+    from backend.services.soc2_audit_service import SOC2AuditService
+
+    return await SOC2AuditService.log_event(
+        db,
+        event=action,
+        organization_id=org_id,
+        user_id=user_id,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        detail=details,
+        request=request,
+    )
+
+

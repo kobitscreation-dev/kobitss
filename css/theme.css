@@ -1131,3 +1131,31 @@ button, select, input, textarea { font: inherit; color: inherit; }
   .ky-topbar-inner, .ky-main { padding-left: 16px; padding-right: 16px; }
   .ky-kpi-grid, .ky-team-grid { grid-template-columns: 1fr; }
 }
+
+/* ── 3-Tier Agency Dashboard Offline & Utility Fallbacks ─────────────── */
+.hidden {
+  display: none !important;
+}
+.fixed {
+  position: fixed;
+}
+.inset-0 {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+.z-50 {
+  z-index: 50;
+}
+.ky-surface-nav-active {
+  background: var(--primary, #ffffff) !important;
+  color: var(--primary-fg, #050505) !important;
+  font-weight: 600 !important;
+}
+.ky-arch-svg-container svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}

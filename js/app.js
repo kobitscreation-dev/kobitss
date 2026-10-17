@@ -171,33 +171,68 @@ function isTriadSurfaceRoute(routeStr) {
   );
 }
 
+function syncTriadNavBar(activeSurface, explicitRole) {
+  let role = explicitRole || window.__kobitsActiveOrgRole || '';
+  if (!role) {
+    try {
+      const savedUser = JSON.parse(localStorage.getItem('kobits_user') || '{}');
+      role = savedUser.role || savedUser.user?.role || '';
+    } catch (_) {}
+  }
+  const normRole = String(role || '').toUpperCase();
+  const isClientOnly = normRole === 'READ_ONLY_REVIEWER' || normRole === 'VIEWER' || normRole === 'CLIENT';
+  const navPortal = document.getElementById('ky-nav-portal');
+  const navAdmin = document.getElementById('ky-nav-admin');
+  const navConsole = document.getElementById('ky-nav-console');
+
+  if (navAdmin) {
+    navAdmin.style.display = isClientOnly ? 'none' : '';
+    navAdmin.classList.toggle('ky-surface-nav-active', activeSurface === 'admin');
+  }
+  if (navConsole) {
+    navConsole.style.display = isClientOnly ? 'none' : '';
+    navConsole.classList.toggle('ky-surface-nav-active', activeSurface === 'console');
+  }
+  if (navPortal) {
+    navPortal.classList.toggle('ky-surface-nav-active', activeSurface === 'portal');
+  }
+}
+
+window.syncTriadNavBar = syncTriadNavBar;
+
 async function dispatchTriadSurfaceRoute(routeStr) {
   const view = document.getElementById('view') || document.getElementById('main-content');
   if (!view) return false;
   const raw = (routeStr !== undefined ? routeStr : getEffectiveTriadRoute());
   const [baseRoute, queryPart] = raw.split('?');
   const params = {};
+  const searchParams = new URLSearchParams(window.location.search || '');
+  if (searchParams.get('org')) params.org = searchParams.get('org');
   if (queryPart) {
     const sp = new URLSearchParams(queryPart);
     if (sp.get('org')) params.org = sp.get('org');
   }
   if (baseRoute === 'portal' || baseRoute === 'client-portal') {
+    syncTriadNavBar('portal');
     const mod = await import('./views/client_portal.js');
     await mod.renderClientPortalView(view, params);
     return true;
   }
   if (baseRoute === 'admin' || baseRoute === 'agency-admin') {
+    syncTriadNavBar('admin');
     const mod = await import('./views/admin_console.js');
     await mod.renderAdminConsoleView(view, params);
     return true;
   }
   if (baseRoute === 'console' || baseRoute.startsWith('console/')) {
+    syncTriadNavBar('console');
     const parts = baseRoute.split('/');
     if (parts[1]) params.missionId = parts[1];
     const mod = await import('./views/console_view.js');
     await mod.renderSystemsConsoleView(view, params);
     return true;
   }
+  syncTriadNavBar('');
   return false;
 }
 

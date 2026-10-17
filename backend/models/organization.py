@@ -256,6 +256,8 @@ class Organization(Base):
         if description is not None:
             meta["description"] = description
             self._description = description
+            if self.stripe_customer_id is None and isinstance(description, str) and description.strip().startswith("{"):
+                self.stripe_customer_id = description
         meta["is_active"] = is_active
         self._is_active = is_active
 
@@ -267,6 +269,14 @@ class Organization(Base):
         cached = _ORG_METADATA_CACHE.get(self.id or "", {}).get("slug") or _ORG_METADATA_CACHE.get(self.name or "", {}).get("slug")
         if cached:
             return str(cached)
+        if self.stripe_customer_id and str(self.stripe_customer_id).strip().startswith("{"):
+            import json
+            try:
+                parsed = json.loads(str(self.stripe_customer_id))
+                if isinstance(parsed, dict) and parsed.get("slug"):
+                    return str(parsed["slug"])
+            except Exception:
+                pass
         import re
         return re.sub(r"[^a-z0-9]+", "-", (self.name or "org").lower()).strip("-") or "org"
 
@@ -284,6 +294,8 @@ class Organization(Base):
         cached = _ORG_METADATA_CACHE.get(self.id or "", {}).get("description") or _ORG_METADATA_CACHE.get(self.name or "", {}).get("description")
         if cached is not None:
             return str(cached)
+        if self.stripe_customer_id and str(self.stripe_customer_id).strip().startswith("{"):
+            return str(self.stripe_customer_id)
         return None
 
     @description.setter
@@ -291,6 +303,8 @@ class Organization(Base):
         self._description = value
         if self.id:
             _ORG_METADATA_CACHE.setdefault(self.id, {})["description"] = value
+        if self.stripe_customer_id is None and isinstance(value, str) and value.strip().startswith("{"):
+            self.stripe_customer_id = value
 
     @property
     def is_active(self) -> bool:

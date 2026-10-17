@@ -58,7 +58,11 @@ export async function renderAdminConsoleView(container, params = {}) {
     }
 
     const clients = data.clients || [];
+    const switcherClients = data.all_clients || clients;
     const approvalQueue = data.approval_queue || [];
+    if (typeof window.syncTriadNavBar === 'function') {
+        window.syncTriadNavBar('admin', 'ADMIN');
+    }
 
     container.innerHTML = `
         <div class="p-6 max-w-7xl mx-auto space-y-8 text-zinc-100" id="agency-admin-surface">
@@ -82,8 +86,8 @@ export async function renderAdminConsoleView(container, params = {}) {
                     <div class="flex items-center gap-2 bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-1.5">
                         <span class="text-[11px] font-mono text-zinc-400">Tenant:</span>
                         <select id="admin-tenant-switcher" class="bg-transparent text-xs font-semibold text-white focus:outline-none">
-                            <option value="" ${!selectedOrg ? 'selected' : ''} class="bg-zinc-900">All Managed Clients (${clients.length})</option>
-                            ${clients.map(c => `
+                            <option value="" ${!selectedOrg ? 'selected' : ''} class="bg-zinc-900">All Managed Clients (${switcherClients.length})</option>
+                            ${switcherClients.map(c => `
                                 <option value="${escapeHtml(c.organization_id)}" ${selectedOrg === c.organization_id ? 'selected' : ''} class="bg-zinc-900">
                                     ${escapeHtml(c.client_name)} ($${Number(c.monthly_retainer_usd).toLocaleString()}/mo)
                                 </option>

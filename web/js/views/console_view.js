@@ -296,6 +296,16 @@ export async function renderSystemsConsoleView(container, params = {}) {
     `;
 
     // Connect Live WebSocket Terminal (`/ws/terminal/{missionId}`)
+    if (typeof window.syncTriadNavBar === 'function') {
+        window.syncTriadNavBar('console', 'ADMIN');
+    }
+    if (window.__kobitsConsoleWs) {
+        try {
+            window.__kobitsConsoleWs.close();
+        } catch (_) {}
+        window.__kobitsConsoleWs = null;
+    }
+
     const termOutput = container.querySelector('#console-terminal-output');
     const wsDot = container.querySelector('#ws-status-dot');
     let ws = null;
@@ -310,6 +320,7 @@ export async function renderSystemsConsoleView(container, params = {}) {
         const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${proto}//${window.location.host}/ws/terminal/${encodeURIComponent(missionId)}`;
         ws = new WebSocket(wsUrl);
+        window.__kobitsConsoleWs = ws;
         ws.onopen = () => {
             if (wsDot) wsDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
         };
@@ -402,9 +413,12 @@ export async function renderSystemsConsoleView(container, params = {}) {
         if (!lspOutput) return;
         lspOutput.textContent = `Querying HeadlessLSPService (${action}: ${symbolVal})...`;
         try {
+            const isFilePath = symbolVal.includes('/') || symbolVal.includes('.');
             const payload = action === 'diagnostics'
-                ? { action, file_path: symbolVal.includes('/') ? symbolVal : 'backend/services/codebase_auditor.py' }
-                : { action, symbol: symbolVal };
+                ? { action, file_path: isFilePath ? symbolVal : 'backend/services/codebase_auditor.py' }
+                : (action === 'symbol_graph' && isFilePath)
+                    ? { action, file_path: symbolVal, symbol: symbolVal }
+                    : { action, symbol: symbolVal };
             const res = await apiFetch('/agency-admin/console/lsp', {
                 method: 'POST',
                 body: JSON.stringify(payload),

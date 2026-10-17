@@ -36,6 +36,7 @@ async def setup_db():
     This prevents wiping the production/development database.
     """
     from sqlalchemy import text
+    await engine.dispose()
     # Clean setup: disable foreign keys so table drops/creates and isolated unit mocks work reliably
     async with engine.begin() as conn:
         if "sqlite" in str(engine.url):
@@ -46,6 +47,7 @@ async def setup_db():
     yield
     
     # Drop all tables after the test completes to maintain isolation
+    await engine.dispose()
     async with engine.begin() as conn:
         if "sqlite" in str(engine.url):
             await conn.execute(text("PRAGMA foreign_keys = OFF"))

@@ -15,6 +15,71 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;');
 }
 
+function buildArchitectureSvg(mermaidText) {
+    const raw = String(mermaidText || 'graph TD\n  ClientPortal --> API\n  API --> AutonomousPod');
+    const edgeRegex = /([A-Za-z0-9_.-]+)(?:\["([^"]+)"\])?\s*-->\s*([A-Za-z0-9_.-]+)(?:\["([^"]+)"\])?/g;
+    const nodesMap = new Map();
+    const edges = [];
+    let match;
+    while ((match = edgeRegex.exec(raw)) !== null) {
+        const fromId = match[1];
+        const fromLabel = match[2] || fromId;
+        const toId = match[3];
+        const toLabel = match[4] || toId;
+        if (!nodesMap.has(fromId)) nodesMap.set(fromId, fromLabel);
+        if (!nodesMap.has(toId)) nodesMap.set(toId, toLabel);
+        edges.push({ from: fromId, to: toId });
+    }
+    if (nodesMap.size === 0) {
+        nodesMap.set('ClientPortal', 'ClientPortal');
+        nodesMap.set('API', 'FastAPI Gateway');
+        nodesMap.set('AutonomousPod', '21-Agent Pod');
+        edges.push({ from: 'ClientPortal', to: 'API' }, { from: 'API', to: 'AutonomousPod' });
+    }
+    const nodeEntries = Array.from(nodesMap.entries()).slice(0, 8);
+    const cols = Math.min(3, Math.max(2, Math.ceil(Math.sqrt(nodeEntries.length))));
+    const rows = Math.ceil(nodeEntries.length / cols);
+    const width = 460;
+    const height = Math.max(150, rows * 68 + 24);
+    const coords = new Map();
+
+    nodeEntries.forEach(([id, label], idx) => {
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        const x = 24 + col * 148;
+        const y = 18 + row * 62;
+        coords.set(id, { x, y, label });
+    });
+
+    const edgeLines = edges
+        .filter(e => coords.has(e.from) && coords.has(e.to))
+        .map(e => {
+            const a = coords.get(e.from);
+            const b = coords.get(e.to);
+            const x1 = a.x + 62;
+            const y1 = a.y + 18;
+            const x2 = b.x + 62;
+            const y2 = b.y + 18;
+            return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#38bdf8" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="3 2" />`;
+        })
+        .join('');
+
+    const nodeRects = nodeEntries
+        .map(([id]) => {
+            const c = coords.get(id);
+            const shortLabel = c.label.length > 16 ? c.label.slice(0, 15) + '…' : c.label;
+            return `
+                <g transform="translate(${c.x}, ${c.y})">
+                    <rect width="124" height="36" rx="8" fill="#09090b" stroke="#10b981" stroke-opacity="0.55" stroke-width="1.2" />
+                    <text x="62" y="22" text-anchor="middle" fill="#e4e4e7" font-family="monospace" font-size="10">${escapeHtml(shortLabel)}</text>
+                </g>
+            `;
+        })
+        .join('');
+
+    return `<svg viewBox="0 0 ${width} ${height}" class="w-full h-auto select-none" role="img" aria-label="Living Architecture Dependency Graph">${edgeLines}${nodeRects}</svg>`;
+}
+
 export async function renderClientPortalView(container, params = {}) {
     if (!container) return;
 
@@ -66,6 +131,12 @@ export async function renderClientPortalView(container, params = {}) {
     }
 
     const org = data.organization || {};
+    if (org.role) {
+        window.__kobitsActiveOrgRole = org.role;
+        if (typeof window.syncTriadNavBar === 'function') {
+            window.syncTriadNavBar('portal', org.role);
+        }
+    }
     const project = data.project || {};
     const hero = data.sprint_hero || {};
     const compute = hero.compute_transparency || {};
@@ -227,8 +298,11 @@ export async function renderClientPortalView(container, params = {}) {
                                     <button id="arch-zoom-in" class="px-2 py-0.5 text-xs bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300" title="Zoom In">+</button>
                                 </div>
                             </div>
-                            <div id="arch-mermaid-viewport" class="overflow-auto max-h-60 transition-transform origin-top-left" style="transform: scale(1);">
-                                <pre class="text-[11px] font-mono text-sky-300 whitespace-pre leading-relaxed">${escapeHtml(arch.mermaid_diagram || 'graph TD\n  ClientPortal --> API\n  API --> AutonomousPod')}</pre>
+                            <div id="arch-mermaid-viewport" class="overflow-auto max-h-60 transition-transform origin-top-left space-y-2" style="transform: scale(1);">
+                                <div id="arch-mermaid-svg-canvas" class="pb-2 border-b border-zinc-800/60">
+                                    ${buildArchitectureSvg(arch.mermaid_diagram)}
+                                </div>
+                                <pre id="arch-mermaid-source" class="mermaid text-[11px] font-mono text-sky-300 whitespace-pre leading-relaxed">${escapeHtml(arch.mermaid_diagram || 'graph TD\n  ClientPortal --> API\n  API --> AutonomousPod')}</pre>
                             </div>
                         </div>
                     </div>

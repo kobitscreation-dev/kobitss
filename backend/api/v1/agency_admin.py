@@ -16,6 +16,7 @@ import os
 import re
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
@@ -30,6 +31,7 @@ from backend.api.deps import (
     get_db,
     get_user_default_org,
     get_user_org_membership,
+    log_audit_event,
 )
 from backend.api.v1.client_portal import (
     _extract_retainer_metadata,
@@ -280,6 +282,7 @@ def _build_21_agent_roster(
 # ---------------------------------------------------------------------------
 
 @router.get("/financials")
+@router.get("/overview")
 async def get_agency_financials(
     request: Request,
     organization_id: Optional[str] = Query(default=None, description="Optional filter to a single client organization"),
@@ -298,6 +301,20 @@ async def get_agency_financials(
         target_org_id=organization_id,
         x_organization_id=x_organization_id,
     )
+
+    all_clients_summary: List[Dict[str, Any]] = []
+    for m_org in managed_orgs:
+        m_meta = _extract_retainer_metadata(m_org)
+        all_clients_summary.append(
+            {
+                "organization_id": m_org.id,
+                "client_name": m_org.name,
+                "slug": m_org.slug,
+                "monthly_retainer_usd": round(float(m_meta.get("monthly_retainer_usd") or 6500.0), 2),
+                "sla_status": m_meta.get("sla_status", "99.9% On-Time SLA"),
+                "portal_url": f"#portal?org={m_org.id}",
+            }
+        )
 
     target_orgs = [o for o in managed_orgs if o.id == organization_id] if organization_id else managed_orgs
     if not target_orgs:
@@ -480,7 +497,9 @@ async def get_agency_financials(
 
     return {
         "active_organization_id": active_org.id,
+        "selected_organization_id": organization_id,
         "active_clients_count": len(client_rows),
+        "managed_clients_count": len(all_clients_summary),
         "monthly_mrr_usd": total_mrr_usd,
         "total_api_cost_usd": total_api_cost_usd,
         "microvm_cost_usd": total_microvm_cost_usd,
@@ -489,6 +508,7 @@ async def get_agency_financials(
         "net_gross_margin_pct": net_gross_margin_pct,
         "total_tokens": total_tokens,
         "clients": client_rows,
+        "all_clients": all_clients_summary,
         "approval_queue": approval_queue,
         "approval_queue_count": len(approval_queue),
     }
@@ -588,6 +608,12 @@ async def approve_and_ship_pr(
 
     operator_notes = payload.operator_notes if payload else "Approved via 5% Operator Approval Gate"
     mission, org = await _load_mission_for_operator(request, db, current_user, resolved_mission_id)
+
+    if mission.approval_status == ApprovalStatus.REJECTED or mission.status == MissionStatus.CANCELLED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot approve a mission that has already been rejected or cancelled.",
+        )
 
     now = datetime.now(timezone.utc)
     commit_sha = mission.base_commit_sha or hashlib.sha1(f"{mission.id}:{now.isoformat()}".encode("utf-8")).hexdigest()[:12]
@@ -785,6 +811,23 @@ async def approve_and_ship_pr(
     )
     db.add(activity)
 
+    await log_audit_event(
+        db=db,
+        org_id=org.id,
+        user_id=current_user.id,
+        action="agency_admin.pr_approved",
+        resource_type="mission",
+        resource_id=mission.id,
+        details={
+            "pr_id": pr_record.id,
+            "pr_number": pr_record.number,
+            "commit_sha": commit_sha,
+            "consensus_seal_hash": seal_bundle["consensus_seal_hash"],
+            "operator_notes": operator_notes,
+        },
+        request=request,
+    )
+
     await db.commit()
     await db.refresh(mission)
 
@@ -841,6 +884,12 @@ async def request_agent_tweak(
 
     mission, org = await _load_mission_for_operator(request, db, current_user, resolved_mission_id)
 
+    if mission.status == MissionStatus.CANCELLED or mission.approval_status == ApprovalStatus.REJECTED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot request a tweak on a mission that has already been rejected or cancelled.",
+        )
+
     tweak_task = Task(
         id=str(uuid.uuid4()),
         project_id=mission.project_id,
@@ -869,6 +918,21 @@ async def request_agent_tweak(
         user_id=current_user.id,
     )
     db.add(activity)
+
+    await log_audit_event(
+        db=db,
+        org_id=org.id,
+        user_id=current_user.id,
+        action="agency_admin.tweak_requested",
+        resource_type="mission",
+        resource_id=mission.id,
+        details={
+            "target_agent": target_agent,
+            "feedback": feedback,
+            "correction_task_id": tweak_task.id,
+        },
+        request=request,
+    )
 
     await db.commit()
     return {
@@ -910,6 +974,12 @@ async def reject_and_rollback_pr(
 
     mission, org = await _load_mission_for_operator(request, db, current_user, resolved_mission_id)
 
+    if mission.approval_status == ApprovalStatus.APPROVED or mission.status == MissionStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot reject a mission whose PR has already been approved and shipped.",
+        )
+
     mission.approval_status = ApprovalStatus.REJECTED
     mission.status = MissionStatus.CANCELLED
 
@@ -939,6 +1009,20 @@ async def reject_and_rollback_pr(
     )
     db.add(activity)
 
+    await log_audit_event(
+        db=db,
+        org_id=org.id,
+        user_id=current_user.id,
+        action="agency_admin.pr_rejected",
+        resource_type="mission",
+        resource_id=mission.id,
+        details={
+            "reason": reason,
+            "sandbox_rolled_back": sandbox_rolled_back,
+        },
+        request=request,
+    )
+
     await db.commit()
     return {
         "status": "rejected_and_rolled_back",
@@ -948,6 +1032,58 @@ async def reject_and_rollback_pr(
         "sandbox_rolled_back": sandbox_rolled_back,
         "reason": reason,
     }
+
+
+@router.post("/approval-gate/decide")
+async def decide_operator_approval_gate(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> Dict[str, Any]:
+    """
+    Unified 5% Operator Approval Gate decision endpoint.
+    Accepts `{"mission_id": "...", "decision": "approve" | "tweak" | "reject", ...}`
+    and delegates to `approve_and_ship_pr`, `request_agent_tweak`, or `reject_and_rollback_pr`.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Valid JSON body is required.")
+
+    mid = body.get("mission_id")
+    decision = str(body.get("decision") or body.get("action") or "").strip().lower()
+    if not mid:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="mission_id is required.")
+
+    if decision in ("approve", "approve_pr", "ship", "approve_and_ship"):
+        payload = ApprovePRRequest(
+            mission_id=mid,
+            operator_notes=body.get("operator_notes") or body.get("notes") or "Approved via 5% Operator Approval Gate",
+            push_to_github=bool(body.get("push_to_github", True)),
+        )
+        return await approve_and_ship_pr(request=request, payload=payload, mission_id=mid, db=db, current_user=current_user)
+
+    if decision in ("tweak", "request_tweak", "revise"):
+        feedback = body.get("feedback") or body.get("operator_notes") or "Apply Lead Engineer refinement"
+        payload = RequestTweakPayload(
+            mission_id=mid,
+            feedback=feedback,
+            target_agent=body.get("target_agent", "Forge"),
+        )
+        return await request_agent_tweak(request=request, payload=payload, mission_id=mid, db=db, current_user=current_user)
+
+    if decision in ("reject", "reject_pr", "rollback", "reject_and_rollback"):
+        reason = body.get("reason") or body.get("feedback") or "Rejected at 5% Operator Gate; sandbox rolled back"
+        payload = RejectPRPayload(
+            mission_id=mid,
+            reason=reason,
+        )
+        return await reject_and_rollback_pr(request=request, payload=payload, mission_id=mid, db=db, current_user=current_user)
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Unsupported approval gate decision '{decision}'. Expected 'approve', 'tweak', or 'reject'.",
+    )
 
 
 @router.post("/onboard", status_code=status.HTTP_201_CREATED)
@@ -976,6 +1112,7 @@ async def onboard_new_agency_client(
     slug = f"{slug_base}-{uuid.uuid4().hex[:6]}"
 
     org_metadata = {
+        "slug": slug,
         "monthly_retainer_usd": round(float(payload.monthly_retainer_usd), 2),
         "github_repo_url": payload.github_repo_url.strip(),
         "client_admin_email": payload.client_admin_email.strip().lower(),
@@ -1158,6 +1295,24 @@ async def onboard_new_agency_client(
     )
     db.add(initial_run)
 
+    await log_audit_event(
+        db=db,
+        org_id=new_org.id,
+        user_id=current_user.id,
+        action="agency_admin.client_onboarded",
+        resource_type="organization",
+        resource_id=new_org.id,
+        details={
+            "client_name": new_org.name,
+            "slug": new_org.slug,
+            "monthly_retainer_usd": org_metadata["monthly_retainer_usd"],
+            "client_admin_email": org_metadata["client_admin_email"],
+            "project_id": project.id,
+            "initial_mission_id": initial_mission.id,
+        },
+        request=request,
+    )
+
     await db.commit()
 
     return {
@@ -1324,6 +1479,33 @@ async def get_systems_console_telemetry(
     }
 
 
+def _validate_safe_workspace_path(repo_root: str, file_path: Optional[str]) -> Optional[str]:
+    """
+    Validates that `file_path` does not contain directory traversal (`..`) or resolve outside `repo_root`.
+    Raises HTTP 400 Bad Request if path traversal is attempted.
+    """
+    if not file_path:
+        return None
+    cleaned = str(file_path).strip()
+    if not cleaned:
+        return None
+    norm_slashes = cleaned.replace("\\", "/")
+    parts = [p for p in norm_slashes.split("/") if p]
+    if ".." in parts or ".." in Path(cleaned).parts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Path traversal outside repository workspace is forbidden.",
+        )
+    abs_root = os.path.realpath(repo_root)
+    abs_target = os.path.realpath(os.path.join(abs_root, cleaned))
+    if not (abs_target == abs_root or abs_target.startswith(abs_root + os.sep)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Path traversal outside repository workspace is forbidden.",
+        )
+    return cleaned
+
+
 @router.get("/console/lsp")
 @router.post("/console/lsp")
 async def query_headless_lsp_explorer(
@@ -1332,6 +1514,7 @@ async def query_headless_lsp_explorer(
     symbol: Optional[str] = Query(default="CodebaseAuditor", description="Symbol name to inspect"),
     file_path: Optional[str] = Query(default=None, description="Optional relative file path"),
     line: Optional[int] = Query(default=None),
+    organization_id: Optional[str] = Query(default=None),
     payload: Optional[LSPQueryPayload] = None,
     x_organization_id: Optional[str] = Header(default=None, alias="X-Organization-Id"),
     db: AsyncSession = Depends(get_db),
@@ -1346,6 +1529,7 @@ async def query_headless_lsp_explorer(
         request=request,
         db=db,
         current_user=current_user,
+        target_org_id=organization_id,
         x_organization_id=x_organization_id,
     )
 
@@ -1356,12 +1540,13 @@ async def query_headless_lsp_explorer(
         line = payload.line or line
 
     repo_root = os.environ.get("KOBITS_WORKSPACE_DIR") or os.getcwd()
+    safe_file_path = _validate_safe_workspace_path(repo_root, file_path)
     act = (action or "definition").strip().lower()
 
     if act in ("definition", "find_definition", "goto_definition"):
         res = HeadlessLSPService.find_definition(
             symbol=symbol or "CodebaseAuditor",
-            file_path=file_path,
+            file_path=safe_file_path,
             line=line,
             repo_path=repo_root,
         )
@@ -1375,7 +1560,7 @@ async def query_headless_lsp_explorer(
         return {"action": "references", "symbol": symbol, "result": res}
 
     if act in ("diagnostics", "get_diagnostics"):
-        target_f = file_path or "backend/services/codebase_auditor.py"
+        target_f = safe_file_path or "backend/services/codebase_auditor.py"
         res = HeadlessLSPService.get_diagnostics(
             file_path=target_f,
             repo_path=repo_root,

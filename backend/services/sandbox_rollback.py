@@ -130,19 +130,20 @@ class SandboxRollbackManager:
             from backend.services.sandbox_manager import SandboxManager
             if CloudMicroVMSandbox.is_configured() or CloudMicroVMSandbox.is_cloud_native():
                 session = SandboxManager.get_session_by_dir(sandbox_dir) if sandbox_dir else None
-                sid = session.session_id if session else "default"
-                cloud_sb = CloudMicroVMSandbox.get_or_create(sid)
-                res = cloud_sb.run_command(
-                    f"git -C /workspace reset -q -- .kobits* 2>/dev/null || true; "
-                    f"git -C /workspace add -A && "
-                    f"git -C /workspace -c user.name=Kobits -c user.email=bot@kobits.ai commit --allow-empty -m '{commit_msg}' && "
-                    f"git -C /workspace rev-parse HEAD"
-                )
-                if res.get("exit_code") == 0 and res.get("stdout"):
-                    cloud_sha = res["stdout"].strip().splitlines()[-1]
-                    if len(cloud_sha) == 40:
-                        logger.info(f"Created cloud microvm git checkpoint '{clean_step}' -> {cloud_sha}")
-                        return local_sha or cloud_sha
+                if session is not None or not sandbox_dir or str(sandbox_dir).startswith("/workspace"):
+                    sid = session.session_id if session else "default"
+                    cloud_sb = CloudMicroVMSandbox.get_or_create(sid)
+                    res = cloud_sb.run_command(
+                        f"git -C /workspace reset -q -- .kobits* 2>/dev/null || true; "
+                        f"git -C /workspace add -A && "
+                        f"git -C /workspace -c user.name=Kobits -c user.email=bot@kobits.ai commit --allow-empty -m '{commit_msg}' && "
+                        f"git -C /workspace rev-parse HEAD"
+                    )
+                    if res.get("exit_code") == 0 and res.get("stdout"):
+                        cloud_sha = res["stdout"].strip().splitlines()[-1]
+                        if len(cloud_sha) == 40:
+                            logger.info(f"Created cloud microvm git checkpoint '{clean_step}' -> {cloud_sha}")
+                            return local_sha or cloud_sha
         except Exception as e:
             logger.debug(f"Cloud MicroVM checkpoint error: {e}")
 
@@ -164,8 +165,8 @@ class SandboxRollbackManager:
         # 1. Rollback locally if sandbox_dir is a git workspace
         if sandbox_dir and cls._is_git_repo(sandbox_dir):
             try:
-                subprocess.run(["git", "reset", "--hard", target_sha], cwd=sandbox_dir, capture_output=True, timeout=10)
-                subprocess.run(["git", "clean", "-fdx"], cwd=sandbox_dir, capture_output=True, timeout=10)
+                subprocess.run(["git", "reset", "--hard", target_sha], cwd=sandbox_dir, capture_output=True, check=True, timeout=10)
+                subprocess.run(["git", "clean", "-fdx"], cwd=sandbox_dir, capture_output=True, check=True, timeout=10)
                 local_ok = True
                 logger.info(f"Successfully rolled back local sandbox {sandbox_dir} to {target_sha}")
             except Exception as e:
@@ -177,15 +178,16 @@ class SandboxRollbackManager:
             from backend.services.sandbox_manager import SandboxManager
             if CloudMicroVMSandbox.is_configured() or CloudMicroVMSandbox.is_cloud_native():
                 session = SandboxManager.get_session_by_dir(sandbox_dir) if sandbox_dir else None
-                sid = session.session_id if session else "default"
-                cloud_sb = CloudMicroVMSandbox.get_or_create(sid)
-                res = cloud_sb.run_command(
-                    f"git -C /workspace reset --hard {target_sha} 2>/dev/null || git -C /workspace reset --hard HEAD; "
-                    f"git -C /workspace clean -fdx"
-                )
-                if res.get("exit_code") == 0:
-                    logger.info(f"Successfully rolled back cloud MicroVM /workspace to {target_sha}")
-                    return True
+                if session is not None or not sandbox_dir or str(sandbox_dir).startswith("/workspace"):
+                    sid = session.session_id if session else "default"
+                    cloud_sb = CloudMicroVMSandbox.get_or_create(sid)
+                    res = cloud_sb.run_command(
+                        f"git -C /workspace reset --hard {target_sha} 2>/dev/null || git -C /workspace reset --hard HEAD; "
+                        f"git -C /workspace clean -fdx"
+                    )
+                    if res.get("exit_code") == 0:
+                        logger.info(f"Successfully rolled back cloud MicroVM /workspace to {target_sha}")
+                        return True
         except Exception as e:
             logger.debug(f"Cloud MicroVM rollback error: {e}")
 

@@ -556,6 +556,7 @@ def test_three_dashboard_frontend_js_and_backend_diagnostics():
     Runs HeadlessLSPService compiler diagnostics across all newly created/updated
     Python routers and Frontend JavaScript view modules to guarantee zero syntax or import errors.
     """
+    from pathlib import Path
     from backend.services.lsp_service import HeadlessLSPService
 
     target_files = [
@@ -573,4 +574,128 @@ def test_three_dashboard_frontend_js_and_backend_diagnostics():
     for rel_path in target_files:
         diag = HeadlessLSPService.get_diagnostics(file_path=rel_path, repo_path=".")
         assert diag["error_count"] == 0, f"Diagnostics error in {rel_path}: {diag['diagnostics']}"
+
+    # Verify CSS .hidden utility and SVG topology helper exist so modals never render inline expanded
+    for css_path in ("web/css/theme.css", "css/theme.css"):
+        css_text = Path(css_path).read_text(encoding="utf-8")
+        assert ".hidden" in css_text and "display: none !important" in css_text
+
+    for portal_js in ("web/js/views/client_portal.js", "js/views/client_portal.js"):
+        js_text = Path(portal_js).read_text(encoding="utf-8")
+        assert "buildArchitectureSvg" in js_text
+
+
+@pytest.mark.asyncio
+async def test_three_dashboard_security_audit_and_state_transitions():
+    """
+    Verifies fixes for:
+    1. Path traversal defense on `/api/v1/agency-admin/console/lsp` (HTTP 400)
+    2. State-transition conflict protection on 5% Approval Gate (HTTP 409)
+    3. Multi-tenant switcher `all_clients` retention when filtered by `organization_id`
+    4. `/overview` and `/approval-gate/decide` route aliases
+    5. SOC-2 hash-chained `AuditLog` persistence and chain verification
+    """
+    from backend.services.soc2_audit_service import SOC2AuditService
+
+    suffix = uuid.uuid4().hex[:8]
+    async with AsyncSessionLocal() as db:
+        org_1 = Organization(
+            id=f"org-sec1-{suffix}",
+            name=f"Sec Tenant One {suffix}",
+            slug=f"sec-one-{suffix}",
+            description='{"monthly_retainer_usd": 5500.0}',
+            is_active=True,
+        )
+        org_2 = Organization(
+            id=f"org-sec2-{suffix}",
+            name=f"Sec Tenant Two {suffix}",
+            slug=f"sec-two-{suffix}",
+            description='{"monthly_retainer_usd": 7000.0}',
+            is_active=True,
+        )
+        admin = User(
+            id=f"u-sec-admin-{suffix}",
+            email=f"sec-admin-{suffix}@kobits.agency",
+            hashed_password=get_password_hash("AdminPass!123"),
+            full_name="Security Admin",
+            is_active=True,
+        )
+        db.add_all([org_1, org_2, admin])
+        await db.flush()
+        db.add_all([
+            OrgMember(id=str(uuid.uuid4()), user_id=admin.id, organization_id=org_1.id, role=OrgRole.ADMIN),
+            OrgMember(id=str(uuid.uuid4()), user_id=admin.id, organization_id=org_2.id, role=OrgRole.ADMIN),
+        ])
+        proj_1 = Project(
+            id=f"proj-sec1-{suffix}",
+            name="Sec Project One",
+            repository_url=".",
+            organization_id=org_1.id,
+            created_by=admin.id,
+        )
+        db.add(proj_1)
+        await db.commit()
+
+    headers = _auth_headers(admin.id, org_1.id)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # 1. Path traversal attempts on LSP endpoint -> 400 Bad Request
+        for traversal_path in ("../../../etc/passwd", "..\\..\\Windows\\win.ini", "/etc/shadow"):
+            r_trav = await ac.post(
+                "/api/v1/agency-admin/console/lsp",
+                headers=headers,
+                json={"action": "diagnostics", "file_path": traversal_path},
+            )
+            assert r_trav.status_code == 400, f"Expected 400 for {traversal_path}, got {r_trav.status_code}"
+
+        # 2. `/overview` route aliases on both Client Portal and Agency Admin
+        r_portal_ov = await ac.get("/api/v1/client-portal/overview", headers=headers)
+        assert r_portal_ov.status_code == 200
+        assert "consensus_seals_list" in r_portal_ov.json()["delivered_prs"][0]
+
+        r_admin_ov = await ac.get(
+            f"/api/v1/agency-admin/overview?organization_id={org_1.id}",
+            headers=headers,
+        )
+        assert r_admin_ov.status_code == 200
+        ov_data = r_admin_ov.json()
+        # Filtered `clients` has only org_1, while `all_clients` retains both org_1 and org_2 for the switcher!
+        assert len(ov_data["clients"]) == 1
+        assert len(ov_data["all_clients"]) >= 2
+
+        # 3. Create intake mission, reject via `/approval-gate/decide`, then verify approving a rejected mission returns 409 Conflict
+        r_intake = await ac.post(
+            "/api/v1/client-portal/intake",
+            headers=headers,
+            json={
+                "title": "Implement Hardware HSM Key Rotation",
+                "description": "Rotate tenant envelope keys every 30 days with zero downtime.",
+                "priority": "Urgent",
+                "project_id": proj_1.id,
+            },
+        )
+        assert r_intake.status_code == 201
+        msn_id = r_intake.json()["mission_id"]
+
+        r_decide_reject = await ac.post(
+            "/api/v1/agency-admin/approval-gate/decide",
+            headers=headers,
+            json={"mission_id": msn_id, "decision": "reject", "reason": "Holding for HSM maintenance window"},
+        )
+        assert r_decide_reject.status_code == 200
+        assert r_decide_reject.json()["approval_status"] == "REJECTED"
+
+        # Attempting to approve a rejected/cancelled mission -> 409 Conflict
+        r_conflict_approve = await ac.post(
+            "/api/v1/agency-admin/approve-pr",
+            headers=headers,
+            json={"mission_id": msn_id, "operator_notes": "Trying to approve after rejection"},
+        )
+        assert r_conflict_approve.status_code == 409
+
+    # 4. Verify SOC-2 hash-chained AuditLog integrity for org_1
+    async with AsyncSessionLocal() as db:
+        chain_result = await SOC2AuditService.verify_audit_chain(db, organization_id=org_1.id)
+        assert chain_result["valid"] is True
+        assert chain_result["verified_entries"] >= 2
 

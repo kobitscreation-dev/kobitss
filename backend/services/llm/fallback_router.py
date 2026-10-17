@@ -91,6 +91,7 @@ class ResilientLLMRouter(LLMProvider):
 
                 # Check if provider returned soft failure
                 if isinstance(result, dict) and result.get("status") in ("FAILED", "ERROR"):
+                    result["status"] = "FAILED"
                     summary = result.get("summary", "")
                     cat = result.get("failure_category")
                     if self.is_recoverable_error(summary, cat) and idx < len(self.providers) - 1:
@@ -104,6 +105,8 @@ class ResilientLLMRouter(LLMProvider):
                         last_error_summary = summary
                         last_failure_cat = cat or "PROVIDER"
                         continue
+                    if idx > 0 and last_error_summary and last_error_summary != "No providers succeeded.":
+                        result["summary"] = f"{last_error_summary} | Fallback ({p_name}): {summary}"
 
                 # Successful execution or non-recoverable error
                 if isinstance(result, dict):

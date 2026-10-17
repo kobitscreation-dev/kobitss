@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +29,7 @@ from backend.api.deps import (
     get_db,
     get_user_default_org,
     get_user_org_membership,
+    log_audit_event,
 )
 from backend.models.agent import AgentRun
 from backend.models.communication import AgentDecision
@@ -260,6 +261,7 @@ def _extract_retainer_metadata(org: Organization) -> Dict[str, Any]:
 
 @router.get("/portal-summary")
 @router.get("/summary")
+@router.get("/overview")
 async def get_client_portal_summary(
     organization_id: Optional[str] = Query(default=None, description="Target client organization ID"),
     project_id: Optional[str] = Query(default=None, description="Target project ID"),
@@ -526,6 +528,7 @@ async def get_client_portal_summary(
                 "created_at": m.created_at.isoformat() if m.created_at else datetime.now(timezone.utc).isoformat(),
                 "completed_at": m.completed_at.isoformat() if m.completed_at else None,
                 "consensus_seals": seal_bundle["seals"],
+                "consensus_seals_list": list(seal_bundle["seals"].values()),
                 "consensus_seal_hash": seal_bundle["consensus_seal_hash"],
                 "all_seals_verified": seal_bundle["all_verified"],
                 "preview": {
@@ -567,6 +570,7 @@ async def get_client_portal_summary(
                 "created_at": pr.created_at.isoformat() if pr.created_at else datetime.now(timezone.utc).isoformat(),
                 "completed_at": pr.merged_at.isoformat() if pr.merged_at else None,
                 "consensus_seals": seal_bundle["seals"],
+                "consensus_seals_list": list(seal_bundle["seals"].values()),
                 "consensus_seal_hash": seal_bundle["consensus_seal_hash"],
                 "all_seals_verified": True,
                 "preview": {
@@ -606,6 +610,7 @@ async def get_client_portal_summary(
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "completed_at": datetime.now(timezone.utc).isoformat(),
                 "consensus_seals": seal_bundle["seals"],
+                "consensus_seals_list": list(seal_bundle["seals"].values()),
                 "consensus_seal_hash": seal_bundle["consensus_seal_hash"],
                 "all_seals_verified": True,
                 "preview": {
@@ -751,6 +756,7 @@ async def get_client_portal_summary(
 
 @router.post("/intake", response_model=ClientIntakeResponse, status_code=status.HTTP_201_CREATED)
 async def submit_client_intake_request(
+    request: Request,
     payload: ClientIntakeRequest,
     x_organization_id: Optional[str] = Header(default=None, alias="X-Organization-Id"),
     db: AsyncSession = Depends(get_db),
@@ -846,6 +852,22 @@ async def submit_client_intake_request(
         user_id=current_user.id,
     )
     db.add(activity)
+
+    await log_audit_event(
+        db=db,
+        org_id=org.id,
+        user_id=current_user.id,
+        action="client_portal.intake_submitted",
+        resource_type="mission",
+        resource_id=mission.id,
+        details={
+            "title": mission.title,
+            "priority": payload.priority,
+            "project_id": project.id,
+            "submitted_by": current_user.email,
+        },
+        request=request,
+    )
 
     await db.commit()
     await db.refresh(mission)
