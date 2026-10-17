@@ -256,11 +256,12 @@ class SandboxRollbackManager:
         # Run optional test verification callback
         if callable(verify_fn):
             ver_res = verify_fn()
-            ver_ok = (
-                ver_res.get("exit_code", 1) == 0
-                if isinstance(ver_res, dict) and "exit_code" in ver_res
-                else bool(ver_res)
-            )
+            if isinstance(ver_res, dict) and "exit_code" in ver_res:
+                ver_ok = ver_res.get("exit_code", 1) == 0
+            elif isinstance(ver_res, tuple) and len(ver_res) >= 1:
+                ver_ok = bool(ver_res[0])
+            else:
+                ver_ok = bool(ver_res)
             if not ver_ok:
                 rolled = cls.rollback(sandbox_dir, checkpoint_sha) if checkpoint_sha else False
                 return {
