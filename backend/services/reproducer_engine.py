@@ -735,9 +735,10 @@ class ReproducerEngine:
             if path_match:
                 target_file = path_match.group(1)
 
+        safe_check_doc = str(check_name or "CI Check").replace('"""', "'''").replace("\r", " ").replace("\n", " ")
         lines = [
             '"""',
-            f'Negative-to-Positive TDD Reproducer for CI Check: {check_name}',
+            f'Negative-to-Positive TDD Reproducer for CI Check: {safe_check_doc}',
             '"""',
             'import os, sys, re',
             '',
@@ -750,7 +751,7 @@ class ReproducerEngine:
         if target_file:
             clean_rel = target_file.replace("\\", "/")
             lines.extend([
-                f'target_path = os.path.join(sandbox_dir, "{clean_rel}")',
+                f'target_path = os.path.join(sandbox_dir, {repr(clean_rel)})',
                 'if not os.path.exists(target_path):',
                 '    print(f"BUG REPRODUCED: Target file {target_path} not found")',
                 '    sys.exit(1)',
@@ -772,31 +773,33 @@ class ReproducerEngine:
                     '    sys.exit(1)',
                 ])
             elif "incompatible types" in low_msg or "assignment" in low_msg:
+                safe_line_num = max(1, int(target_line or 1))
                 lines.extend([
-                    f'# Assert type conflict resolution on line {target_line}',
+                    f'# Assert type conflict resolution on line {safe_line_num}',
                     'file_lines = content.splitlines()',
-                    f'if len(file_lines) >= {target_line}:',
-                    f'    line_text = file_lines[{target_line - 1}]',
+                    f'if len(file_lines) >= {safe_line_num}:',
+                    f'    line_text = file_lines[{safe_line_num - 1}]',
                     '    # If unpatched line still assigns raw mismatched type',
                     '    if "int" in line_text and "str" in line_text and "cast" not in line_text and "int(" not in line_text and "str(" not in line_text:',
-                    f'        print("BUG REPRODUCED: Unresolved type conflict on line {target_line}")',
+                    f'        print("BUG REPRODUCED: Unresolved type conflict on line {safe_line_num}")',
                     '        sys.exit(1)',
                 ])
             elif "test_" in low_details:
                 test_match = re.search(r"(test_\w+)", failure_details)
                 t_name = test_match.group(1) if test_match else "test"
                 lines.extend([
-                    f'# Verify unit test failure is resolved',
-                    f'if "{t_name}" in content and "raise" in content and "pass" not in content:',
-                    f'    print("BUG REPRODUCED: Failing test condition detected")',
-                    f'    sys.exit(1)',
+                    '# Verify unit test failure is resolved',
+                    f'if {repr(t_name)} in content and "raise" in content and "pass" not in content:',
+                    '    print("BUG REPRODUCED: Failing test condition detected")',
+                    '    sys.exit(1)',
                 ])
             else:
+                marker_val = target_msg[:40] if target_msg[:40] else "error"
                 lines.extend([
                     '# Verify error trace markers are resolved in source code',
-                    f'error_marker = "{target_msg[:40]}" if "{target_msg[:40]}" else "error"',
+                    f'error_marker = {repr(marker_val)}',
                     'if error_marker and error_marker in content and "fix" not in content.lower():',
-                    '    print(f"BUG REPRODUCED: Error marker \'{error_marker}\' still present in code")',
+                    '    print(f"BUG REPRODUCED: Error marker {error_marker!r} still present in code")',
                     '    sys.exit(1)',
                 ])
         else:
@@ -826,12 +829,13 @@ class ReproducerEngine:
         Must fail on unpatched code and pass once the human reviewer\'s requested changes are applied.
         """
         clean_path = (file_path or "code.py").replace("\\", "/")
-        target_line = line_num or 1
-        low_comment = comment_body.lower()
+        target_line = int(line_num or 1)
+        low_comment = (comment_body or "").lower()
+        safe_doc_path = clean_path.replace('"""', "'''").replace("\r", " ").replace("\n", " ")
 
         lines = [
             '"""',
-            f'Negative-to-Positive TDD Reproducer for Code Review Feedback on {clean_path}:{target_line}',
+            f'Negative-to-Positive TDD Reproducer for Code Review Feedback on {safe_doc_path}:{target_line}',
             '"""',
             'import os, sys, re',
             '',
@@ -839,7 +843,7 @@ class ReproducerEngine:
             'if sandbox_dir not in sys.path:',
             '    sys.path.insert(0, sandbox_dir)',
             '',
-            f'target_path = os.path.join(sandbox_dir, "{clean_path}")',
+            f'target_path = os.path.join(sandbox_dir, {repr(clean_path)})',
             'if not os.path.exists(target_path):',
             '    print(f"BUG REPRODUCED: Target file {target_path} not found")',
             '    sys.exit(1)',
@@ -856,8 +860,8 @@ class ReproducerEngine:
                 old_name, new_name = rename_match.group(1), rename_match.group(2)
                 lines.extend([
                     f'# Assert variable was renamed from {old_name} to {new_name}',
-                    f'if "{new_name}" not in content:',
-                    f'    print("BUG REPRODUCED: Variable \'{old_name}\' has not been renamed to \'{new_name}\'")',
+                    f'if {repr(new_name)} not in content:',
+                    f'    print(f"BUG REPRODUCED: Variable {repr(old_name)} has not been renamed to {repr(new_name)}")',
                     '    sys.exit(1)',
                 ])
             else:
@@ -884,7 +888,7 @@ class ReproducerEngine:
         else:
             lines.extend([
                 '# Verify requested feedback instruction satisfied',
-                f'req_keywords = [w for w in "{comment_body}".lower().split() if len(w) > 4][:3]',
+                f'req_keywords = [w for w in {repr(comment_body or "")}.lower().split() if len(w) > 4][:3]',
                 'matched = sum(1 for kw in req_keywords if kw in content.lower())',
                 'if matched == 0 and len(req_keywords) > 0:',
                 '    print("BUG REPRODUCED: Review directive not reflected in source")',

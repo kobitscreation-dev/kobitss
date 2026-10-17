@@ -158,6 +158,75 @@ class AttachRepoRequest(BaseModel):
     html_url: str
     project_id: str
 
+async def _verify_github_project_tenant(
+    db: AsyncSession,
+    project_id: str,
+    membership: OrganizationMember,
+    action: str = "github.project_access",
+) -> Project:
+    proj = await db.get(Project, project_id)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if proj.organization_id != membership.organization_id:
+        from backend.services.soc2_audit_service import AuditEvent, SOC2AuditService
+        await SOC2AuditService.log_rbac_event(
+            db,
+            event=AuditEvent.RBAC_ACCESS_DENIED,
+            user_id=membership.user_id,
+            organization_id=proj.organization_id,
+            actor_role=membership.role.value if hasattr(membership.role, "value") else str(membership.role),
+            resource_type="project",
+            resource_id=project_id,
+            status="DENIED",
+            detail={
+                "action": action,
+                "reason": "cross_tenant_project_access_attempt",
+                "severity": "HIGH",
+                "target_org_id": proj.organization_id,
+                "caller_org_id": membership.organization_id,
+            },
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=403,
+            detail="Cross-tenant access denied: Project belongs to another organization.",
+        )
+    return proj
+
+
+def _sanitize_push_commits(payload: dict) -> List[Dict[str, str]]:
+    """Sanitize and wrap external git commit messages in <user_instruction source='git_commit_message'> boundary tags."""
+    from app.ai.sanitizer import PromptSanitizer
+    raw_commits = list(payload.get("commits") or [])
+    head_commit = payload.get("head_commit")
+    if isinstance(head_commit, dict) and not raw_commits:
+        raw_commits.append(head_commit)
+    sanitized_commits: List[Dict[str, str]] = []
+    for c in raw_commits[:20]:
+        if not isinstance(c, dict):
+            continue
+        cid = str(c.get("id") or "")[:12]
+        raw_msg = str(c.get("message") or "")
+        wrapped_msg = PromptSanitizer.wrap_user_instruction(
+            raw_msg,
+            source="git_commit_message",
+            strict=False,
+        )
+        c["message"] = wrapped_msg
+        sanitized_commits.append({
+            "id": cid,
+            "sanitized_message": PromptSanitizer.sanitize(raw_msg, strict=False),
+            "wrapped_instruction": wrapped_msg,
+        })
+    if isinstance(head_commit, dict) and "message" in head_commit:
+        head_commit["message"] = PromptSanitizer.wrap_user_instruction(
+            str(head_commit.get("message") or ""),
+            source="git_commit_message",
+            strict=False,
+        )
+    return sanitized_commits
+
+
 @router.post("/projects/{project_id}/repositories")
 async def attach_repository(
     project_id: str,
@@ -167,12 +236,7 @@ async def attach_repository(
 ):
     """Attaches a GitHub repository to a Kobits project."""
     membership = await get_user_default_org(db, current_user.id)
-    
-    # Get project
-    project = await db.execute(select(Project).where(Project.id == project_id, Project.organization_id == membership.organization_id))
-    project = project.scalars().first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await _verify_github_project_tenant(db, project_id, membership, action="github.attach_repository")
         
     # Get connection
     conn = await db.execute(select(GitHubConnection).where(GitHubConnection.user_id == current_user.id))
@@ -319,7 +383,34 @@ async def sync_repository(
     current_user: User = Depends(get_current_active_user)
 ):
     membership = await get_user_default_org(db, current_user.id)
+    proj = await db.get(Project, project_id)
+    if proj and proj.organization_id != membership.organization_id:
+        await _verify_github_project_tenant(db, project_id, membership, action="github.sync_repository")
     repo = await db.get(Repository, repository_id)
+    if repo and repo.organization_id and repo.organization_id != membership.organization_id:
+        from backend.services.soc2_audit_service import AuditEvent, SOC2AuditService
+        await SOC2AuditService.log_rbac_event(
+            db,
+            event=AuditEvent.RBAC_ACCESS_DENIED,
+            user_id=current_user.id,
+            organization_id=repo.organization_id,
+            actor_role=membership.role.value if hasattr(membership.role, "value") else str(membership.role),
+            resource_type="repository",
+            resource_id=repository_id,
+            status="DENIED",
+            detail={
+                "action": "github.sync_repository",
+                "reason": "cross_tenant_repository_sync_attempt",
+                "severity": "HIGH",
+                "target_org_id": repo.organization_id,
+                "caller_org_id": membership.organization_id,
+            },
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=403,
+            detail="Cross-tenant access denied: Repository belongs to another organization.",
+        )
     if not repo or repo.project_id != project_id:
         raise HTTPException(status_code=404, detail="Repository not found")
         
@@ -333,6 +424,9 @@ async def get_project_repository(
     current_user: User = Depends(get_current_active_user)
 ):
     membership = await get_user_default_org(db, current_user.id)
+    proj = await db.get(Project, project_id)
+    if proj and proj.organization_id != membership.organization_id:
+        await _verify_github_project_tenant(db, project_id, membership, action="github.get_project_repository")
     stmt = select(Repository).where(Repository.project_id == project_id, Repository.organization_id == membership.organization_id)
     result = await db.execute(stmt)
     repo = result.scalars().first()
@@ -365,7 +459,8 @@ async def github_push_webhook(
     
     repository = payload.get("repository", {})
     ref = payload.get("ref", "")
-    after_sha = payload.get("after")
+    after_sha = payload.get("after") or ""
+    sanitized_commits = _sanitize_push_commits(payload)
     
     repo_full_name = repository.get("full_name")
     if not repo_full_name:
@@ -389,13 +484,14 @@ async def github_push_webhook(
         project_id=repo.project_id,
         type=ActivityType.PROJECT_UPDATED,
         title="GitHub Webhook Received",
-        description=f"Detected push to {branch}. New HEAD is {after_sha[:7]}."
+        description=f"Detected push to {branch}. New HEAD is {after_sha[:7]}.",
+        metadata_json=json.dumps({"sanitized_commits": sanitized_commits}),
     )
     db.add(act)
     await db.commit()
     
     background_tasks.add_task(sync_repository_background, repo.id, repo.organization_id)
-    return {"status": "sync_started"}
+    return {"status": "sync_started", "sanitized_commits": sanitized_commits}
 
 from backend.models.github import PullRequest, PullRequestStatus
 from backend.models.mission import Mission, MissionStatus
@@ -437,7 +533,8 @@ async def github_events_webhook(
     if event_type == "push":
         repository = payload.get("repository", {})
         ref = payload.get("ref", "")
-        after_sha = payload.get("after")
+        after_sha = payload.get("after") or ""
+        sanitized_commits = _sanitize_push_commits(payload)
         repo_full_name = repository.get("full_name")
         if not repo_full_name:
             return {"status": "ignored"}
@@ -453,12 +550,13 @@ async def github_events_webhook(
                 project_id=repo.project_id,
                 type=ActivityType.PROJECT_UPDATED,
                 title="GitHub Webhook Received",
-                description=f"Detected push to {branch}. New HEAD is {after_sha[:7]}."
+                description=f"Detected push to {branch}. New HEAD is {after_sha[:7]}.",
+                metadata_json=json.dumps({"sanitized_commits": sanitized_commits}),
             )
             db.add(act)
             await db.commit()
             background_tasks.add_task(sync_repository_background, repo.id, repo.organization_id)
-            return {"status": "sync_started"}
+            return {"status": "sync_started", "sanitized_commits": sanitized_commits}
         return {"status": "ignored"}
 
     if event_type == "pull_request":

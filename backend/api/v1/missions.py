@@ -382,8 +382,29 @@ async def _resolve_owned_project(db: AsyncSession, project_ref: Optional[Union[s
     if proj:
         if proj.organization_id == org_id:
             return proj
-        # Project exists but belongs to a different organization -> enforce tenant isolation
-        raise HTTPException(status_code=404, detail="Project not found")
+        # Project exists but belongs to a different organization -> enforce tenant isolation (403 + SOC-2 alert)
+        from backend.services.soc2_audit_service import AuditEvent, SOC2AuditService
+        await SOC2AuditService.log_rbac_event(
+            db,
+            event=AuditEvent.RBAC_ACCESS_DENIED,
+            user_id=user_id,
+            organization_id=proj.organization_id,
+            resource_type="project",
+            resource_id=proj.id,
+            status="DENIED",
+            detail={
+                "action": "missions.resolve_project",
+                "reason": "cross_tenant_project_access_attempt",
+                "severity": "HIGH",
+                "target_org_id": proj.organization_id,
+                "caller_org_id": org_id,
+            },
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cross-tenant access denied: Project belongs to another organization.",
+        )
 
     proj = (
         await db.execute(
@@ -401,7 +422,7 @@ async def _resolve_owned_project(db: AsyncSession, project_ref: Optional[Union[s
     return await _get_or_create_default_proj()
 
 
-async def _resolve_owned_mission(db: AsyncSession, mission_ref: str, org_id: str) -> Mission:
+async def _resolve_owned_mission(db: AsyncSession, mission_ref: str, org_id: str, user_id: Optional[str] = None) -> Mission:
     ref = (mission_ref or "").strip()
     if not ref:
         raise HTTPException(status_code=404, detail="Mission not found")
@@ -416,8 +437,31 @@ async def _resolve_owned_mission(db: AsyncSession, mission_ref: str, org_id: str
         return m
 
     mission = await db.get(Mission, ref)
-    if mission and mission.organization_id == org_id:
-        return mission
+    if mission:
+        if mission.organization_id == org_id:
+            return mission
+        from backend.services.soc2_audit_service import AuditEvent, SOC2AuditService
+        await SOC2AuditService.log_rbac_event(
+            db,
+            event=AuditEvent.RBAC_ACCESS_DENIED,
+            user_id=user_id,
+            organization_id=mission.organization_id,
+            resource_type="mission",
+            resource_id=mission.id,
+            status="DENIED",
+            detail={
+                "action": "missions.resolve_mission",
+                "reason": "cross_tenant_mission_access_attempt",
+                "severity": "HIGH",
+                "target_org_id": mission.organization_id,
+                "caller_org_id": org_id,
+            },
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cross-tenant access denied: Mission belongs to another organization.",
+        )
 
     mission = (
         await db.execute(
@@ -427,6 +471,33 @@ async def _resolve_owned_mission(db: AsyncSession, mission_ref: str, org_id: str
         )
     ).scalars().first()
     if not mission:
+        foreign_mission = (
+            await db.execute(
+                select(Mission)
+                .where(Mission.id.like(f"{ref}%"))
+                .order_by(Mission.created_at.desc())
+            )
+        ).scalars().first()
+        if foreign_mission and foreign_mission.organization_id != org_id:
+            from backend.services.auth_service import log_audit_event
+            await log_audit_event(
+                db=db,
+                org_id=org_id,
+                user_id=user_id,
+                action="rbac.cross_tenant_denied",
+                resource_type="mission",
+                resource_id=foreign_mission.id,
+                details={
+                    "target_org_id": foreign_mission.organization_id,
+                    "caller_org_id": org_id,
+                    "reason": "Cross-tenant mission prefix access blocked",
+                },
+                severity="HIGH",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cross-tenant access denied: Mission belongs to another organization.",
+            )
         raise HTTPException(status_code=404, detail="Mission not found")
     return mission
 

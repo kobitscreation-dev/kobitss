@@ -523,9 +523,15 @@ WORKDIR /workspace
         cpus = float(limits.get("cpus", 1.0))
         pids_limit = int(limits.get("pids_limit", 200))
 
+        from backend.services.container_security import SyscallInterceptionEngine
+
+        runtime_name = SyscallInterceptionEngine.get_runtime_name()
+        runtime_args = ["--runtime", "runsc"] if runtime_name == "runsc" else []
+
         boot_cmd = [
             "docker", "run", "-d",
             "--name", container_name,
+            *runtime_args,
             "--memory", f"{mem_mb}m",
             "--memory-swap", f"{mem_mb}m",
             "--cpus", str(cpus),
@@ -1004,8 +1010,12 @@ WORKDIR /workspace
 
             has_services = os.path.exists(os.path.join(sandbox_abs, "docker-compose.yml"))
             network_mode = "bridge" if has_services else "none"
+            from backend.services.container_security import SyscallInterceptionEngine
+            runtime_name = SyscallInterceptionEngine.get_runtime_name()
+            runtime_args = ["--runtime", "runsc"] if runtime_name == "runsc" else []
             exec_cmd = [
                 "docker", "run", "--rm",
+                *runtime_args,
                 "--memory", "2048m",
                 "--cpus", "1.0",
                 "--pids-limit", "200",

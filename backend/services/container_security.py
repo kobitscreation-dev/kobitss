@@ -166,6 +166,8 @@ class EgressSecurityPolicy:
             return False, f"Blocked: {reason}"
 
         if require_registry_allowlist or self.enforce_domain_whitelist:
+            if clean_target in [ip.lower() for ip in self.allowed_dns_resolvers]:
+                return True, "Allowed DNS resolver"
             allowed_domains = [d.lower() for d in self.allowed_registries]
             if not any(clean_target == d or clean_target.endswith(f".{d}") for d in allowed_domains):
                 return False, f"Blocked: destination '{clean_target}' is not in the sandbox egress allowlist"
@@ -382,7 +384,47 @@ table inet kobits_firewall {
 # =====================================================================
 
 _ORIGINAL_SOCKET_CONNECT = socket.socket.connect
+_ORIGINAL_SOCKET_CONNECT_EX = socket.socket.connect_ex
 _SOCKET_FILTER_INSTALLED = False
+
+
+def _validate_socket_destination(address) -> None:
+    """
+    Validates a socket destination address tuple against cloud metadata, RFC 1918 private subnets,
+    metadata hostnames, and DNS rebinding to internal/IMDS IPs.
+    Raises PermissionError if blocked.
+    """
+    try:
+        host = address[0]
+    except (IndexError, TypeError):
+        return
+
+    if not isinstance(host, str):
+        return
+
+    allowed, reason = NetworkEgressEnforcer.validate_destination(host, resolve_dns=False)
+    if not allowed:
+        logger.critical(f"BLOCKED EGRESS ATTEMPT: {host} - {reason}")
+        raise PermissionError(f"[Kobits Sandbox Security] Outbound connection to {host} is blocked: {reason}")
+
+    # If host is a domain name (not an IP literal), inspect resolved DNS records for rebinding to blocked IPs
+    try:
+        ipaddress.ip_address(host.strip())
+    except ValueError:
+        try:
+            addr_info = socket.getaddrinfo(host.strip(), None)
+            for _family, _socktype, _proto, _canonname, sockaddr in addr_info:
+                resolved_ip_str = sockaddr[0]
+                blocked, ip_reason = NetworkEgressEnforcer.is_ip_blocked(resolved_ip_str)
+                if blocked:
+                    rebinding_reason = f"Domain {host} resolved to blocked IP {resolved_ip_str}: {ip_reason}"
+                    logger.critical(f"BLOCKED DNS REBINDING EGRESS ATTEMPT: {rebinding_reason}")
+                    raise PermissionError(
+                        f"[Kobits Sandbox Security] Outbound connection to {host} is blocked: {rebinding_reason}"
+                    )
+        except socket.gaierror:
+            # Let the underlying socket connect handle standard DNS resolution errors
+            pass
 
 
 def _filtered_socket_connect(self, address):
@@ -390,32 +432,35 @@ def _filtered_socket_connect(self, address):
     Socket wrapper that validates the destination address before initiating TCP/UDP connect.
     Raises PermissionError if connecting to cloud metadata or private subnet.
     """
-    try:
-        host = address[0]
-        # Validate target host
-        blocked, reason = NetworkEgressEnforcer.is_ip_blocked(host)
-        if blocked:
-            logger.critical(f"BLOCKED EGRESS ATTEMPT: {host} - {reason}")
-            raise PermissionError(f"[Kobits Sandbox Security] Outbound connection to {host} is blocked: {reason}")
-    except (IndexError, TypeError):
-        pass
+    _validate_socket_destination(address)
     return _ORIGINAL_SOCKET_CONNECT(self, address)
 
 
+def _filtered_socket_connect_ex(self, address):
+    """
+    Socket wrapper for connect_ex that validates the destination address before initiating non-blocking connect.
+    Raises PermissionError if connecting to cloud metadata or private subnet.
+    """
+    _validate_socket_destination(address)
+    return _ORIGINAL_SOCKET_CONNECT_EX(self, address)
+
+
 def install_socket_egress_filter():
-    """Installs the defense-in-depth in-process socket filter."""
+    """Installs the defense-in-depth in-process socket filter on connect and connect_ex."""
     global _SOCKET_FILTER_INSTALLED
     if not _SOCKET_FILTER_INSTALLED:
         socket.socket.connect = _filtered_socket_connect
+        socket.socket.connect_ex = _filtered_socket_connect_ex
         _SOCKET_FILTER_INSTALLED = True
         logger.info("Kernel-level socket egress interceptor installed.")
 
 
 def uninstall_socket_egress_filter():
-    """Restores original socket connect function."""
+    """Restores original socket connect and connect_ex functions."""
     global _SOCKET_FILTER_INSTALLED
     if _SOCKET_FILTER_INSTALLED:
         socket.socket.connect = _ORIGINAL_SOCKET_CONNECT
+        socket.socket.connect_ex = _ORIGINAL_SOCKET_CONNECT_EX
         _SOCKET_FILTER_INSTALLED = False
         logger.info("Socket egress interceptor uninstalled.")
 

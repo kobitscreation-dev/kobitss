@@ -115,6 +115,10 @@ class PromptSanitizer:
                 f"Received: {len(user_input)} characters."
             )
 
+        # Strip zero-width / invisible obfuscation characters and normalize fullwidth angle brackets
+        user_input = re.sub(r"[\u200b\u200c\u200d\u200e\u200f\ufeff\u2060\u00ad]", "", user_input)
+        user_input = user_input.replace("\uff1c", "<").replace("\uff1e", ">")
+
         # Check injection patterns
         for pattern, description, block in cls.INJECTION_PATTERNS:
             if pattern.search(user_input):

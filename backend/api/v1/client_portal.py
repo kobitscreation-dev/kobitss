@@ -895,8 +895,8 @@ async def submit_client_intake_request(
         mission_priority = MissionPriority.MEDIUM
 
     mid = str(uuid.uuid4())
-    clean_title = PromptSanitizer.sanitize(payload.title.strip(), strict=False)[0].strip()
-    clean_description = PromptSanitizer.sanitize(payload.description.strip(), strict=False)[0].strip()
+    clean_title = PromptSanitizer.sanitize(payload.title.strip(), strict=False).strip() or "Client Feature Request"
+    clean_description = PromptSanitizer.sanitize(payload.description.strip(), strict=False).strip() or "Sanitized client request"
     wrapped_objective = PromptSanitizer.wrap_user_instruction(
         payload.description.strip(),
         source="client_portal_intake",

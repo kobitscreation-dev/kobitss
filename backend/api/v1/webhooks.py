@@ -93,14 +93,21 @@ async def github_webhook(
                 )
                 raise HTTPException(status_code=404, detail="Project not found for repository")
 
+            from app.ai.sanitizer import PromptSanitizer
+            safe_title = PromptSanitizer.sanitize(title, strict=False) or "GitHub Issue"
+            safe_objective = PromptSanitizer.wrap_user_instruction(
+                body or title,
+                source="github_issue",
+                strict=False,
+            )
             m = Mission(
                 id=str(uuid.uuid4()),
                 organization_id=project.organization_id,
                 project_id=project.id,
                 repository_id=getattr(project, "repository_id", None) or (repo_rec.id if repo_rec else None),
                 created_by=project.created_by,
-                title=f"[GitHub] {title}",
-                objective=body or title,
+                title=f"[GitHub] {safe_title}",
+                objective=safe_objective,
                 status=MissionStatus.ACTIVE,
                 phase=WorkflowPhase.INTAKE,
             )
@@ -441,14 +448,20 @@ async def github_webhook(
                 except Exception:
                     pass
 
+        from app.ai.sanitizer import PromptSanitizer
         cleaned_prompt = re.sub(r"@kobits(-ai)?(\[bot\])?", "", comment_body, flags=re.IGNORECASE).strip()
         if not cleaned_prompt:
             cleaned_prompt = comment_body
+        delimited_prompt = PromptSanitizer.wrap_user_instruction(
+            cleaned_prompt,
+            source="github_pr_review_comment",
+            strict=False,
+        )
 
         objective = (
             f"Address PR #{pr_number} review comment from @{sender_login} on `{file_path}`"
             f"{f' (line {line_num})' if line_num else ''}:\n\n"
-            f"Instruction: {cleaned_prompt}\n\n"
+            f"Instruction: {delimited_prompt}\n\n"
             f"Diff Context:\n```\n{diff_hunk}\n```"
         )
 
@@ -655,7 +668,13 @@ async def github_webhook(
         existing_mission.status = MissionStatus.ACTIVE
         existing_mission.phase = WorkflowPhase.IMPLEMENTATION
 
+        from app.ai.sanitizer import PromptSanitizer
         from backend.services.reproducer_engine import ReproducerEngine
+        safe_comment_body = PromptSanitizer.wrap_user_instruction(
+            comment_body,
+            source="github_pr_issue_comment",
+            strict=False,
+        )
         reproducer_script_content = ReproducerEngine.synthesize_review_reproducer(
             file_path="code.py",
             line_num=1,
@@ -668,7 +687,7 @@ async def github_webhook(
             project_id=existing_mission.project_id,
             mission_id=existing_mission.id,
             title=f"[PR #{pr_number} Conversation] Address Reviewer Feedback",
-            description=f"PR #{pr_number} Comment from @{sender_login}:\n\n{comment_body}",
+            description=f"PR #{pr_number} Comment from @{sender_login}:\n\n{safe_comment_body}",
             status=TaskStatus.PENDING,
             is_correction=True,
             priority=TaskPriority.HIGH,
@@ -743,14 +762,20 @@ async def github_webhook(
                     mission.status = MissionStatus.ACTIVE
                     mission.phase = WorkflowPhase.IMPLEMENTATION
 
+                    from app.ai.sanitizer import PromptSanitizer
                     body_text = review_data.get("body", "Changes requested by reviewer")
+                    safe_body_text = PromptSanitizer.wrap_user_instruction(
+                        body_text,
+                        source="github_pr_review",
+                        strict=False,
+                    )
                     task_id = str(uuid.uuid4())
                     correction_task = Task(
                         id=task_id,
                         project_id=mission.project_id,
                         mission_id=mission.id,
                         title=f"[PR #{pr_number} Review] Changes Requested",
-                        description=f"Human Reviewer Feedback:\n\n{body_text}",
+                        description=f"Human Reviewer Feedback:\n\n{safe_body_text}",
                         status=TaskStatus.PENDING,
                         is_correction=True,
                         priority=TaskPriority.HIGH,
@@ -807,8 +832,9 @@ async def jira_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     issue = payload.get("issue", {})
     fields = issue.get("fields", {})
     
-    title = fields.get("summary", "Jira Issue")
-    body = fields.get("description", "")
+    title = PromptSanitizer.sanitize(str(fields.get("summary", "Jira Issue") or "Jira Issue"), strict=False)
+    raw_body = str(fields.get("description", "") or "")
+    body = PromptSanitizer.wrap_user_instruction(raw_body or title, source="jira_issue")
     
     jira_proj = fields.get("project", {})
     jira_proj_key = jira_proj.get("key") or jira_proj.get("id") or payload.get("project_key")
@@ -834,7 +860,7 @@ async def jira_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         repository_id=getattr(project, "repository_id", None),
         created_by=project.created_by,
         title=f"[Jira] {title}",
-        objective=body or title,
+        objective=body,
         status=MissionStatus.ACTIVE,
         phase=WorkflowPhase.INTAKE
     )
@@ -861,8 +887,9 @@ async def linear_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     action = payload.get("action")
     if action == "create" and payload.get("type") == "Issue":
         data = payload.get("data", {})
-        title = data.get("title", "Linear Issue")
-        body = data.get("description", "")
+        title = PromptSanitizer.sanitize(str(data.get("title", "Linear Issue") or "Linear Issue"), strict=False)
+        raw_body = str(data.get("description", "") or "")
+        body = PromptSanitizer.wrap_user_instruction(raw_body or title, source="linear_issue")
         
         linear_team = data.get("teamId") or data.get("projectId") or (
             data.get("team", {}).get("key") if isinstance(data.get("team"), dict) else None
@@ -889,7 +916,7 @@ async def linear_webhook(request: Request, db: AsyncSession = Depends(get_db)):
             repository_id=getattr(project, "repository_id", None),
             created_by=project.created_by,
             title=f"[Linear] {title}",
-            objective=body or title,
+            objective=body,
             status=MissionStatus.ACTIVE,
             phase=WorkflowPhase.INTAKE
         )
@@ -931,6 +958,8 @@ async def slack_webhook(request: Request, db: AsyncSession = Depends(get_db)):
             cleaned_text = re.sub(r"<@[A-Z0-9]+>", "", text).strip()
             if not cleaned_text:
                 return {"status": "ignored", "reason": "empty prompt"}
+            sanitized_title_text = PromptSanitizer.sanitize(cleaned_text, strict=False)
+            wrapped_objective = PromptSanitizer.wrap_user_instruction(cleaned_text, source="slack_mention")
             
             project = None
             if channel:
@@ -952,8 +981,8 @@ async def slack_webhook(request: Request, db: AsyncSession = Depends(get_db)):
                 project_id=project.id,
                 repository_id=getattr(project, "repository_id", None),
                 created_by=project.created_by,
-                title=f"[Slack Request] {cleaned_text[:30]}...",
-                objective=cleaned_text,
+                title=f"[Slack Request] {sanitized_title_text[:30]}...",
+                objective=wrapped_objective,
                 status=MissionStatus.ACTIVE,
                 phase=WorkflowPhase.INTAKE
             )

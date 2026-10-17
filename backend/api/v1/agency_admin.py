@@ -474,7 +474,7 @@ async def get_agency_financials(
                     "files_changed": files_changed,
                     "diff_preview": diff_preview,
                     "microvm_logs": [
-                        f"[MicroVM:{m.id[:8]}] Booting isolated sandbox worktree (mem=512MB, cpus=1.0, pids_max=64)...",
+                        f"[MicroVM:{m.id[:8]}] Booting isolated sandbox worktree (mem=2048MB, cpus=1.0, pids_max=200)...",
                         f"[Forge] Synthesizing changes across {len(files_changed)} files for '{m.title}'...",
                         f"[Sentinel] Running pytest suite: 32 passed, 0 failed in 1.42s.",
                         f"[Aegis] SAST & dependency audit complete: 0 CVEs, 0 secrets exposed.",
@@ -991,10 +991,14 @@ async def reject_and_rollback_pr(
 
     sandbox_rolled_back = False
     try:
-        sess = SandboxManager.get_session(mission.id)
+        sess = (
+            SandboxManager.get_session(mission.id)
+            or SandboxManager.get_session(mission.id[:12])
+            or (SandboxManager.get_session_by_branch(mission.active_branch) if mission.active_branch else None)
+        )
         if sess:
-            SandboxManager.cleanup_sandbox(sess.session_id)
-            sandbox_rolled_back = True
+            cleanup_res = SandboxManager.cleanup(sess.session_id)
+            sandbox_rolled_back = bool(cleanup_res.get("success", True))
     except Exception:
         pass
 
@@ -1408,7 +1412,11 @@ async def get_systems_console_telemetry(
     limits = ResourceLimits.strict_sandbox_quotas()
     egress_policy = EgressSecurityPolicy()
     sec_mgr = ContainerSecurityManager(limits=limits, egress_policy=egress_policy)
-    sec_audit = sec_mgr.get_security_posture_report() if hasattr(sec_mgr, "get_security_posture_report") else {}
+    sec_audit = (
+        sec_mgr.audit_security_posture()
+        if hasattr(sec_mgr, "audit_security_posture")
+        else (sec_mgr.get_security_posture_report() if hasattr(sec_mgr, "get_security_posture_report") else {})
+    )
 
     active_containers: List[Dict[str, Any]] = []
     active_sb_map = getattr(CloudMicroVMSandbox, "_active_sandboxes", {})
