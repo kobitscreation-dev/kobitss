@@ -895,6 +895,13 @@ app.include_router(extension.router, prefix="/api/v1/extension", tags=["VS Code 
 from backend.api.v1 import discovery
 app.include_router(discovery.router, prefix="/api/v1/discovery", tags=["Codebase Discovery & Architecture"])
 
+from backend.api.v1 import client_portal, agency_admin
+app.include_router(client_portal.router, prefix="/api/v1/client-portal", tags=["Dashboard 1: Executive Client Portal"])
+app.include_router(client_portal.router, prefix="/api/v1/portal", tags=["Dashboard 1: Executive Client Portal"])
+app.include_router(agency_admin.router, prefix="/api/v1/agency-admin", tags=["Dashboard 2: Agency Operations & Financial Hub"])
+app.include_router(agency_admin.router, prefix="/api/v1/admin", tags=["Dashboard 2: Agency Operations & Financial Hub"])
+app.include_router(agency_admin.router, prefix="/api/v1/console", tags=["Dashboard 3: Deep Systems & MicroVM Mission Control"])
+
 try:
     from backend.api import webhooks as notification_webhooks
     app.include_router(notification_webhooks.router)
@@ -1245,21 +1252,22 @@ async def serve_static(file_path: str, request: Request):
             return FileResponse("portal.html", headers=headers)
 
     # Protect personal dashboard workspace routes behind authentication
-    if clean_path in ("dashboard", "web/index.html", "web") or clean_path.startswith("web/"):
+    dashboard_routes = ("dashboard", "client-portal", "admin", "console", "web/index.html", "web")
+    if clean_path in dashboard_routes or clean_path.startswith("web/"):
         ext = os.path.splitext(clean_path)[1].lower()
         if ext in ("", ".html"):
             is_demo = request.query_params.get("demo") == "true" or request.query_params.get("mock") == "true"
             valid_token = _has_valid_session_token(request)
             if not valid_token and not settings.KOBITS_DEV_MODE and not is_demo:
                 return RedirectResponse(url="/portal.html#login", status_code=302)
-            if clean_path in ("dashboard", "web/index.html", "web") and os.path.isfile("web/index.html"):
+            if clean_path in dashboard_routes and os.path.isfile("web/index.html"):
                 resp = FileResponse("web/index.html", headers=headers)
                 if valid_token and request.query_params.get("session_token"):
                     _set_session_cookie(resp, valid_token)
                 return resp
 
     # If dashboard is requested (authenticated)
-    if clean_path == "dashboard":
+    if clean_path in ("dashboard", "client-portal", "admin", "console"):
         if os.path.isfile("web/index.html"):
             return FileResponse("web/index.html", headers=headers)
         if os.path.isfile("portal.html"):

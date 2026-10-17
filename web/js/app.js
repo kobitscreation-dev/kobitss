@@ -147,12 +147,70 @@ function renderPhaseStrip(phase, status) {
   }).join('')}</div>`;
 }
 
+// ── 3-Tier Agency Dashboard Surface Routing (#portal, #admin, #console) ─────
+
+function getEffectiveTriadRoute() {
+  const rawHash = (location.hash || '').replace(/^#\/?/, '').split('?')[0];
+  if (rawHash) return rawHash;
+  const path = (location.pathname || '').replace(/^\/+|\/+$/g, '');
+  if (path === 'client-portal') return 'portal';
+  if (path === 'admin') return 'admin';
+  if (path === 'console') return 'console';
+  return '';
+}
+
+function isTriadSurfaceRoute(routeStr) {
+  const h = (routeStr !== undefined ? routeStr : getEffectiveTriadRoute()).split('?')[0];
+  return (
+    h === 'portal' ||
+    h === 'client-portal' ||
+    h === 'admin' ||
+    h === 'agency-admin' ||
+    h === 'console' ||
+    h.startsWith('console/')
+  );
+}
+
+async function dispatchTriadSurfaceRoute(routeStr) {
+  const view = document.getElementById('view') || document.getElementById('main-content');
+  if (!view) return false;
+  const raw = (routeStr !== undefined ? routeStr : getEffectiveTriadRoute());
+  const [baseRoute, queryPart] = raw.split('?');
+  const params = {};
+  if (queryPart) {
+    const sp = new URLSearchParams(queryPart);
+    if (sp.get('org')) params.org = sp.get('org');
+  }
+  if (baseRoute === 'portal' || baseRoute === 'client-portal') {
+    const mod = await import('./views/client_portal.js');
+    await mod.renderClientPortalView(view, params);
+    return true;
+  }
+  if (baseRoute === 'admin' || baseRoute === 'agency-admin') {
+    const mod = await import('./views/admin_console.js');
+    await mod.renderAdminConsoleView(view, params);
+    return true;
+  }
+  if (baseRoute === 'console' || baseRoute.startsWith('console/')) {
+    const parts = baseRoute.split('/');
+    if (parts[1]) params.missionId = parts[1];
+    const mod = await import('./views/console_view.js');
+    await mod.renderSystemsConsoleView(view, params);
+    return true;
+  }
+  return false;
+}
+
 // ── Data Fetching ───────────────────────────────────────────────────────────
 
 async function fetchDashboard(silent = false) {
   const view = document.getElementById('view') || document.getElementById('main-content');
   if (!view) return;
-  const initialCurH = (location.hash || '').replace(/^#\/?/, '');
+  const initialCurH = getEffectiveTriadRoute();
+  if (isTriadSurfaceRoute(initialCurH)) {
+    if (!silent) await dispatchTriadSurfaceRoute(initialCurH);
+    return;
+  }
   const isMissionRoute = initialCurH.startsWith('missions') || initialCurH.startsWith('mission');
   if (!silent && !state.dashboard && !isMissionRoute && initialCurH !== 'settings' && initialCurH !== 'new-project') {
     view.innerHTML = `<div class="ky-card" style="text-align:center;padding:48px 24px;max-width:540px;margin:40px auto">
@@ -194,7 +252,10 @@ async function fetchDashboard(silent = false) {
       localStorage.removeItem('kobits.projectId');
     }
     populateProjectSelect(data);
-    const curH = (location.hash || '').replace(/^#\/?/, '');
+    const curH = getEffectiveTriadRoute();
+    if (isTriadSurfaceRoute(curH)) {
+      return;
+    }
     if (curH === 'settings') {
       if (!silent) renderSettingsPage();
       return;
@@ -1643,7 +1704,12 @@ function initTopBar() {
   });
 
   window.addEventListener('hashchange', () => {
-    const h = (location.hash || '').replace(/^#\/?/, '');
+    const rawH = (location.hash || '').replace(/^#\/?/, '');
+    const h = rawH.split('?')[0];
+    if (isTriadSurfaceRoute(rawH)) {
+      dispatchTriadSurfaceRoute(rawH);
+      return;
+    }
     if (h === 'github') {
       openGitHubModal();
       return;
@@ -2984,7 +3050,7 @@ function initLiveWebSocket() {
 
 // ── Bootstrap ───────────────────────────────────────────────────────────────
 
-const initialHash = (location.hash || '').replace(/^#\/?/, '');
+const initialHash = getEffectiveTriadRoute();
 if (['overview', 'milestones', 'deliverables', 'team', 'reports'].includes(initialHash)) {
   state.tab = initialHash;
 }
@@ -2993,7 +3059,9 @@ initTopBar();
 fetchDashboard();
 initLiveWebSocket();
 
-if (initialHash === 'settings') {
+if (isTriadSurfaceRoute(initialHash)) {
+  dispatchTriadSurfaceRoute(initialHash);
+} else if (initialHash === 'settings') {
   renderSettingsPage();
 } else if (initialHash === 'new-project') {
   renderNewProjectPage();

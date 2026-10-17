@@ -1366,6 +1366,11 @@ async def deliver_mission(
     membership = await get_user_default_org(db, current_user.id)
     await enforce_permission_with_audit(db, membership, Permission.CODE_WRITE, action="deliver_mission")
     mission = await _resolve_owned_mission(db, mission_id, membership.organization_id)
+    if mission.requires_approval and mission.approval_status != ApprovalStatus.APPROVED:
+        raise HTTPException(
+            status_code=403,
+            detail="5% Operator Approval Gate: Mission requires Lead Engineer approval before shipping to GitHub.",
+        )
     push_pr = True if request is None else bool(request.push_and_open_pr)
     from backend.services.sandbox_review import persist_mission_deliverable
     deliverable = await persist_mission_deliverable(db, mission, push_and_open_pr=push_pr)

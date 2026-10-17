@@ -253,9 +253,16 @@ class RoleChecker:
 
 
 from backend.models.organization import OrgRole, Permission  # noqa: E402
+from backend.services.auth_service import (  # noqa: E402
+    enforce_permission_with_audit,
+    enforce_role_with_audit,
+    get_user_default_org,
+    get_user_org_membership,
+)
 
 require_admin = RoleChecker(minimum_role=OrgRole.ADMIN)
 require_lead_engineer = RoleChecker(minimum_role=OrgRole.LEAD_ENGINEER)
 require_member = RoleChecker(minimum_role=OrgRole.MEMBER)
 require_reviewer = RoleChecker(minimum_role=OrgRole.READ_ONLY_REVIEWER)
+
 

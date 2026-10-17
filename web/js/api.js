@@ -452,16 +452,184 @@ index 0000000..9b62a4f
       return { status: "success", message: "Disconnected GitHub account" };
     }
 
-    // 10. Interactive actions (Approve, Apply, Retry, Cancel, Start mission)
+    // 10. 3-Tier Agency Dashboard Demo Mode Fallbacks
+    if (path.startsWith('/client-portal/portal-summary') || path.startsWith('/client-portal/summary')) {
+      return {
+        organization: { id: "demo-org-acme", name: "Acme FinTech Corp", slug: "acme-fintech", role: "READ_ONLY_REVIEWER", monthly_retainer_usd: 6500, billing_tier: "Autonomous Pod Retainer", sla_status: "99.9% On-Time SLA" },
+        project: { id: "demo-proj-core", name: "Acme Core Banking Platform", description: "Autonomous software engineering workspace", default_branch: "main", tech_stack: ["Python", "FastAPI", "PostgreSQL", "TypeScript", "Docker"] },
+        sprint_hero: {
+          active_sprint_name: "Sprint 2: Zero-Trust Webhook Verification & Ledger Isolation",
+          sprint_progress_pct: 78,
+          status_badge: "ACTIVE_SPRINT",
+          compute_transparency: { functions_analyzed: 2840, test_iterations_run: 96, bugs_self_healed: 14, autonomous_hours_saved: 99.4 }
+        },
+        milestone_roadmap: [
+          { id: "ms-1", week: "Week 1", title: "Codebase Discovery & Security Baseline", description: "Automated AST dependency mapping, secret scanning, and test harness setup.", status: "COMPLETED", progress: 100, audit_report_available: true, deliverables: ["Mermaid Architecture DAG", "SAST Baseline"] },
+          { id: "ms-2", week: "Week 2", title: "Zero-Trust Webhook & Billing Pipeline", description: "HMAC-SHA256 webhook verification and idempotent ledger transactions.", status: "IN_PROGRESS", progress: 78, audit_report_available: false, deliverables: ["Stripe Webhook Verifier", "Pytest Suite"] },
+          { id: "ms-3", week: "Week 3", title: "Multi-Region Read Replica Caching", description: "Low-latency LRU cache and read-replica failover.", status: "UPCOMING", progress: 0, audit_report_available: false, deliverables: ["Redis/Memory Cache"] },
+          { id: "ms-4", week: "Week 4", title: "Production Load Audit & SLA Handover", description: "p95 latency benchmarking and SOC2 evidence bundle.", status: "UPCOMING", progress: 0, audit_report_available: false, deliverables: ["SOC2 Audit Bundle"] }
+        ],
+        architecture_map: {
+          audit_id: "audit-demo-01",
+          health_score: 94,
+          tech_stack: ["Python", "FastAPI", "SQLAlchemy", "TypeScript", "Docker"],
+          total_loc: 42800,
+          total_files: 164,
+          executive_summary: "Modular multi-tenant service architecture with 100% automated regression verification and zero critical CVEs.",
+          mermaid_diagram: "graph TD\n  ClientPortal[Executive Client Portal] --> Gateway[FastAPI Gateway]\n  Gateway --> Pod[21-Agent Autonomous Pod]\n  Pod --> Sandbox[Firecracker MicroVM]",
+          markdown_report: "# Executive Architecture & Codebase Discovery Audit\n\n- **Health Score:** 94/100\n- **Security:** 0 CVEs, 0 leaked secrets\n- **Test Coverage:** 100% critical path pass rate"
+        },
+        delivered_prs: [
+          {
+            id: "pr-142",
+            mission_id: "demo-msn-wal",
+            pr_number: 142,
+            title: "Distributed Raft Consensus & WAL Storage Engine",
+            business_summary: "Guarantees zero transaction data loss during unexpected cloud node restarts with deterministic CRC32 replay.",
+            branch: "feat/wal-acid-consensus",
+            commit_sha: "9b62a4f8c12d",
+            status: "MERGED",
+            approval_status: "APPROVED",
+            github_pr_url: "https://github.com/kobits/platform/pull/142",
+            consensus_seal_hash: "sha256:8f9d2a7e4c1b90e3f5a21d8c",
+            all_seals_verified: true,
+            consensus_seals: {
+              security: { label: "Security Verified", agent: "Aegis", status: "VERIFIED", summary: "Aegis confirmed 0 CVEs, 0 leaked secrets, and clean SAST/dependency checks." },
+              qa: { label: "QA Verified", agent: "Sentinel", status: "VERIFIED", summary: "Sentinel confirmed 100% unit & integration tests passing (48 assertions green)." },
+              architecture: { label: "Architecture Verified", agent: "Nexus", status: "VERIFIED", summary: "Nexus verified clean modular boundaries across 3 modified modules." }
+            },
+            preview: {
+              available: true,
+              url: "/api/v1/preview/demo-msn-wal/",
+              viewports: {
+                desktop: { label: "Desktop", width: 1920, height: 1080 },
+                tablet: { label: "Tablet", width: 768, height: 1024 },
+                mobile: { label: "Mobile", width: 375, height: 812 }
+              }
+            }
+          }
+        ],
+        adr_log: [
+          { id: "ADR-001", title: "Strict Multi-Tenant Database Row Isolation", summary: "Enforced organization-scoped foreign keys and RBAC membership verification across all API queries.", rationale: "Guarantees SOC2 Type II tenant isolation.", confidence: 99.0, author_agent: "Nexus" },
+          { id: "ADR-002", title: "3-Agent Cryptographic Consensus Gate", summary: "Every PR requires independent sign-off from Aegis, Sentinel, and Nexus.", rationale: "Eliminates regressions before Lead Engineer review.", confidence: 98.5, author_agent: "Aegis" }
+        ],
+        intake_requests: []
+      };
+    }
+
+    if (path.startsWith('/agency-admin/financials')) {
+      return {
+        active_organization_id: "demo-org-acme",
+        active_clients_count: 2,
+        monthly_mrr_usd: 14500.0,
+        total_api_cost_usd: 312.40,
+        microvm_cost_usd: 74.60,
+        total_cost_usd: 387.00,
+        net_gross_margin_usd: 14113.00,
+        net_gross_margin_pct: 97.33,
+        total_tokens: 642000,
+        clients: [
+          { organization_id: "demo-org-acme", client_name: "Acme FinTech Corp", slug: "acme-fintech", client_admin_email: "cto@acmefintech.io", monthly_retainer_usd: 8000, total_cost_usd: 210.50, net_margin_usd: 7789.50, net_margin_pct: 97.4, active_sprint: "Sprint 2: Zero-Trust Webhook Verification", sla_status: "99.9% On-Time SLA" },
+          { organization_id: "demo-org-veloce", client_name: "Veloce Health AI", slug: "veloce-health", client_admin_email: "vp@veloce.ai", monthly_retainer_usd: 6500, total_cost_usd: 176.50, net_margin_usd: 6323.50, net_margin_pct: 97.3, active_sprint: "Sprint 1: HIPAA Audit Logging", sla_status: "99.9% On-Time SLA" }
+        ],
+        approval_queue_count: 1,
+        approval_queue: [
+          {
+            mission_id: "demo-msn-sandbox",
+            organization_id: "demo-org-acme",
+            client_name: "Acme FinTech Corp",
+            title: "Autonomous Pytest Cleanroom Sandbox Orchestration",
+            description: "Provision ephemeral sandbox cleanrooms with isolated venvs and execute real-time AST syntax validation.",
+            status: "AWAITING_APPROVAL",
+            branch: "feat/cleanroom-sandbox",
+            commit_sha: "4e91c2a7b01f",
+            files_changed: ["runtime/sandbox.py", "runtime/venv.py", "tests/test_sandbox.py"],
+            diff_preview: "--- a/runtime/sandbox.py\n+++ b/runtime/sandbox.py\n@@ -1,3 +1,8 @@\n+# Verified in isolated Firecracker MicroVM\n",
+            microvm_logs: ["[MicroVM] Booted sandbox (mem=512MB, cpus=1.0)", "[Sentinel] 32 passed in 1.18s", "[Aegis] 0 CVEs detected"],
+            preview_url: "/api/v1/preview/demo-msn-sandbox/",
+            console_url: "#console/demo-msn-sandbox",
+            consensus_seal_hash: "sha256:4e91c2a7b01f88a3"
+          }
+        ]
+      };
+    }
+
+    if (path.startsWith('/agency-admin/console/telemetry')) {
+      return {
+        organization_id: "demo-org-acme",
+        mission_id: "demo-msn-sandbox",
+        mission_title: "Autonomous Pytest Cleanroom Sandbox Orchestration",
+        mission_status: "ACTIVE",
+        terminal_ws_url: "/ws/terminal/demo-msn-sandbox",
+        steering_endpoint: "/api/v1/missions/demo-msn-sandbox/steer",
+        agent_dag: {
+          total_agents: 21,
+          core_leads: [
+            { order: 1, name: "Axiom", role: "Chief Mission Planner", cluster: "Discovery & Architecture", is_core_lead: true, status: "VERIFIED", latency_ms: 640, tokens_used: 1420, cost_usd: 0.0114, thought_trace: "Decomposed sprint objective into dependency-ordered DAG tasks." },
+            { order: 2, name: "Nexus", role: "Chief Systems Architect", cluster: "Discovery & Architecture", is_core_lead: true, status: "VERIFIED", latency_ms: 690, tokens_used: 1580, cost_usd: 0.0126, thought_trace: "Verified module boundaries and database isolation." },
+            { order: 3, name: "Forge", role: "Principal Implementation Engineer", cluster: "Implementation Swarm", is_core_lead: true, status: "VERIFIED", latency_ms: 820, tokens_used: 2140, cost_usd: 0.0171, thought_trace: "Synthesized production implementation and unit tests." },
+            { order: 4, name: "Sentinel", role: "Lead QA & Verification Engineer", cluster: "Verification & Security Consensus", is_core_lead: true, status: "VERIFIED", latency_ms: 740, tokens_used: 1320, cost_usd: 0.0106, thought_trace: "Executed pytest suite in MicroVM: 100% green." },
+            { order: 5, name: "Aegis", role: "Principal Security Auditor", cluster: "Verification & Security Consensus", is_core_lead: true, status: "VERIFIED", latency_ms: 680, tokens_used: 1190, cost_usd: 0.0095, thought_trace: "Completed SAST, secret scan, and RBAC boundary check (0 CVEs)." }
+          ],
+          agents: [
+            { order: 1, name: "Axiom", role: "Chief Mission Planner", cluster: "Discovery & Architecture", is_core_lead: true, status: "VERIFIED", latency_ms: 640, tokens_used: 1420, cost_usd: 0.0114, thought_trace: "Decomposed sprint objective into dependency-ordered DAG tasks." },
+            { order: 2, name: "Nexus", role: "Chief Systems Architect", cluster: "Discovery & Architecture", is_core_lead: true, status: "VERIFIED", latency_ms: 690, tokens_used: 1580, cost_usd: 0.0126, thought_trace: "Verified module boundaries and database isolation." },
+            { order: 3, name: "Forge", role: "Principal Implementation Engineer", cluster: "Implementation Swarm", is_core_lead: true, status: "VERIFIED", latency_ms: 820, tokens_used: 2140, cost_usd: 0.0171, thought_trace: "Synthesized production implementation and unit tests." },
+            { order: 4, name: "Sentinel", role: "Lead QA & Verification Engineer", cluster: "Verification & Security Consensus", is_core_lead: true, status: "VERIFIED", latency_ms: 740, tokens_used: 1320, cost_usd: 0.0106, thought_trace: "Executed pytest suite in MicroVM: 100% green." },
+            { order: 5, name: "Aegis", role: "Principal Security Auditor", cluster: "Verification & Security Consensus", is_core_lead: true, status: "VERIFIED", latency_ms: 680, tokens_used: 1190, cost_usd: 0.0095, thought_trace: "Completed SAST, secret scan, and RBAC boundary check (0 CVEs)." }
+          ]
+        },
+        microvm_fleet: {
+          active_count: 1,
+          egress_firewall: {
+            status: "ACTIVE",
+            blocked_imds_ips: ["169.254.169.254/32", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+            allowed_registries: ["pypi.org", "registry.npmjs.org", "github.com"]
+          },
+          containers: [
+            { container_id: "fc-vm-demo8f42", mission_id: "demo-msn-sandbox", driver: "firecracker_microvm", status: "READY", memory_usage_mb: 294, memory_limit_mb: 512, memory_pct: 57.4, cpu_utilization_pct: 24.5, cpu_quota_cores: 1.0, pid_count: 14, pid_limit: 64, egress_firewall: "ACTIVE (RFC1918 + IMDS Blocked)", seccomp_profile: "strict-non-root-uid-10001" }
+          ]
+        }
+      };
+    }
+
+    if (path.startsWith('/agency-admin/console/lsp')) {
+      return {
+        action: "definition",
+        symbol: body?.symbol || "CodebaseAuditor",
+        result: { found: true, file_path: "backend/services/codebase_auditor.py", line: 48, kind: "class", signature: "class CodebaseAuditor" }
+      };
+    }
+
+    // 11. Interactive actions (Approve, Apply, Retry, Cancel, Start mission)
     if (method === 'POST') {
       if (path.includes('/missions/projects/') && path.includes('/missions')) {
         const newId = "demo-msn-" + Math.random().toString(36).substring(2, 7);
         return { mission_id: newId, status: "PLANNING" };
       }
+      if (path.includes('/client-portal/intake')) {
+        return { ticket_id: "KOB-DEMO01", mission_id: "demo-msn-intake", status: "queued_for_autonomous_pod" };
+      }
+      if (path.includes('/agency-admin/onboard')) {
+        return { status: "client_onboarded", organization: { id: "demo-org-new", name: body?.client_name || "New Client" } };
+      }
       return { success: true, message: "Operation completed." };
     }
 
   return null;
+}
+
+export async function apiFetch(path, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  let parsedBody = undefined;
+  if (options.body !== undefined) {
+    if (typeof options.body === 'string') {
+      try { parsedBody = JSON.parse(options.body); } catch { parsedBody = options.body; }
+    } else {
+      parsedBody = options.body;
+    }
+  }
+  return api(method, path, parsedBody);
 }
 
 export const get = (p) => api('GET', p);

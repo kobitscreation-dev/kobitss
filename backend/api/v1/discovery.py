@@ -5,17 +5,51 @@ Provides the Kyros-style "Week 1: Codebase Mapping & Architecture Discovery" end
 
 import os
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps import get_db, get_current_user
+from backend.api.deps import get_db, get_current_user, get_user_org_membership
+from backend.core.security import decode_access_token
 from backend.models.user import User
 from backend.models.project import Project
 from backend.services.codebase_auditor import CodebaseAuditor, CodebaseAuditResult
 
 router = APIRouter()
+
+
+async def _verify_project_tenant_access(
+    request: Request,
+    project: Project,
+    current_user: User,
+    db: AsyncSession,
+) -> None:
+    """Enforces multi-tenant isolation when explicit auth or organization headers are supplied."""
+    if not project.organization_id:
+        return
+    org_header = request.headers.get("X-Organization-Id") or request.headers.get("x-organization-id")
+    auth_header = request.headers.get("Authorization") or request.headers.get("authorization") or ""
+
+    resolved_user_id = current_user.id if current_user else None
+    if auth_header.startswith("Bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+        payload = decode_access_token(token)
+        if payload and payload.get("sub"):
+            resolved_user_id = str(payload["sub"])
+
+    if org_header and org_header.strip() != project.organization_id:
+        if resolved_user_id:
+            await get_user_org_membership(db, resolved_user_id, project.organization_id)
+            return
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cross-tenant access denied: project belongs to another organization.",
+        )
+
+    if auth_header and resolved_user_id:
+        await get_user_org_membership(db, resolved_user_id, project.organization_id)
+
 
 
 class AuditResponse(BaseModel):
@@ -38,6 +72,7 @@ class AuditResponse(BaseModel):
 @router.post("/{project_id}/audit", response_model=AuditResponse)
 async def trigger_codebase_audit(
     project_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -48,6 +83,8 @@ async def trigger_codebase_audit(
     project = (await db.execute(select(Project).where(Project.id == project_id))).scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    await _verify_project_tenant_access(request, project, current_user, db)
 
     # Determine target repo path (local directory or default project root)
     repo_path = project.repository_url or os.environ.get("KOBITS_WORKSPACE_DIR") or os.getcwd()
@@ -80,6 +117,7 @@ async def trigger_codebase_audit(
 @router.get("/{project_id}/report")
 async def get_latest_audit_report(
     project_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -87,6 +125,8 @@ async def get_latest_audit_report(
     project = (await db.execute(select(Project).where(Project.id == project_id))).scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    await _verify_project_tenant_access(request, project, current_user, db)
 
     repo_path = project.repository_url or os.environ.get("KOBITS_WORKSPACE_DIR") or os.getcwd()
     if not os.path.exists(repo_path):

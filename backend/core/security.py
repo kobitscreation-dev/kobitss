@@ -40,7 +40,7 @@ def get_password_hash(password: str) -> str:
 
 
 def create_access_token(
-    subject: Union[str, Any],
+    subject: Union[str, dict, Any],
     expires_delta: timedelta = None,
     extra_claims: dict = None,
 ) -> str:
@@ -49,10 +49,25 @@ def create_access_token(
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    to_encode = {"exp": expire, "sub": str(subject)}
+    if isinstance(subject, dict):
+        sub_val = str(subject.get("sub", ""))
+        to_encode = {k: v for k, v in subject.items() if v is not None}
+        to_encode["exp"] = expire
+        to_encode["sub"] = sub_val
+    else:
+        to_encode = {"exp": expire, "sub": str(subject)}
+
     if extra_claims:
         for k, v in extra_claims.items():
             if v is not None:
                 to_encode[k] = v
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
+
+def decode_access_token(token: str) -> Union[dict, None]:
+    try:
+        return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except Exception:
+        return None
+

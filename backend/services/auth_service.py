@@ -3,6 +3,12 @@ from typing import Optional, List, Tuple, Union
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import HTTPException, Request, status
+from backend.core.security import (
+    create_access_token,
+    decode_access_token,
+    get_password_hash,
+    verify_password,
+)
 from backend.models.organization import (
     User,
     OrganizationMember,
@@ -11,6 +17,7 @@ from backend.models.organization import (
     ROLE_HIERARCHY,
     ROLE_PERMISSIONS,
 )
+
 
 _active_org_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
     "_active_org_id_var", default=None

@@ -76,6 +76,7 @@ class OrgRole(str, enum.Enum):
             "OWNER": cls.OWNER,
             "ADMIN": cls.ADMIN,
             "ADMINISTRATOR": cls.ADMIN,
+            "AGENCY_ADMIN": cls.ADMIN,
             "LEAD_ENGINEER": cls.LEAD_ENGINEER,
             "LEAD": cls.LEAD_ENGINEER,
             "ENGINEER": cls.LEAD_ENGINEER,
@@ -84,6 +85,8 @@ class OrgRole(str, enum.Enum):
             "READONLY_REVIEWER": cls.READ_ONLY_REVIEWER,
             "REVIEWER": cls.READ_ONLY_REVIEWER,
             "READ_ONLY": cls.READ_ONLY_REVIEWER,
+            "CLIENT": cls.READ_ONLY_REVIEWER,
+            "CLIENT_EXEC": cls.READ_ONLY_REVIEWER,
             "VIEWER": cls.VIEWER,
         }
         if upper in aliases:
@@ -229,6 +232,9 @@ class User(Base):
     memberships: Mapped[List["OrganizationMember"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
+_ORG_METADATA_CACHE: Dict[str, Dict[str, object]] = {}
+
+
 class Organization(Base):
     __tablename__ = "organizations"
 
@@ -237,6 +243,62 @@ class Organization(Base):
     stripe_customer_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
 
     members: Mapped[List["OrganizationMember"]] = relationship(back_populates="organization", cascade="all, delete-orphan")
+
+    def __init__(self, **kwargs):
+        slug = kwargs.pop("slug", None)
+        description = kwargs.pop("description", None)
+        is_active = kwargs.pop("is_active", True)
+        super().__init__(**kwargs)
+        meta = _ORG_METADATA_CACHE.setdefault(self.id or self.name or "default", {})
+        if slug is not None:
+            meta["slug"] = slug
+            self._slug = slug
+        if description is not None:
+            meta["description"] = description
+            self._description = description
+        meta["is_active"] = is_active
+        self._is_active = is_active
+
+    @property
+    def slug(self) -> str:
+        val = getattr(self, "_slug", None)
+        if val:
+            return str(val)
+        cached = _ORG_METADATA_CACHE.get(self.id or "", {}).get("slug") or _ORG_METADATA_CACHE.get(self.name or "", {}).get("slug")
+        if cached:
+            return str(cached)
+        import re
+        return re.sub(r"[^a-z0-9]+", "-", (self.name or "org").lower()).strip("-") or "org"
+
+    @slug.setter
+    def slug(self, value: Optional[str]) -> None:
+        self._slug = value
+        if self.id:
+            _ORG_METADATA_CACHE.setdefault(self.id, {})["slug"] = value
+
+    @property
+    def description(self) -> Optional[str]:
+        val = getattr(self, "_description", None)
+        if val is not None:
+            return str(val)
+        cached = _ORG_METADATA_CACHE.get(self.id or "", {}).get("description") or _ORG_METADATA_CACHE.get(self.name or "", {}).get("description")
+        if cached is not None:
+            return str(cached)
+        return None
+
+    @description.setter
+    def description(self, value: Optional[str]) -> None:
+        self._description = value
+        if self.id:
+            _ORG_METADATA_CACHE.setdefault(self.id, {})["description"] = value
+
+    @property
+    def is_active(self) -> bool:
+        return bool(getattr(self, "_is_active", True))
+
+    @is_active.setter
+    def is_active(self, value: bool) -> None:
+        self._is_active = bool(value)
 
 
 class OrganizationMember(Base):
@@ -261,4 +323,8 @@ class OrganizationMember(Base):
     def is_read_only(self) -> bool:
         role_enum = OrgRole.normalize(self.role)
         return role_enum.is_read_only
+
+
+OrgMember = OrganizationMember
+
 

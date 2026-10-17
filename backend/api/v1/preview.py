@@ -203,15 +203,60 @@ def render_placeholder_html(mission_id: str, status: str, phase: str) -> HTMLRes
     return HTMLResponse(content=html, status_code=200, headers={"Cache-Control": "no-cache"})
 
 
+async def _verify_preview_tenant_access(
+    request: Optional[Request],
+    mission: Mission,
+    db: AsyncSession,
+) -> None:
+    """
+    If explicit tenant headers (X-Organization-Id or Authorization Bearer JWT) are supplied,
+    enforce strict multi-tenant isolation so Client A cannot inspect Client B's live preview.
+    """
+    if request is None or not mission.organization_id:
+        return
+    org_header = request.headers.get("X-Organization-Id") or request.headers.get("x-organization-id")
+    auth_header = request.headers.get("Authorization") or request.headers.get("authorization") or ""
+    if org_header and org_header.strip() != mission.organization_id:
+        if auth_header.startswith("Bearer "):
+            from backend.core.security import decode_access_token
+            from backend.api.deps import get_user_org_membership
+            token = auth_header.split(" ", 1)[1].strip()
+            payload = decode_access_token(token)
+            user_id = payload.get("sub") if payload else None
+            if user_id:
+                await get_user_org_membership(db, str(user_id), mission.organization_id)
+                return
+        raise HTTPException(status_code=403, detail="Cross-tenant preview access denied.")
+    if auth_header.startswith("Bearer "):
+        from backend.core.security import decode_access_token
+        from backend.api.deps import get_user_org_membership
+        token = auth_header.split(" ", 1)[1].strip()
+        payload = decode_access_token(token)
+        user_id = payload.get("sub") if payload else None
+        if user_id:
+            await get_user_org_membership(db, str(user_id), mission.organization_id)
+
+
+
+VIEWPORT_PRESETS = {
+    "desktop": {"label": "Desktop", "width": 1920, "height": 1080},
+    "tablet": {"label": "Tablet", "width": 768, "height": 1024},
+    "mobile": {"label": "Mobile", "width": 375, "height": 812},
+}
+
+
 @router.get("/{mission_id}/info")
 async def get_preview_info(
     mission_id: str,
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     """Retrieve preview status, detected files, dev server configuration, and entry URL."""
     mission = await db.get(Mission, mission_id)
     if not mission:
         raise HTTPException(status_code=404, detail="Mission not found")
+
+    await _verify_preview_tenant_access(request, mission, db)
 
     sandbox_dir = find_sandbox_directory(mission)
     from backend.services.cloud_sandbox import CloudMicroVMSandbox
@@ -225,6 +270,7 @@ async def get_preview_info(
             "entry_point": None,
             "files": [],
             "preview_url": f"/api/v1/preview/{mission_id}/",
+            "viewports": VIEWPORT_PRESETS,
         }
 
     preview_cfg = get_preview_config(sandbox_dir) if sandbox_dir else {}
@@ -272,6 +318,7 @@ async def get_preview_info(
         "files_count": len(files),
         "files_sample": files[:20],
         "preview_url": remote_data.get("remote_preview_url") or f"/api/v1/preview/{mission_id}/",
+        "viewports": VIEWPORT_PRESETS,
         "dev_server": {
             "active": bool(preview_cfg.get("active") or remote_data),
             "port": preview_cfg.get("port") or 3000,
@@ -290,6 +337,8 @@ async def configure_preview_port(
     mission = await db.get(Mission, mission_id)
     if not mission:
         raise HTTPException(status_code=404, detail="Mission not found")
+
+    await _verify_preview_tenant_access(request, mission, db)
 
     body = await request.json()
     port = body.get("port")
@@ -432,6 +481,8 @@ async def serve_preview_asset(
     mission = await db.get(Mission, mission_id)
     if not mission:
         raise HTTPException(status_code=404, detail="Mission not found")
+
+    await _verify_preview_tenant_access(request, mission, db)
 
     sandbox_dir = find_sandbox_directory(mission)
     from backend.services.cloud_sandbox import CloudMicroVMSandbox
