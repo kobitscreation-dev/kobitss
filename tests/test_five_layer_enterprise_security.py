@@ -118,7 +118,7 @@ async def test_layer2_http_security_headers_and_preview_isolation():
     await _ensure_db_tables()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        res = await client.get("/health")
+        res = await client.get("/api/health")
         assert res.status_code == 200
         assert res.headers.get("X-Content-Type-Options") == "nosniff"
         assert res.headers.get("X-Frame-Options") == "SAMEORIGIN"
@@ -183,9 +183,9 @@ async def test_layer2_cross_tenant_isolation_403_and_soc2_alert():
         assert res_proj.status_code == 403
         assert "Cross-tenant access denied" in res_proj.json()["detail"]
 
-        # 2. User A attempts to access Tenant B's dashboard via X-Organization-Id header
+        # 2. User A attempts to access Tenant B's portal overview via X-Organization-Id header
         res_portal = await client.get(
-            "/api/v1/client-portal/dashboard",
+            "/api/v1/client-portal/overview",
             headers={**headers_a, "X-Organization-Id": org_b.id},
         )
         assert res_portal.status_code == 403
@@ -224,7 +224,7 @@ async def test_layer3_prompt_sanitization_and_user_instruction_delimiters():
     # Ensure nested closing tag breakout was stripped inside the body
     inner_body = wrapped[len('<user_instruction source="github_issue">'):-len("</user_instruction>")]
     assert "</user_instruction>" not in inner_body
-    assert "[REDACTED_BY_SANITIZER]" in inner_body
+    assert "[FILTERED]" in inner_body
 
     # Strict mode raises PromptInjectionError on injection payloads
     with pytest.raises(PromptInjectionError):
@@ -271,7 +271,7 @@ async def test_layer3_prompt_sanitization_and_user_instruction_delimiters():
         assert "<user_instruction" in prompt
         assert "</user_instruction>" in prompt
         assert "Security Boundary Rule" in prompt
-        assert "[REDACTED_BY_SANITIZER]" in prompt
+        assert "[FILTERED]" in prompt
 
 
 def test_layer3_negative_to_positive_tdd_reproducer(tmp_path: Path):
@@ -315,8 +315,6 @@ async def test_layer3_git_checkpoint_and_automatic_hard_rollback(tmp_path: Path)
     subprocess.run(["git", "add", "-A"], cwd=str(repo_dir), check=True, capture_output=True)
     subprocess.run(["git", "commit", "-m", "initial clean state"], cwd=str(repo_dir), check=True, capture_output=True)
 
-    rollback_mgr = SandboxRollbackManager(str(repo_dir))
-
     # Apply a broken patch whose verification fails -> must automatically rollback to checkpoint
     def apply_bad_patch():
         calc_file.write_text("def add(a, b):\n    return a - b\n", encoding="utf-8")
@@ -324,10 +322,11 @@ async def test_layer3_git_checkpoint_and_automatic_hard_rollback(tmp_path: Path)
     def verify_patch():
         return False, "Unit test test_add failed: 2 + 2 returned 0"
 
-    outcome = await rollback_mgr.checkpoint_and_apply(
+    outcome = await SandboxRollbackManager.checkpoint_and_apply(
+        str(repo_dir),
+        apply_bad_patch,
+        verify_patch,
         step_name="broken_agent_edit",
-        apply_fn=apply_bad_patch,
-        verify_fn=verify_patch,
     )
     assert outcome["success"] is False
     assert outcome["rolled_back"] is True
@@ -370,7 +369,7 @@ async def test_layer4_consensus_seals_and_soc2_hash_chain_integrity():
     async with AsyncSessionLocal() as db:
         await SOC2AuditService.log_event(
             db,
-            event=AuditEvent.MISSION_GATE_APPROVED,
+            event=AuditEvent.RBAC_ROLE_ASSIGNED,
             category=AuditCategory.RBAC.value,
             user_id="lead_eng_1",
             organization_id=org_id,
@@ -425,11 +424,14 @@ async def test_layer5_secrets_resolution_supply_chain_audit_and_zero_auditor_fin
         json.dumps({"name": "app", "dependencies": {"lodash": "4.17.15"}}),
         encoding="utf-8",
     )
-    dep_audit = await EnvironmentBootstrapper.audit_dependencies(vuln_sb)
-    assert dep_audit["clean"] is False
-    cve_ids = {f["cve"] for f in dep_audit["findings"]}
+    dep_audit = EnvironmentBootstrapper.audit_dependencies(str(vuln_sb), block_on_cve=False)
+    assert dep_audit["passed"] is False
+    cve_ids = {f["cve"] for f in dep_audit["vulnerabilities"]}
     assert "CVE-2020-14343" in cve_ids
-    assert "CVE-2021-23337" in cve_ids
+    assert "CVE-2020-8203" in cve_ids
+
+    with pytest.raises(PermissionError, match="Supply-Chain Security Gate Blocked"):
+        EnvironmentBootstrapper.audit_dependencies(str(vuln_sb), block_on_cve=True)
 
     # 4. Verify CodebaseAuditor reports 0 security findings across the live Kobits repository
     repo_root = Path(__file__).resolve().parent.parent

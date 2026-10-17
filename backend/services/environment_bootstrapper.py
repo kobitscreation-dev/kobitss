@@ -920,7 +920,8 @@ WORKDIR /workspace
         normalized_cmd = cls.normalize_command_for_sandbox(sandbox_abs, command, is_docker=False)
 
         if os.name == "nt":
-            exec_argv = [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c", normalized_cmd]
+            comspec = os.environ.get("COMSPEC", "cmd.exe")
+            exec_argv: Any = f'{comspec} /d /s /c "{normalized_cmd}"'
         else:
             exec_argv = [shutil.which("sh") or "/bin/sh", "-c", normalized_cmd]
 
