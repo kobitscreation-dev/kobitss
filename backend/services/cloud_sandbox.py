@@ -879,6 +879,37 @@ class MicroVMSnapshot:
         }
 
 
+class RepoFingerprint(str):
+    """
+    64-character SHA-256 repository & lockfile fingerprint string that ALSO supports
+    2-tuple unpacking `(repo_fp, lock_hash)` and carries lockfile corruption diagnostics.
+    """
+
+    repo_fp: str
+    lock_hash: str
+    is_corrupted: bool
+    corrupted_files: List[str]
+
+    def __new__(
+        cls,
+        full_sha256: str,
+        repo_fp: str,
+        lock_hash: str,
+        is_corrupted: bool = False,
+        corrupted_files: Optional[List[str]] = None,
+    ):
+        obj = super().__new__(cls, full_sha256)
+        obj.repo_fp = repo_fp
+        obj.lock_hash = lock_hash
+        obj.is_corrupted = is_corrupted
+        obj.corrupted_files = list(corrupted_files or [])
+        return obj
+
+    def __iter__(self):
+        yield self.repo_fp
+        yield self.lock_hash
+
+
 class WarmSnapshotPoolManager:
     """
     Devin/Kyros-Grade Firecracker MicroVM Warm-Snapshot Fleet Manager (Gap 1).
@@ -909,12 +940,42 @@ class WarmSnapshotPoolManager:
     )
 
     @classmethod
-    def compute_repo_fingerprint(cls, repo_path: str = ".") -> tuple[str, str]:
-        """Computes (repo_fingerprint, lockfile_hash) for deterministic warm snapshot matching."""
+    def validate_lockfile_content(cls, fname: str, raw_bytes: bytes) -> bool:
+        """Returns True if lockfile syntax is valid, False if corrupted."""
+        try:
+            text = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            return False
+
+        if fname in ("package.json", "package-lock.json", "Pipfile.lock"):
+            import json
+            try:
+                json.loads(text)
+                return True
+            except Exception:
+                return False
+
+        if fname == "requirements.txt":
+            import re
+            for raw_line in text.splitlines():
+                line = raw_line.split("#")[0].strip()
+                if not line or line.startswith(("-", "--", "git+", "http://", "https://")):
+                    continue
+                if not re.match(r"^[A-Za-z0-9_.\-\[\]]+\s*(?:[=<>!~]=?.*|@\s*\S+)?$", line):
+                    return False
+        return True
+
+    @classmethod
+    def compute_repo_fingerprint(cls, repo_path: str = ".") -> RepoFingerprint:
+        """
+        Computes a 64-character SHA-256 `RepoFingerprint` (which also unpacks as
+        `(repo_fingerprint, lockfile_hash)`) and detects lockfile corruption.
+        """
         abs_root = os.path.realpath(repo_path or ".")
         lock_hasher = hashlib.sha256()
         repo_hasher = hashlib.sha256()
         repo_hasher.update(abs_root.encode("utf-8", errors="ignore"))
+        corrupted_files: List[str] = []
 
         if os.path.isdir(abs_root):
             for fname in cls.LOCKFILE_NAMES:
@@ -925,12 +986,21 @@ class WarmSnapshotPoolManager:
                             data = f.read(65536)
                         lock_hasher.update(fname.encode("utf-8"))
                         lock_hasher.update(data)
+                        if not cls.validate_lockfile_content(fname, data):
+                            corrupted_files.append(fname)
                     except Exception:
-                        pass
+                        corrupted_files.append(fname)
 
         lock_hash = lock_hasher.hexdigest()[:16]
-        repo_fp = hashlib.sha256(f"{repo_hasher.hexdigest()[:16]}:{lock_hash}".encode("utf-8")).hexdigest()[:16]
-        return repo_fp, lock_hash
+        full_sha256 = hashlib.sha256(f"{repo_hasher.hexdigest()[:16]}:{lock_hash}".encode("utf-8")).hexdigest()
+        repo_fp = full_sha256[:16]
+        return RepoFingerprint(
+            full_sha256,
+            repo_fp=repo_fp,
+            lock_hash=lock_hash,
+            is_corrupted=bool(corrupted_files),
+            corrupted_files=corrupted_files,
+        )
 
     @classmethod
     def capture_snapshot(
@@ -1010,7 +1080,8 @@ class WarmSnapshotPoolManager:
         Restores an isolated MicroVM from a warm snapshot in <800ms via Copy-on-Write state cloning.
         """
         t0 = time.perf_counter()
-        repo_fp, _lock_hash = cls.compute_repo_fingerprint(repo_path)
+        fp_obj = cls.compute_repo_fingerprint(repo_path)
+        repo_fp, _lock_hash = fp_obj
 
         target_snap: Optional[MicroVMSnapshot] = None
         if snapshot_id and snapshot_id in cls._snapshots_by_id:
@@ -1055,6 +1126,8 @@ class WarmSnapshotPoolManager:
             "snapshot_id": target_snap.snapshot_id,
             "repo_fingerprint": target_snap.repo_fingerprint,
             "lockfile_hash": target_snap.lockfile_hash,
+            "lockfile_corrupted": fp_obj.is_corrupted,
+            "corrupted_lockfiles": fp_obj.corrupted_files,
             "warm_cache_hit": was_warm_hit,
             "restore_latency_ms": elapsed_ms,
             "sla_target_ms": 800.0,

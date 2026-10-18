@@ -69,15 +69,18 @@ def test_extreme_gap_1_warm_pool_burst_depletion_and_corruption():
         with open(req_path, "w", encoding="utf-8") as f:
             f.write("!!!CORRUPT_SYNTAX@@@\n")
 
-        # System must still compute deterministic fingerprint without crashing
+        # System must still compute deterministic 64-char SHA-256 fingerprint and flag lockfile corruption
         fp_corrupt = WarmSnapshotPoolManager.compute_repo_fingerprint(repo_root)
-        assert isinstance(fp_corrupt, tuple) and len(fp_corrupt) == 2 and len(fp_corrupt[0]) == 16
+        assert len(fp_corrupt) == 64
+        assert fp_corrupt.is_corrupted is True
+        assert "requirements.txt" in fp_corrupt.corrupted_files
         sb_corrupt, meta_c = WarmSnapshotPoolManager.restore_from_warm_pool(
             session_id="corrupt-lockfile-session",
             repo_path=repo_root,
         )
         assert sb_corrupt.sandbox_id.startswith("fc-vm-warm-")
         assert meta_c["sla_met"] is True
+        assert meta_c["lockfile_corrupted"] is True
 
 
 # ===========================================================================
@@ -381,15 +384,16 @@ def test_extreme_gap_6_working_set_budgeting_starvation_and_pinning():
 
     ctx = budgeter.render_working_set_context(current_turn=21)
 
-    # 1. Pinned config.py MUST remain in ACTIVE_FULL regardless of age
+    # 1. Pinned config.py AND just-touched module_21.py MUST remain in ACTIVE_FULL
     assert "config.py" in ctx["active_files"]
+    assert "module_21.py" in ctx["active_files"]
     cfg_entry = budgeter._entries["config.py"]
     assert cfg_entry.state == "ACTIVE_FULL"
     assert cfg_entry.is_pinned is True
 
     # 2. Maximum active files respected
-    assert ctx["active_file_count"] <= 2
-    assert ctx["skeleton_file_count"] >= 19
+    assert ctx["active_file_count"] == 2
+    assert ctx["skeleton_file_count"] == 19
 
     # 3. Test unparseable/corrupted Python code fallback
     broken_code = "class Def Broken!?!?!@@@ syntax error"

@@ -76,16 +76,17 @@ class Config:
 
     # ── Core Security ─────────────────────────────────────────────────────────
     # A02: Secret key from environment/Secret Manager only. Fail hard if not set in production.
-    SECRET_KEY: str = resolve_secret("SECRET_KEY", "")
-    if not SECRET_KEY:
-        # Generate an ephemeral key for development — warn loudly
-        SECRET_KEY = secrets.token_urlsafe(64)
-        import warnings
-        warnings.warn(
-            "SECRET_KEY environment variable not set. "
-            "Using an ephemeral key — DO NOT use in production!",
-            stacklevel=2,
-        )
+    SECRET_KEY: str = resolve_secret("SECRET_KEY", "") or secrets.token_urlsafe(64)
+    TESTING: bool = False
+
+    def __init__(self):
+        if not self.TESTING and not resolve_secret("SECRET_KEY", "") and "PYTEST_CURRENT_TEST" not in os.environ:
+            import warnings
+            warnings.warn(
+                "SECRET_KEY environment variable not set. "
+                "Using an ephemeral key — DO NOT use in production!",
+                stacklevel=2,
+            )
 
     # ── Debug Mode — A05 ──────────────────────────────────────────────────────
     # NEVER hardcode DEBUG=True. Must be env-controlled.
@@ -178,6 +179,7 @@ class ProductionConfig(Config):
 
 class TestingConfig(Config):
     """Testing configuration — uses ephemeral runtime tokens if not set in env."""
+    __test__ = False
     TESTING = True
     DEBUG = False
     DATABASE_URL = "sqlite:///:memory:"

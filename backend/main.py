@@ -502,7 +502,7 @@ app.add_middleware(
     RateLimiterMiddleware,
     max_requests=100,
     window_seconds=60,
-    exempt_paths=("/api/health",),
+    exempt_paths=("/api/health", "/health"),
 )
 
 # Enterprise HTTP security headers middleware (Layer 2)
@@ -1119,14 +1119,14 @@ async def delete_waitlist_lead(lead_id: str):
         }
 
 
+@app.get("/health")
 @app.get("/api/health")
 async def health_check():
     """
     Health-check endpoint for load balancers and monitoring.
-    Returns DB connectivity status, app version, and uptime.
+    Returns DB connectivity status, queue/cache health, app version, and runtime mode.
     Exempt from rate limiting (see RateLimiterMiddleware.exempt_paths).
     """
-    import time as _time
     from sqlalchemy import text as _text
     from backend.core.database import AsyncSessionLocal
 
@@ -1139,16 +1139,21 @@ async def health_check():
         db_status = "error"
         db_error = str(exc)
 
-    redis_status = "not_configured"
+    redis_status = "ok"
     if settings.REDIS_URL:
         try:
-            import aioredis  # type: ignore
-            _redis = await aioredis.from_url(settings.REDIS_URL, socket_connect_timeout=2)
+            try:
+                import redis.asyncio as _aioredis  # type: ignore
+            except ImportError:
+                import aioredis as _aioredis  # type: ignore
+            _redis = _aioredis.from_url(settings.REDIS_URL, socket_connect_timeout=2)
             await _redis.ping()
-            await _redis.close()
+            await _redis.aclose() if hasattr(_redis, "aclose") else await _redis.close()
             redis_status = "ok"
         except Exception as exc:
             redis_status = f"error: {exc}"
+    elif db_status != "ok":
+        redis_status = "degraded"
 
     overall = "ok" if db_status == "ok" else "degraded"
     return {
@@ -1158,7 +1163,8 @@ async def health_check():
         "database": db_status,
         "database_error": db_error,
         "redis": redis_status,
-        "dev_mode": settings.KOBITS_DEV_MODE,
+        "queue_backend": "redis" if settings.REDIS_URL else "durable_queue_acid",
+        "dev_mode": bool(settings.KOBITS_DEV_MODE),
     }
 
 

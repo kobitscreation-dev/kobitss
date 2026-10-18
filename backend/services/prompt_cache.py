@@ -184,15 +184,16 @@ class PromptCacheOptimizer:
             # Prefix invariant broken! Cache is invalidated: zero cache read tokens, all tokens must be written
             cached_read_tokens = 0
             cache_write_tokens = eligible_prefix_tokens
+            self._cached_token_watermark[session_id] = 0
         elif turn_idx == 1:
             # First turn writes the prefix into KV cache; static system + repo map + tools are warm if pre-warmed
             cached_read_tokens = sys_tokens + tool_tokens if prev_watermark > 0 else int(eligible_prefix_tokens * 0.85)
             cache_write_tokens = max(0, eligible_prefix_tokens - cached_read_tokens)
+            self._cached_token_watermark[session_id] = eligible_prefix_tokens
         else:
             cached_read_tokens = min(eligible_prefix_tokens, prev_watermark)
             cache_write_tokens = max(0, eligible_prefix_tokens - cached_read_tokens)
-
-        self._cached_token_watermark[session_id] = eligible_prefix_tokens
+            self._cached_token_watermark[session_id] = eligible_prefix_tokens
 
         cache_hit_rate_pct = (cached_read_tokens / total_input_tokens) * 100.0
 
@@ -254,10 +255,38 @@ class PromptCacheOptimizer:
         initial_user_prompt: str = "",
     ) -> int:
         """
-        Pre-warms the KV cache watermark for a session so Turn 1 immediately hits the
-        cached system instructions, repository AST symbol map, and tool schemas.
+        Pre-warms the KV cache watermark and canonical prefix hash for a session so Turn 1
+        immediately hits the cached system instructions, repository AST symbol map, and tool schemas.
         """
         initial_msgs = [{"role": "user", "content": initial_user_prompt}] if initial_user_prompt else []
+        if initial_user_prompt:
+            system_blocks: List[Dict[str, Any]] = [
+                {
+                    "type": "text",
+                    "text": system_prompt or "You are an autonomous software engineer.",
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
+            if repo_ast_map:
+                system_blocks.append(
+                    {
+                        "type": "text",
+                        "text": f"<repository_symbol_graph>\n{repo_ast_map}\n</repository_symbol_graph>",
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                )
+            cached_tools: List[Dict[str, Any]] = []
+            if tools:
+                cached_tools = copy.deepcopy(tools)
+                cached_tools[-1]["cache_control"] = {"type": "ephemeral"}
+            static_prefix_repr = {
+                "system": system_blocks,
+                "tools": cached_tools,
+                "turn_0_role": "user",
+                "turn_0_content": initial_user_prompt,
+            }
+            self._session_prefix_hashes[session_id] = self._compute_canonical_hash(static_prefix_repr)
+
         sys_tokens = ContextCompactor.estimate_tokens(system_prompt) + ContextCompactor.estimate_tokens(repo_ast_map)
         tool_tokens = ContextCompactor.estimate_tokens(tools or [])
         msg_tokens = ContextCompactor.estimate_messages_tokens(initial_msgs)

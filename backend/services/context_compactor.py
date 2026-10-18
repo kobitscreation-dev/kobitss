@@ -1259,17 +1259,27 @@ class WorkingSetBudgetManager:
             if not over_file_cap and not over_token_cap:
                 break
 
-            # Candidate pool for demotion: unpinned active files (excluding just-touched file if possible)
+            # Candidate pool for demotion: unpinned active files (excluding just-touched file)
             candidates = [
                 e for e in active_entries
                 if not e.is_pinned and e.file_path != protected_path
             ]
-            if not candidates and protected_path:
-                # If only unpinned candidate is protected_path, only consider it if it is unpinned
-                prot_entry = self._entries.get(protected_path)
-                if prot_entry and not prot_entry.is_pinned and prot_entry.state == "ACTIVE_FULL":
-                    candidates = [prot_entry]
             if not candidates:
+                # If we are only over token cap due to accumulated skeletons, compact oldest skeletons first
+                if not over_file_cap and over_token_cap:
+                    skeleton_Pool = [
+                        e for e in self._entries.values()
+                        if e.state == "COLLAPSED_AST_SKELETON" and e.skeleton_tokens > 12
+                    ]
+                    if skeleton_Pool:
+                        oldest_skel = min(skeleton_Pool, key=lambda e: (e.last_accessed_turn, e.access_count))
+                        stub = f"# [AST SKELETON: {oldest_skel.file_path} (compacted)]"
+                        stub_toks = max(1, ContextCompactor.estimate_tokens(stub))
+                        reclaimed_s = max(0, oldest_skel.skeleton_tokens - stub_toks)
+                        oldest_skel.ast_skeleton = stub
+                        oldest_skel.skeleton_tokens = stub_toks
+                        WorkingSetBudgetManager._global_tokens_reclaimed += reclaimed_s
+                        continue
                 # Pinned files must NEVER be demoted under any circumstance
                 break
 
