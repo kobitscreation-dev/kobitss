@@ -519,6 +519,10 @@ class CDPBrowserStreamSession:
             "frame_data_uri": f"data:image/png;base64,{b64_frame}",
         }
 
+    async def capture_screencast_frame(self) -> Dict[str, Any]:
+        """Asynchronous screencast frame capture conforming to CDP Page.screencastFrame streaming."""
+        return self.capture_cdp_frame()
+
 
 class CDPStreamManager:
     """Global registry managing active 30fps CDP Browser Stream Sessions across missions."""
@@ -526,12 +530,26 @@ class CDPStreamManager:
     _sessions: Dict[str, CDPBrowserStreamSession] = {}
 
     @classmethod
-    def get_or_create_session(cls, mission_id: str) -> CDPBrowserStreamSession:
+    def get_or_create_session(
+        cls,
+        mission_id: str,
+        viewport_width: int = 1280,
+        viewport_height: int = 720,
+        target_fps: int = 30,
+        **kwargs,
+    ) -> CDPBrowserStreamSession:
         session = cls._sessions.get(mission_id)
         if not session:
-            session = CDPBrowserStreamSession(mission_id=mission_id)
+            session = CDPBrowserStreamSession(
+                mission_id=mission_id,
+                width=viewport_width,
+                height=viewport_height,
+                target_fps=target_fps,
+            )
             cls._sessions[mission_id] = session
         return session
+
+    get_or_create_stream = get_or_create_session
 
     @classmethod
     def get_telemetry(cls) -> Dict[str, Any]:

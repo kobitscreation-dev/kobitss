@@ -180,7 +180,11 @@ class PromptCacheOptimizer:
         total_input_tokens = max(1, eligible_prefix_tokens + tail_msg_tokens)
 
         prev_watermark = self._cached_token_watermark.get(session_id, 0)
-        if turn_idx == 1 or not prefix_invariant_verified:
+        if not prefix_invariant_verified:
+            # Prefix invariant broken! Cache is invalidated: zero cache read tokens, all tokens must be written
+            cached_read_tokens = 0
+            cache_write_tokens = eligible_prefix_tokens
+        elif turn_idx == 1:
             # First turn writes the prefix into KV cache; static system + repo map + tools are warm if pre-warmed
             cached_read_tokens = sys_tokens + tool_tokens if prev_watermark > 0 else int(eligible_prefix_tokens * 0.85)
             cache_write_tokens = max(0, eligible_prefix_tokens - cached_read_tokens)

@@ -836,7 +836,7 @@ class HeadlessLSPService:
                     if not parts:
                         continue
                     orig_sym = re.sub(r"^type\s+", "", parts[0]).strip()
-                    exported_sym = parts[-1].strip()
+                    exported_sym = re.sub(r"^type\s+", "", parts[-1]).strip()
                     if exported_sym == sym_head:
                         sub_resolved = cls._resolve_js_ts_specifier(spec, t_dir, workspace_dir)
                         if sub_resolved:
@@ -1514,8 +1514,9 @@ class HeadlessLSPService:
         curr_dir = os.path.dirname(current_file)
         lines = code.splitlines()
 
-        # Collect local and imported interfaces
+        # Collect local and imported interfaces and function signatures
         known_interfaces = cls._extract_ts_interfaces(code, current_file, ws_abs)
+        ts_funcs: Dict[str, Tuple[int, int]] = {}
 
         # 1. Check imports (TS2307 & TS2305) and import interfaces from referenced modules
         for line_idx, line in enumerate(lines, 1):
@@ -1565,6 +1566,22 @@ class HeadlessLSPService:
                                     "message": f"TS2305: Module '\"{spec}\"' ({target_rel}) has no exported member '{orig_sym}'.",
                                     "code": "TS2305",
                                 })
+                            else:
+                                # Resolve function signature for arity diagnostics (TS2554)
+                                resolved_fn = cls._resolve_js_ts_symbol_across_barrels(
+                                    target_file=resolved_mod,
+                                    symbol=orig_sym,
+                                    workspace_dir=ws_abs,
+                                )
+                                if resolved_fn and resolved_fn.get("kind") in ("function", "async_function", "arrow_function"):
+                                    sig = resolved_fn.get("signature", "")
+                                    sig_m = re.search(r"\(([^)]*)\)", sig)
+                                    if sig_m:
+                                        params_raw = [p.strip() for p in sig_m.group(1).split(",") if p.strip()]
+                                        if not any("..." in p for p in params_raw):
+                                            min_p = sum(1 for p in params_raw if "?" not in p.split(":")[0] and "=" not in p)
+                                            max_p = len(params_raw)
+                                            ts_funcs[local_sym] = (min_p, max_p)
 
         # 2. Check primitive variable type annotations (TS2322)
         # e.g., const count: number = "forty-two";
@@ -1649,7 +1666,6 @@ class HeadlessLSPService:
                         })
 
         # 4. Check TypeScript function argument counts (TS2554)
-        ts_funcs: Dict[str, Tuple[int, int]] = {}
         for fn_m in re.finditer(
             r"(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_$]+)\s*\(([^)]*)\)",
             code,

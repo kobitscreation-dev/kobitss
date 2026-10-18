@@ -1264,9 +1264,13 @@ class WorkingSetBudgetManager:
                 e for e in active_entries
                 if not e.is_pinned and e.file_path != protected_path
             ]
+            if not candidates and protected_path:
+                # If only unpinned candidate is protected_path, only consider it if it is unpinned
+                prot_entry = self._entries.get(protected_path)
+                if prot_entry and not prot_entry.is_pinned and prot_entry.state == "ACTIVE_FULL":
+                    candidates = [prot_entry]
             if not candidates:
-                candidates = [e for e in active_entries if e.file_path != protected_path]
-            if not candidates:
+                # Pinned files must NEVER be demoted under any circumstance
                 break
 
             # Sort by (last_accessed_turn ASC, access_count ASC, -full_tokens ASC) -> evict oldest & largest first
