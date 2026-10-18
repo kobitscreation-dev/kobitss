@@ -866,7 +866,8 @@ def _build_default_team_agents() -> List[Dict[str, Any]]:
             "status": "Standby",
             "status_code": "standby",
             "specialization": "Cloud Run scaling, Docker microVM isolation, ephemeral preview routing, zero-downtime deploys",
-            "deliverables_completed": 99.98,
+            "deliverables_completed": 20,
+            "uptime_sla": "99.98%",
             "current_focus": "Ephemeral preview subdomains and SSL termination",
         },
     ]
@@ -1923,6 +1924,25 @@ async def submit_client_intake_request(
 
     await db.commit()
     await db.refresh(mission)
+
+    try:
+        from backend.services.websocket_manager import manager
+        await manager.broadcast(
+            "client_portal",
+            {
+                "type": "activity",
+                "activity": {
+                    "id": f"act-{uuid.uuid4().hex[:6]}",
+                    "timestamp": datetime.now(timezone.utc).strftime("%H:%M"),
+                    "time": datetime.now(timezone.utc).strftime("%H:%M"),
+                    "message": f"Client request submitted: {clean_title} (Priority: {payload.priority})",
+                    "type": "client_intake",
+                    "dot_color": "lime",
+                },
+            },
+        )
+    except Exception:
+        pass
 
     return ClientIntakeResponse(
         status="queued_for_autonomous_pod",

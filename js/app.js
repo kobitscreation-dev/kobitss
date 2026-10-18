@@ -153,7 +153,7 @@ function getEffectiveTriadRoute() {
   const rawHash = (location.hash || '').replace(/^#\/?/, '').split('?')[0];
   if (rawHash) return rawHash;
   const path = (location.pathname || '').replace(/^\/+|\/+$/g, '');
-  if (path === 'portal' || path === 'client-portal' || path === 'portal-summary') return 'portal';
+  if (path === 'portal' || path === 'client-portal' || path === 'portal-summary' || path === 'teamwork-preview' || path === 'teamwork' || path === 'boost') return path;
   if (path === 'admin' || path === 'agency-admin') return 'admin';
   if (path === 'console' || path.startsWith('console/')) return 'console';
   return '';
@@ -165,6 +165,14 @@ function isTriadSurfaceRoute(routeStr) {
     h === 'portal' ||
     h === 'client-portal' ||
     h === 'portal-summary' ||
+    h.startsWith('portal/') ||
+    h === 'teamwork-preview' ||
+    h === 'teamwork' ||
+    h === 'boost' ||
+    h === 'team' ||
+    h === 'reports' ||
+    h === 'milestones' ||
+    h === 'deliverables' ||
     h === 'admin' ||
     h === 'agency-admin' ||
     h === 'console' ||
@@ -294,7 +302,28 @@ async function dispatchTriadSurfaceRoute(routeStr) {
     const sp = new URLSearchParams(queryPart);
     if (sp.get('org')) params.org = sp.get('org');
   }
-  if (baseRoute === 'portal' || baseRoute === 'client-portal' || baseRoute === 'portal-summary') {
+  if (
+    baseRoute === 'portal' ||
+    baseRoute === 'client-portal' ||
+    baseRoute === 'portal-summary' ||
+    baseRoute.startsWith('portal/') ||
+    baseRoute === 'teamwork-preview' ||
+    baseRoute === 'teamwork' ||
+    baseRoute === 'boost' ||
+    baseRoute === 'team' ||
+    baseRoute === 'reports' ||
+    baseRoute === 'milestones' ||
+    baseRoute === 'deliverables'
+  ) {
+    if (baseRoute.startsWith('portal/')) {
+      params.tab = baseRoute.split('/')[1];
+    } else if (baseRoute === 'teamwork-preview' || baseRoute === 'teamwork' || baseRoute === 'team') {
+      params.tab = 'team';
+    } else if (baseRoute === 'boost' || baseRoute === 'reports') {
+      params.tab = 'reports';
+    } else if (baseRoute === 'milestones' || baseRoute === 'deliverables') {
+      params.tab = baseRoute;
+    }
     syncTriadNavBar('portal');
     const mod = await import('./views/client_portal.js');
     await mod.renderClientPortalView(view, params);

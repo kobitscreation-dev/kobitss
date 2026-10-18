@@ -87,6 +87,38 @@ export function buildArchitectureSvg(mermaidText) {
     return `<svg viewBox="0 0 ${width} ${height}" class="w-full h-auto select-none" role="img" aria-label="Living Architecture Dependency Graph">${edgeLines}${nodeRects}</svg>`;
 }
 
+export function getDeliverableIconSvg(iconName) {
+    const name = String(iconName || '').toLowerCase().trim();
+    switch (name) {
+        case 'credit-card':
+            return '<svg class="w-4 h-4 text-sky-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="2" stroke-width="2"/><line x1="2" y1="10" x2="22" y2="10" stroke-width="2"/></svg>';
+        case 'shield-check':
+            return '<svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>';
+        case 'cpu':
+            return '<svg class="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="4" y="4" width="16" height="16" rx="2" stroke-width="2"/><rect x="9" y="9" width="6" height="6" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>';
+        case 'alert-triangle':
+            return '<svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>';
+        case 'lock':
+            return '<svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11V7a5 5 0 0110 0v4"/></svg>';
+        case 'database':
+            return '<svg class="w-4 h-4 text-cyan-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><ellipse cx="12" cy="5" rx="9" ry="3" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>';
+        case 'shopping-bag':
+            return '<svg class="w-4 h-4 text-pink-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>';
+        case 'zap':
+            return '<svg class="w-4 h-4 text-[#ccff00] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" stroke-width="2"/></svg>';
+        case 'search':
+            return '<svg class="w-4 h-4 text-sky-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="11" cy="11" r="8" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="2"/></svg>';
+        case 'shopping-cart':
+            return '<svg class="w-4 h-4 text-orange-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="9" cy="21" r="1" stroke-width="2"/><circle cx="20" cy="21" r="1" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>';
+        case 'file-text':
+            return '<svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8" stroke-width="2"/><line x1="16" y1="13" x2="8" y2="13" stroke-width="2"/><line x1="16" y1="17" x2="8" y2="17" stroke-width="2"/></svg>';
+        case 'server':
+            return '<svg class="w-4 h-4 text-indigo-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="2" y="2" width="20" height="8" rx="2" stroke-width="2"/><rect x="2" y="14" width="20" height="8" rx="2" stroke-width="2"/><line x1="6" y1="6" x2="6.01" y2="6" stroke-width="2"/><line x1="6" y1="18" x2="6.01" y2="18" stroke-width="2"/></svg>';
+        default:
+            return '<svg class="w-4 h-4 text-[#ccff00] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+    }
+}
+
 export async function renderClientPortalView(container, params = {}) {
     if (!container) return;
     if (typeof container === 'string') {
@@ -191,7 +223,16 @@ export async function renderClientPortalView(container, params = {}) {
     }
 
     // Active Tab State (overview | milestones | deliverables | team | reports)
-    let currentTab = 'overview';
+    function resolveInitialTab(val) {
+        const v = String(val || '').toLowerCase().replace(/^#\/?/, '').split('?')[0];
+        if (v.includes('milestone')) return 'milestones';
+        if (v.includes('deliverable')) return 'deliverables';
+        if (v.includes('teamwork') || v.includes('team')) return 'team';
+        if (v.includes('boost') || v.includes('report')) return 'reports';
+        return 'overview';
+    }
+
+    let currentTab = resolveInitialTab(params.tab || urlParams.get('tab') || window.location.hash);
     let currentDeliverableFilter = 'All';
 
     function renderPortalDOM() {
@@ -493,7 +534,7 @@ export async function renderClientPortalView(container, params = {}) {
                                                     <!-- In-line Neon Lime Progress Bar for Active Phase -->
                                                     <div class="space-y-1.5 pt-1">
                                                         <div class="flex items-center justify-between text-xs font-mono">
-                                                            <span class="text-[#ccff00]">Active Phase Progress</span>
+                                                            <span class="text-[#ccff00] font-semibold">Progress ${item.progress || 60}%</span>
                                                             <span class="text-white font-bold">${item.progress || 60}%</span>
                                                         </div>
                                                         <div class="w-full h-1.5 bg-[#0d0e11] rounded-full overflow-hidden">
@@ -506,7 +547,7 @@ export async function renderClientPortalView(container, params = {}) {
                                                 <div class="flex flex-wrap gap-1.5 pt-1">
                                                     ${(item.deliverables || []).map(tag => `
                                                         <span class="px-2 py-0.5 text-[11px] font-mono rounded bg-[#0d0e11] text-zinc-300 border border-zinc-800">
-                                                            ${escapeHtml(tag)}
+                                                             ${escapeHtml(tag)}
                                                         </span>
                                                     `).join('')}
                                                 </div>
@@ -523,9 +564,14 @@ export async function renderClientPortalView(container, params = {}) {
                         <div class="bg-[#14151a] border border-white/[0.08] rounded-xl p-6 space-y-6">
                             <!-- Filters & Header -->
                             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
-                                <div>
-                                    <h2 class="text-base font-bold text-white">DELIVERABLES CATALOG</h2>
-                                    <p class="text-xs text-zinc-400">Independently verified code artifacts, PRs, and live interactive sandboxes.</p>
+                                <div class="flex items-center gap-3">
+                                    <div>
+                                        <h2 class="text-base font-bold text-white">DELIVERABLES CATALOG</h2>
+                                        <p class="text-xs text-zinc-400">Independently verified code artifacts, PRs, and live interactive sandboxes.</p>
+                                    </div>
+                                    <span class="px-2.5 py-0.5 text-xs font-mono rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700 shrink-0">
+                                        ${deliverablesCatalog.length} items
+                                    </span>
                                 </div>
                                 <div class="flex flex-wrap items-center gap-2" id="deliverables-filter-container">
                                     <button class="deliverable-filter-btn px-3 py-1 text-xs font-mono rounded-lg ${currentDeliverableFilter === 'All' ? 'bg-[#ccff00] text-zinc-950 font-bold' : 'bg-zinc-800 text-zinc-400 hover:text-white'}" data-filter="All">
@@ -565,7 +611,10 @@ export async function renderClientPortalView(container, params = {}) {
                                             <div class="bg-[#1a1b22] border border-white/[0.05] hover:border-[#ccff00]/40 rounded-xl p-5 space-y-3 transition flex flex-col justify-between">
                                                 <div class="space-y-2">
                                                     <div class="flex items-start justify-between gap-2">
-                                                        <h3 class="text-sm font-semibold text-white">${escapeHtml(deliv.title)}</h3>
+                                                        <div class="flex items-center gap-2 min-w-0">
+                                                            ${getDeliverableIconSvg(deliv.icon)}
+                                                            <h3 class="text-sm font-semibold text-white truncate">${escapeHtml(deliv.title)}</h3>
+                                                        </div>
                                                         <span class="px-2 py-0.5 text-[10px] font-mono uppercase rounded-full border ${badgeColor} shrink-0">
                                                             ${escapeHtml(deliv.status)}
                                                         </span>
@@ -893,6 +942,13 @@ export async function renderClientPortalView(container, params = {}) {
                 const targetTab = tabBtn.getAttribute('data-tab');
                 if (targetTab && targetTab !== currentTab) {
                     currentTab = targetTab;
+                    const curH = window.location.hash || '';
+                    const newH = '#' + targetTab;
+                    if (curH !== newH && !curH.startsWith('#login') && !curH.startsWith('#register')) {
+                        try {
+                            window.history.replaceState(null, '', newH);
+                        } catch (_) {}
+                    }
                     renderPortalDOM();
                 }
             });
@@ -1024,19 +1080,46 @@ export async function renderClientPortalView(container, params = {}) {
     renderPortalDOM();
 
     // Setup Real-Time WebSocket stream with Polling fallback
-    let ws = null;
-    let pollInterval = null;
+    if (container.__kbWs) {
+        try { container.__kbWs.close(); } catch (_) {}
+        container.__kbWs = null;
+    }
+    if (container.__kbPoll) {
+        clearInterval(container.__kbPoll);
+        container.__kbPoll = null;
+    }
 
     function initRealtime() {
         try {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const host = window.location.host;
-            ws = new WebSocket(`${protocol}//${host}/ws/client-portal`);
+            const ws = new WebSocket(`${protocol}//${host}/ws/client-portal`);
+            container.__kbWs = ws;
 
             ws.onmessage = (event) => {
                 try {
                     const payload = JSON.parse(event.data);
-                    if (payload.type === 'activity' && payload.activity) {
+                    if (payload.type === 'portal_activity_snapshot' && Array.isArray(payload.activities) && payload.activities.length) {
+                        activities.splice(0, activities.length, ...payload.activities);
+                        const feed = container.querySelector('#portal-activity-feed');
+                        if (feed) {
+                            feed.innerHTML = activities.map(act => {
+                                let dotColor = 'bg-[#ccff00]';
+                                if (act.dot_color === 'cyan') dotColor = 'bg-sky-400';
+                                if (act.dot_color === 'emerald') dotColor = 'bg-emerald-400';
+                                if (act.dot_color === 'amber') dotColor = 'bg-amber-400';
+                                if (act.dot_color === 'zinc') dotColor = 'bg-zinc-500';
+
+                                return `
+                                    <div class="flex items-center gap-3 py-1.5 border-b border-zinc-900/60 last:border-none">
+                                        <span class="w-2 h-2 rounded-full ${dotColor} shrink-0"></span>
+                                        <span class="text-zinc-500 shrink-0">${escapeHtml(act.timestamp || act.time || '14:00')}</span>
+                                        <span class="text-zinc-300">${escapeHtml(act.message || act.description || '')}</span>
+                                    </div>
+                                `;
+                            }).join('');
+                        }
+                    } else if (payload.type === 'activity' && payload.activity) {
                         activities.unshift(payload.activity);
                         const feed = container.querySelector('#portal-activity-feed');
                         if (feed) {
@@ -1056,14 +1139,18 @@ export async function renderClientPortalView(container, params = {}) {
             ws.onerror = () => {
                 startPollingFallback();
             };
+
+            ws.onclose = () => {
+                startPollingFallback();
+            };
         } catch (_) {
             startPollingFallback();
         }
     }
 
     function startPollingFallback() {
-        if (pollInterval) return;
-        pollInterval = setInterval(async () => {
+        if (container.__kbPoll) return;
+        container.__kbPoll = setInterval(async () => {
             try {
                 const actData = await apiFetch('/client-portal/activity');
                 if (actData && Array.isArray(actData.activities) && actData.activities.length) {

@@ -121,6 +121,10 @@ async def test_public_showcase_portal_summary_5_tabs():
         agent_names = {agent["name"] for agent in team_agents}
         expected_agents = {"Axiom", "Nexus", "Sentinel", "Aegis", "Forge", "Pixel", "Vanguard"}
         assert expected_agents.issubset(agent_names)
+        vanguard = next(a for a in team_agents if a["name"] == "Vanguard")
+        assert isinstance(vanguard["deliverables_completed"], int)
+        assert vanguard["deliverables_completed"] >= 20
+        assert "uptime_sla" in vanguard
 
         # Tab 5: Reports - Velocity, Test Coverage, SOC-2 Audit, Code Quality
         reports = data.get("executive_reports")
@@ -296,6 +300,7 @@ def test_frontend_js_and_portal_html_integrity():
 
         # Check export signatures
         assert "export function buildArchitectureSvg" in code
+        assert "export function getDeliverableIconSvg" in code
         assert "export async function renderClientPortalView" in code
 
         # Check 5 tab navigation tabs and handlers
@@ -304,6 +309,11 @@ def test_frontend_js_and_portal_html_integrity():
         assert 'data-tab="deliverables"' in code
         assert 'data-tab="team"' in code
         assert 'data-tab="reports"' in code
+
+        # Check deliverable icons, item count, and active milestone progress bar text
+        assert "getDeliverableIconSvg(deliv.icon)" in code
+        assert "${deliverablesCatalog.length} items" in code
+        assert "Progress ${item.progress || 60}%" in code
 
         # Check electric neon-lime palette token
         assert "#ccff00" in code
@@ -327,3 +337,68 @@ def test_frontend_js_and_portal_html_integrity():
     assert "loadExecutivePortal" in html
     assert "renderClientPortalView" in html
     assert "Operator Login" in html
+    assert "getPortalInitialTab" in html
+    assert "isClientPortalRoute" in html
+
+
+@pytest.mark.asyncio
+async def test_client_portal_intake_and_realtime_broadcast():
+    """
+    Verify authenticated feature request intake creates mission and broadcasts real-time activity.
+    """
+    suffix = uuid.uuid4().hex[:8]
+    async with AsyncSessionLocal() as db:
+        org = Organization(
+            id=f"org-intake-{suffix}",
+            name=f"Intake Client {suffix}",
+            slug=f"intake-{suffix}",
+            description="Client Org",
+            is_active=True,
+        )
+        db.add(org)
+
+        client_user = User(
+            id=f"u-intake-{suffix}",
+            email=f"client-{suffix}@intake.test",
+            hashed_password=get_password_hash("Pass123!test"),
+            full_name="Intake User",
+            is_active=True,
+        )
+        db.add(client_user)
+
+        membership = OrgMember(
+            id=f"mem-intake-{suffix}",
+            organization_id=org.id,
+            user_id=client_user.id,
+            role=OrgRole.READ_ONLY_REVIEWER,
+        )
+        db.add(membership)
+
+        proj = Project(
+            id=f"proj-intake-{suffix}",
+            organization_id=org.id,
+            name="Intake Platform",
+            description="Intake Project",
+            created_by=client_user.id,
+        )
+        db.add(proj)
+        await db.commit()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        headers = _auth_headers(client_user.id, org.id)
+        payload = {
+            "title": "Add Apple Pay & Google Pay One-Click Checkout",
+            "description": "Integrate Apple Pay and Google Pay digital wallets into the checkout flow.",
+            "priority": "High",
+            "organization_id": org.id,
+            "project_id": proj.id,
+        }
+        res = await ac.post("/api/v1/client-portal/intake", headers=headers, json=payload)
+        assert res.status_code == 201, res.text
+        data = res.json()
+        assert data["status"] == "queued_for_autonomous_pod"
+        assert data["title"] == payload["title"]
+        assert data["priority"] == "High"
+        assert data["ticket_id"].startswith("KOB-")
+

@@ -869,13 +869,40 @@
   <script>
     let portalRendered = false;
 
-    async function loadExecutivePortal() {
+    function getPortalInitialTab() {
+      const hash = (window.location.hash || '').toLowerCase();
+      if (hash.includes('milestone')) return 'milestones';
+      if (hash.includes('deliverable')) return 'deliverables';
+      if (hash.includes('teamwork') || hash.includes('team')) return 'team';
+      if (hash.includes('boost') || hash.includes('report')) return 'reports';
+      return 'overview';
+    }
+
+    function isClientPortalRoute(hash) {
+      const h = (hash || '').toLowerCase();
+      return (
+        h === '' ||
+        h === '#portal' ||
+        h === '#overview' ||
+        h === '#milestones' ||
+        h === '#deliverables' ||
+        h === '#team' ||
+        h === '#reports' ||
+        h === '#teamwork-preview' ||
+        h === '#teamwork' ||
+        h === '#boost' ||
+        h.startsWith('#portal/')
+      );
+    }
+
+    async function loadExecutivePortal(requestedTab) {
       const mount = document.getElementById('executive-portal-mount');
       if (!mount) return;
+      const targetTab = requestedTab || getPortalInitialTab();
       try {
         const mod = await import('/web/js/views/client_portal.js');
         if (mod && typeof mod.renderClientPortalView === 'function') {
-          await mod.renderClientPortalView(mount);
+          await mod.renderClientPortalView(mount, { tab: targetTab });
           portalRendered = true;
           return;
         }
@@ -885,7 +912,7 @@
       try {
         const modFallback = await import('/js/views/client_portal.js');
         if (modFallback && typeof modFallback.renderClientPortalView === 'function') {
-          await modFallback.renderClientPortalView(mount);
+          await modFallback.renderClientPortalView(mount, { tab: targetTab });
           portalRendered = true;
         }
       } catch (e2) {
@@ -904,9 +931,9 @@
         if (params.get('auth_error')) {
           return;
         }
-        // Do not auto-redirect if user explicitly navigated to login, register, or client portal showcase
+        // Do not auto-redirect if user navigated to login, register, or client portal routes/tabs
         const curHash = window.location.hash || '';
-        if (curHash === '#login' || curHash === '#register' || curHash === '#signup' || curHash === '#portal' || curHash === '') {
+        if (curHash === '#login' || curHash === '#register' || curHash === '#signup' || isClientPortalRoute(curHash)) {
           return;
         }
         const savedToken = localStorage.getItem('kobits_token');
@@ -924,7 +951,7 @@
           }
           const role = String(data?.role || data?.user?.role || '').toUpperCase();
           const defaultHash = (role === 'READ_ONLY_REVIEWER' || role === 'VIEWER' || role === 'CLIENT') ? '#portal' : '#overview';
-          const targetHash = ['#admin', '#console', '#overview'].includes(curHash) ? curHash : defaultHash;
+          const targetHash = ['#admin', '#console'].includes(curHash) ? curHash : defaultHash;
           window.location.replace('/web/index.html' + targetHash);
           return;
         } else if (res.status === 401 && savedToken) {
@@ -933,9 +960,8 @@
       } catch (_) {}
     })();
 
-    if (['#dashboard', '#overview', '#admin', '#console'].includes(window.location.hash)) {
-      const targetHash = window.location.hash === '#dashboard' ? '#overview' : window.location.hash;
-      window.location.replace('/web/index.html' + targetHash);
+    if (['#dashboard', '#admin', '#console'].includes(window.location.hash)) {
+      window.location.replace('/web/index.html' + window.location.hash);
     }
 
     let isSignUp = window.location.hash === '#register';
@@ -967,10 +993,9 @@
       const authScreen = document.getElementById('auth-screen');
       const portalView = document.getElementById('executive-portal-view');
 
-      if (['#dashboard', '#overview', '#admin', '#console'].includes(curHash)) {
+      if (['#dashboard', '#admin', '#console'].includes(curHash)) {
         const tok = localStorage.getItem('kobits_token');
-        const targetHash = curHash === '#dashboard' ? '#overview' : curHash;
-        const target = tok ? `/dashboard?session_token=${encodeURIComponent(tok)}${targetHash}` : `/dashboard${targetHash}`;
+        const target = tok ? `/dashboard?session_token=${encodeURIComponent(tok)}${curHash}` : `/dashboard${curHash}`;
         window.location.replace(target);
         return;
       }
@@ -980,12 +1005,10 @@
         if (authScreen) authScreen.classList.remove('hidden');
         isSignUp = (curHash === '#register' || curHash === '#signup');
       } else {
-        // Empty hash or #portal: Executive Portal Mode
+        // Empty hash, #portal, or any client portal tab: Executive Portal Mode
         if (authScreen) authScreen.classList.add('hidden');
         if (portalView) portalView.classList.remove('hidden');
-        if (!portalRendered) {
-          loadExecutivePortal();
-        }
+        loadExecutivePortal(getPortalInitialTab());
         return;
       }
       const title = document.getElementById('auth-title');
