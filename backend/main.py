@@ -863,6 +863,36 @@ async def websocket_dashboard(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket, "dashboard")
 
+@app.websocket("/ws/client-portal")
+@app.websocket("/api/v1/client-portal/ws")
+async def websocket_client_portal(websocket: WebSocket):
+    await manager.connect(websocket, "client_portal")
+    try:
+        await websocket.send_json({
+            "type": "connected",
+            "message": "Connected to Kobits real-time executive client portal stream.",
+            "timestamp": datetime.now(timezone.utc).strftime("%H:%M")
+        })
+        try:
+            from backend.api.v1.client_portal import _build_default_recent_activity
+            await websocket.send_json({
+                "type": "portal_activity_snapshot",
+                "activities": _build_default_recent_activity(),
+                "timestamp": datetime.now(timezone.utc).strftime("%H:%M")
+            })
+        except Exception:
+            pass
+        while True:
+            data = await websocket.receive_text()
+            try:
+                msg = json.loads(data)
+                if msg.get("type") == "ping":
+                    await websocket.send_json({"type": "pong", "timestamp": datetime.now(timezone.utc).strftime("%H:%M")})
+            except Exception:
+                pass
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, "client_portal")
+
 @app.websocket("/ws/missions/{mission_id}")
 async def websocket_mission(websocket: WebSocket, mission_id: str):
     await manager.connect(websocket, mission_id)

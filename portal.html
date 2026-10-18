@@ -666,6 +666,33 @@
   </div>
 
   <!-- ============================================================
+       EXECUTIVE CLIENT PORTAL VIEW
+       ============================================================ -->
+  <div id="executive-portal-view" class="hidden min-h-screen bg-[#0d0e11] text-zinc-100">
+    <div class="border-b border-white/[0.08] bg-[#14151a]/90 backdrop-blur-md px-6 py-3 flex items-center justify-between sticky top-0 z-50">
+      <div class="flex items-center gap-3">
+        <a href="/" class="flex items-center gap-2.5 text-white hover:text-zinc-200 transition no-underline" title="Kobits Home">
+          <svg style="width:22px;height:22px" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12.2 5.8C11.4 13.2 10.1 21.8 9.2 31.4" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/>
+            <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+            <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
+          </svg>
+          <span class="font-mono font-bold tracking-wider text-sm">KOBITS</span>
+        </a>
+        <span class="text-zinc-600">/</span>
+        <span class="text-xs font-mono text-[#ccff00]">CLIENT PORTAL</span>
+      </div>
+      <div class="flex items-center gap-4">
+        <a href="#login" onclick="window.location.hash='#login'; return false;" class="text-xs font-medium text-zinc-400 hover:text-[#ccff00] transition flex items-center gap-1.5 font-mono py-1.5 px-3 rounded-lg border border-white/[0.08] hover:border-[#ccff00]/30 bg-white/[0.02]">
+          <span>Operator Login</span>
+          <span>&rarr;</span>
+        </a>
+      </div>
+    </div>
+    <div id="executive-portal-mount"></div>
+  </div>
+
+  <!-- ============================================================
        AUTH SCREEN
        ============================================================ -->
   <div id="auth-screen" class="flex min-h-screen items-center justify-center p-4"
@@ -797,9 +824,9 @@
 
       <!-- Preview link -->
       <div style="margin-top:20px;text-align:center">
-        <button onclick="window.location.href='/web/index.html#overview'"
+        <button onclick="window.location.hash='#portal'"
           class="kb-meta" style="color:var(--kb-text-3);background:none;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:4px">
-          Explore public preview
+          Explore executive client portal
           <i data-lucide="arrow-right" style="width:12px;height:12px"></i>
         </button>
       </div>
@@ -840,6 +867,32 @@
        SCRIPTS
        ============================================================ -->
   <script>
+    let portalRendered = false;
+
+    async function loadExecutivePortal() {
+      const mount = document.getElementById('executive-portal-mount');
+      if (!mount) return;
+      try {
+        const mod = await import('/web/js/views/client_portal.js');
+        if (mod && typeof mod.renderClientPortalView === 'function') {
+          await mod.renderClientPortalView(mount);
+          portalRendered = true;
+          return;
+        }
+      } catch (err) {
+        console.warn('Could not load /web/js/views/client_portal.js, trying /js/...', err);
+      }
+      try {
+        const modFallback = await import('/js/views/client_portal.js');
+        if (modFallback && typeof modFallback.renderClientPortalView === 'function') {
+          await modFallback.renderClientPortalView(mount);
+          portalRendered = true;
+        }
+      } catch (e2) {
+        console.error('Failed to render client portal view:', e2);
+      }
+    }
+
     (async function checkExistingSession() {
       try {
         const params = new URLSearchParams(window.location.search);
@@ -851,9 +904,9 @@
         if (params.get('auth_error')) {
           return;
         }
-        // Do not auto-redirect if user explicitly navigated to login, register, or signup
+        // Do not auto-redirect if user explicitly navigated to login, register, or client portal showcase
         const curHash = window.location.hash || '';
-        if (curHash === '#login' || curHash === '#register' || curHash === '#signup') {
+        if (curHash === '#login' || curHash === '#register' || curHash === '#signup' || curHash === '#portal' || curHash === '') {
           return;
         }
         const savedToken = localStorage.getItem('kobits_token');
@@ -871,7 +924,7 @@
           }
           const role = String(data?.role || data?.user?.role || '').toUpperCase();
           const defaultHash = (role === 'READ_ONLY_REVIEWER' || role === 'VIEWER' || role === 'CLIENT') ? '#portal' : '#overview';
-          const targetHash = ['#portal', '#admin', '#console', '#overview'].includes(curHash) ? curHash : defaultHash;
+          const targetHash = ['#admin', '#console', '#overview'].includes(curHash) ? curHash : defaultHash;
           window.location.replace('/web/index.html' + targetHash);
           return;
         } else if (res.status === 401 && savedToken) {
@@ -880,7 +933,7 @@
       } catch (_) {}
     })();
 
-    if (['#dashboard', '#overview', '#portal', '#admin', '#console'].includes(window.location.hash)) {
+    if (['#dashboard', '#overview', '#admin', '#console'].includes(window.location.hash)) {
       const targetHash = window.location.hash === '#dashboard' ? '#overview' : window.location.hash;
       window.location.replace('/web/index.html' + targetHash);
     }
@@ -910,11 +963,29 @@
     };
 
     function updateAuthMode() {
-      if (['#dashboard', '#overview', '#portal', '#admin', '#console'].includes(window.location.hash)) {
+      const curHash = window.location.hash || '';
+      const authScreen = document.getElementById('auth-screen');
+      const portalView = document.getElementById('executive-portal-view');
+
+      if (['#dashboard', '#overview', '#admin', '#console'].includes(curHash)) {
         const tok = localStorage.getItem('kobits_token');
-        const targetHash = window.location.hash === '#dashboard' ? '#overview' : window.location.hash;
+        const targetHash = curHash === '#dashboard' ? '#overview' : curHash;
         const target = tok ? `/dashboard?session_token=${encodeURIComponent(tok)}${targetHash}` : `/dashboard${targetHash}`;
         window.location.replace(target);
+        return;
+      }
+
+      if (curHash === '#login' || curHash === '#register' || curHash === '#signup') {
+        if (portalView) portalView.classList.add('hidden');
+        if (authScreen) authScreen.classList.remove('hidden');
+        isSignUp = (curHash === '#register' || curHash === '#signup');
+      } else {
+        // Empty hash or #portal: Executive Portal Mode
+        if (authScreen) authScreen.classList.add('hidden');
+        if (portalView) portalView.classList.remove('hidden');
+        if (!portalRendered) {
+          loadExecutivePortal();
+        }
         return;
       }
       const title = document.getElementById('auth-title');
