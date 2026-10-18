@@ -101,7 +101,9 @@
                 <a href="/pricing.html" class="hover:text-white transition-colors">Pricing</a>
             </div>
             <div class="flex items-center gap-3">
-                <a href="/landing.html?open_apply=1" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-semibold hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.18)] hover:scale-[1.02]">Apply for Early Access</a>
+                <button type="button" data-open-early-access="1" onclick="openEarlyAccessModal()" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-semibold hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.18)] hover:scale-[1.02] cursor-pointer whitespace-nowrap">
+                    Apply for Early Access
+                </button>
                 <button type="button" id="kb-engineering-menu-toggle" class="lg:hidden text-zinc-400 hover:text-white p-1 rounded-md focus:outline-none" aria-label="Toggle navigation menu">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                 </button>
@@ -119,6 +121,11 @@
         <a href="/pricing.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Pricing</a>
         <a href="/portal.html#login" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Sign In</a>
         <a href="mailto:kobitscreation@gmail.com" class="text-zinc-400 hover:text-white py-2 lowercase font-sans">kobitscreation@gmail.com</a>
+        <div class="pt-2">
+            <button type="button" data-open-early-access="1" onclick="openEarlyAccessModal()" class="w-full py-2.5 bg-white text-black font-semibold text-center rounded-lg cursor-pointer whitespace-nowrap">
+                Apply for Early Access
+            </button>
+        </div>
     </div>
 
     <!-- HEADER -->
@@ -295,6 +302,74 @@
         </div>
     </footer>
 
+    <!-- EARLY ACCESS & MISSION LAUNCH APPLICATION MODAL -->
+    <div id="modal-early-access" class="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-label="Launch Mission & Apply for Early Access">
+        <div class="bg-[#0c0c0e] border border-zinc-800 rounded-2xl max-w-md w-full p-6 md:p-8 relative shadow-2xl">
+            <button id="close-early-access" type="button" class="absolute top-4 right-4 text-zinc-400 hover:text-white transition-colors p-1 cursor-pointer" aria-label="Close modal">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <div class="mb-6">
+                <div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-950/40 text-[11px] font-mono text-emerald-300 mb-3">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>EARLY ACCESS ROLLOUT</span>
+                </div>
+                <h3 class="text-xl font-semibold text-white">Launch Mission with Kobits</h3>
+                <p class="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                    Zero local installation. Tell us about your repository stack to provision your remote ephemeral MicroVM environment.
+                </p>
+            </div>
+
+            <div id="ea-error" class="hidden p-3 rounded-lg bg-red-950/60 border border-red-800 text-xs text-red-200 mb-3 font-mono"></div>
+
+            <form id="form-early-access" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-mono text-zinc-400 mb-1.5">WORK EMAIL *</label>
+                    <input type="email" id="ea-email" required placeholder="alex@company.com" class="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors font-mono">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-mono text-zinc-400 mb-1.5">FULL NAME</label>
+                        <input type="text" id="ea-name" placeholder="Alex Chen" class="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-mono text-zinc-400 mb-1.5">COMPANY / TEAM</label>
+                        <input type="text" id="ea-company" placeholder="Acme Inc." class="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-mono text-zinc-400 mb-1.5">PRIMARY STACK</label>
+                    <input type="text" id="ea-stack" placeholder="e.g. Python / FastAPI / PostgreSQL / React" class="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors">
+                </div>
+                <div>
+                    <label class="block text-xs font-mono text-zinc-400 mb-1.5">WHAT WOULD YOU LIKE KOBITS TO SOLVE?</label>
+                    <textarea id="ea-usecase" rows="2" placeholder="e.g. TDD bug reproduction, self-healing CI workflows, microservices refactoring..." class="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors"></textarea>
+                </div>
+                <button type="submit" id="btn-submit-early-access" class="w-full py-2.5 bg-white text-black font-semibold text-xs rounded-lg hover:bg-zinc-200 transition-colors shadow-[0_0_15px_rgba(255,255,255,0.18)] flex items-center justify-center gap-2 cursor-pointer">
+                    <span>Submit &amp; Provision Access</span>
+                </button>
+                <div class="text-[11px] text-zinc-500 pt-2 text-center font-mono">
+                    Direct inquiries: <a href="mailto:kobitscreation@gmail.com" class="text-zinc-400 hover:text-white underline font-sans">kobitscreation@gmail.com</a>
+                </div>
+            </form>
+
+            <div id="ea-success" class="hidden text-center py-6">
+                <div class="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-3 border border-emerald-500/40">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <h4 class="text-base font-semibold text-white">Application Received!</h4>
+                <p class="text-xs text-zinc-400 mt-2 leading-relaxed">
+                    You're registered for the private early access rollout. Our team reviews submissions daily and will send your workspace invitation and API credentials shortly.
+                </p>
+                <div class="text-[11px] text-zinc-500 mt-3 font-mono">
+                    Questions? Reach us at <a href="mailto:kobitscreation@gmail.com" class="text-zinc-300 underline font-sans">kobitscreation@gmail.com</a>
+                </div>
+                <button type="button" id="btn-done-early-access" class="mt-5 px-5 py-2 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-xs font-mono text-white rounded-lg transition-colors cursor-pointer">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         lucide.createIcons();
         const toggleBtn = document.getElementById('kb-engineering-menu-toggle');
@@ -305,6 +380,122 @@
                 mobileMenu.classList.toggle('flex');
             });
         }
+
+        function openEarlyAccessModal() {
+            const modal = document.getElementById('modal-early-access');
+            const form = document.getElementById('form-early-access');
+            const successView = document.getElementById('ea-success');
+            const errEl = document.getElementById('ea-error');
+            if (!modal) return;
+            if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
+                mobileMenu.classList.add('hidden');
+                mobileMenu.classList.remove('flex');
+            }
+            modal.classList.remove('hidden');
+            if (form) form.classList.remove('hidden');
+            if (successView) successView.classList.add('hidden');
+            if (errEl) errEl.classList.add('hidden');
+            const emailInput = document.getElementById('ea-email');
+            if (emailInput) setTimeout(() => emailInput.focus(), 80);
+        }
+        window.openEarlyAccessModal = openEarlyAccessModal;
+
+        function closeEarlyAccessModal() {
+            const modal = document.getElementById('modal-early-access');
+            if (modal) modal.classList.add('hidden');
+        }
+        window.closeEarlyAccessModal = closeEarlyAccessModal;
+
+        function setupEarlyAccessModal() {
+            const modal = document.getElementById('modal-early-access');
+            const form = document.getElementById('form-early-access');
+            const successView = document.getElementById('ea-success');
+            const closeBtn = document.getElementById('close-early-access');
+            const doneBtn = document.getElementById('btn-done-early-access');
+            const submitBtn = document.getElementById('btn-submit-early-access');
+
+            closeBtn?.addEventListener('click', closeEarlyAccessModal);
+            doneBtn?.addEventListener('click', closeEarlyAccessModal);
+            modal?.addEventListener('click', (e) => {
+                if (e.target === modal) closeEarlyAccessModal();
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+                    closeEarlyAccessModal();
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-open-early-access]');
+                if (btn) {
+                    e.preventDefault();
+                    openEarlyAccessModal();
+                }
+            });
+
+            if (window.location.search.includes('open_apply=1') || window.location.hash === '#early-access' || window.location.hash === '#modal-early-access') {
+                setTimeout(openEarlyAccessModal, 200);
+            }
+            window.addEventListener('hashchange', () => {
+                if (window.location.hash === '#early-access' || window.location.hash === '#modal-early-access') {
+                    openEarlyAccessModal();
+                }
+            });
+
+            form?.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('ea-email')?.value?.trim();
+                const fullName = document.getElementById('ea-name')?.value?.trim();
+                const company = document.getElementById('ea-company')?.value?.trim();
+                const stack = document.getElementById('ea-stack')?.value?.trim();
+                const useCase = document.getElementById('ea-usecase')?.value?.trim();
+
+                if (!email) return;
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Submitting & Provisioning…';
+                }
+
+                try {
+                    const combinedUseCase = stack ? `${useCase ? useCase + ' | ' : ''}Stack: ${stack}` : useCase;
+                    const res = await fetch('/api/v1/waitlist/apply', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email: email,
+                            full_name: fullName,
+                            company: company,
+                            use_case: combinedUseCase
+                        })
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok) {
+                        form.classList.add('hidden');
+                        successView.classList.remove('hidden');
+                        if (window.lucide) lucide.createIcons();
+                    } else {
+                        const errEl = document.getElementById('ea-error');
+                        if (errEl) {
+                            errEl.textContent = data.detail || data.message || 'Submission failed. Please check your email and try again.';
+                            errEl.classList.remove('hidden');
+                        }
+                    }
+                } catch (err) {
+                    const errEl = document.getElementById('ea-error');
+                    if (errEl) {
+                        errEl.textContent = 'Failed to connect to server. Please try again.';
+                        errEl.classList.remove('hidden');
+                    }
+                } finally {
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Submit & Provision Access';
+                    }
+                }
+            });
+        }
+        setupEarlyAccessModal();
     </script>
 </body>
 </html>

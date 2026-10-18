@@ -203,12 +203,19 @@ def test_all_marketing_pages_navbar_structure_and_exact_spec():
         assert "Architecture" not in nav_html, f"{page} navbar still has legacy 'Architecture' instead of 'Engineering'"
         assert "Security & SOC2" not in nav_html, f"{page} navbar still has legacy 'Security & SOC2' instead of 'Security'"
 
-        # 4. Right action button: Must be single clean 'Apply for Early Access', no Connect GitHub or Launch Mission
+        # 4. Right action button: Must be single clean 'Apply for Early Access' button opening the early access modal
         assert "Apply for Early Access" in nav_html, f"{page} navbar missing 'Apply for Early Access' button"
         assert "Connect GitHub" not in nav_html, f"{page} navbar still contains 'Connect GitHub'"
         assert "Launch Mission" not in nav_html, f"{page} navbar still contains 'Launch Mission'"
+        assert 'data-open-early-access="1"' in nav_html, f"{page} navbar missing data-open-early-access attribute"
+        assert "openEarlyAccessModal()" in nav_html, f"{page} navbar button missing onclick='openEarlyAccessModal()'"
+        assert "whitespace-nowrap" in nav_html, f"{page} navbar button missing whitespace-nowrap"
 
-        # 5. Mobile drawer parity
+        # 5. Early Access Modal DOM parity across all marketing pages
+        assert 'id="modal-early-access"' in content, f"{page} missing #modal-early-access dialog container"
+        assert 'openEarlyAccessModal' in content, f"{page} missing openEarlyAccessModal script implementation"
+
+        # 6. Mobile drawer parity
         mobile_match = re.search(r'id="kb-[a-z-]+menu"[^>]*>(.*?)</div>', content, re.DOTALL)
         if mobile_match:
             mobile_html = mobile_match.group(1)
@@ -216,6 +223,8 @@ def test_all_marketing_pages_navbar_structure_and_exact_spec():
             assert "Security & SOC2" not in mobile_html, f"{page} mobile menu has legacy 'Security & SOC2'"
             assert "/engineering.html" in mobile_html, f"{page} mobile menu missing /engineering.html"
             assert "/security.html" in mobile_html, f"{page} mobile menu missing /security.html"
+            assert "Connect GitHub" not in mobile_html, f"{page} mobile menu still has 'Connect GitHub'"
+            assert "Apply for Early Access" in mobile_html, f"{page} mobile menu missing 'Apply for Early Access'"
 
 
 def test_no_kyros_or_devin_or_cloud_headlines_in_marketing_pages():

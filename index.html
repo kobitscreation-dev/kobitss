@@ -323,7 +323,7 @@
                 <a href="/pricing.html" class="hover:text-white transition-colors">Pricing</a>
             </div>
             <div class="flex items-center gap-3">
-                <button type="button" data-open-early-access="1" onclick="openEarlyAccessModal()" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-semibold hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.18)] hover:scale-[1.02] cursor-pointer">
+                <button type="button" data-open-early-access="1" onclick="openEarlyAccessModal()" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-semibold hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.18)] hover:scale-[1.02] cursor-pointer whitespace-nowrap">
                     Apply for Early Access
                 </button>
                 <button type="button" id="kb-mobile-menu-toggle" class="lg:hidden text-zinc-400 hover:text-white p-1 rounded-md focus:outline-none" aria-label="Toggle navigation menu">
@@ -342,8 +342,13 @@
         <a href="/security.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Security</a>
         <a href="/pricing.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Pricing</a>
         <a href="/portal" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Executive Portal</a>
-        <a href="/portal.html#login" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Sign In / Connect GitHub</a>
+        <a href="/portal.html#login" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Sign In</a>
         <a href="mailto:kobitscreation@gmail.com" class="text-zinc-400 hover:text-white py-2 lowercase font-sans">kobitscreation@gmail.com</a>
+        <div class="pt-2">
+            <button type="button" data-open-early-access="1" onclick="openEarlyAccessModal()" class="w-full py-2.5 bg-white text-black font-semibold text-center rounded-lg cursor-pointer whitespace-nowrap">
+                Apply for Early Access
+            </button>
+        </div>
     </div>
 
     <!-- HERO SECTION: THE AUTONOMOUS SOFTWARE ENGINEER -->
@@ -2214,6 +2219,11 @@
       const successView = document.getElementById('ea-success');
       const errEl = document.getElementById('ea-error');
       if (!modal) return;
+      const mobileMenu = document.getElementById('kb-mobile-menu');
+      if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
+        mobileMenu.classList.add('hidden');
+        mobileMenu.classList.remove('flex');
+      }
       modal.classList.remove('hidden');
       if (form) form.classList.remove('hidden');
       if (successView) successView.classList.add('hidden');
