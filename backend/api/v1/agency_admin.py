@@ -1509,6 +1509,11 @@ async def get_systems_console_telemetry(
     from backend.services.prompt_cache import PromptCacheOptimizer
     from backend.services.browser_engine import CDPStreamManager
     from backend.services.best_of_n import MCTSHypothesisExplorer
+    from backend.services.context_compactor import WorkingSetBudgetManager
+    from backend.services.tool_registry import SpeculativeToolDAGExecutor
+    from backend.services.atomic_changeset import ASTThreeWayMergeHealer
+    from backend.services.toolchain_detector import AutonomousToolchainDetector
+    from backend.services.visual_qa import PerceptualVisualDiffEngine
 
     warm_pool_telemetry = (
         CloudMicroVMSandbox.get_warm_pool_telemetry()
@@ -1523,6 +1528,11 @@ async def get_systems_console_telemetry(
     prompt_cache_telemetry = PromptCacheOptimizer.get_global_cache_telemetry()
     cdp_stream_telemetry = CDPStreamManager.get_telemetry()
     mcts_telemetry = MCTSHypothesisExplorer.get_telemetry()
+    working_set_telemetry = WorkingSetBudgetManager.get_global_telemetry()
+    speculative_dag_telemetry = SpeculativeToolDAGExecutor.get_telemetry()
+    atomic_merge_telemetry = ASTThreeWayMergeHealer.get_telemetry()
+    toolchain_telemetry = AutonomousToolchainDetector.get_telemetry()
+    visual_diff_telemetry = PerceptualVisualDiffEngine.get_telemetry()
 
     return {
         "organization_id": org.id,
@@ -1555,6 +1565,11 @@ async def get_systems_console_telemetry(
         "prompt_cache_economics": prompt_cache_telemetry,
         "cdp_browser_stream": cdp_stream_telemetry,
         "mcts_search_tree": mcts_telemetry,
+        "working_set_budget": working_set_telemetry,
+        "speculative_tool_dag": speculative_dag_telemetry,
+        "atomic_changeset_and_merge": atomic_merge_telemetry,
+        "toolchain_auto_detector": toolchain_telemetry,
+        "perceptual_visual_diff": visual_diff_telemetry,
     }
 
 

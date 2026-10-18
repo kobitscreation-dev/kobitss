@@ -727,3 +727,511 @@ build_frontier_vision_prompt = VisualQAManager.build_frontier_vision_prompt
 parse_frontier_vision_response = VisualQAManager.parse_frontier_vision_response
 analyze_with_frontier_vision = VisualQAManager.analyze_with_frontier_vision
 
+
+# ===========================================================================
+# GAP 10: Multi-Modal Perceptual Visual Diffing (Before vs. After SSIM,
+#         64-Bit dHash, Pixelmatch Heatmap & Layout Shift Invariants)
+# ===========================================================================
+
+import base64
+
+
+@dataclass
+class PerceptualDiffReport:
+    """Result of comparing a Before (baseline) vs. After (post-patch) UI state."""
+    viewport: str
+    ssim_score: float
+    before_dhash: str
+    after_dhash: str
+    dhash_hamming_distance: int
+    total_pixels: int
+    changed_pixels: int
+    pixel_diff_ratio: float
+    cumulative_layout_shift: float
+    classification: str  # "IDENTICAL" | "INTENTIONAL_TARGET_UPDATE" | "UNINTENDED_VISUAL_REGRESSION"
+    regression_detected: bool
+    diff_mask_data_uri: str
+    changed_selectors: List[str] = field(default_factory=list)
+    unintended_shifted_selectors: List[str] = field(default_factory=list)
+    findings: List[SentinelFinding] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "viewport": self.viewport,
+            "ssim_score": round(self.ssim_score, 4),
+            "before_dhash": self.before_dhash,
+            "after_dhash": self.after_dhash,
+            "dhash_hamming_distance": self.dhash_hamming_distance,
+            "total_pixels": self.total_pixels,
+            "changed_pixels": self.changed_pixels,
+            "pixel_diff_ratio": round(self.pixel_diff_ratio, 4),
+            "cumulative_layout_shift": round(self.cumulative_layout_shift, 4),
+            "classification": self.classification,
+            "regression_detected": self.regression_detected,
+            "diff_mask_data_uri": self.diff_mask_data_uri,
+            "changed_selectors": self.changed_selectors,
+            "unintended_shifted_selectors": self.unintended_shifted_selectors,
+            "findings": [f.to_dict() for f in self.findings],
+        }
+
+
+class PerceptualVisualDiffEngine:
+    """
+    Frontier Perceptual Visual Diffing & Structural Layout Invariant Engine (Devin / Kyros Parity).
+
+    Computes:
+    1. 64-bit Perceptual Difference Hash (`dHash`) across 9x8 downsampled luminance grids.
+    2. Windowed Structural Similarity Index (`SSIM` in [0.0, 1.0]) using luminance,
+       contrast, and structural covariance.
+    3. Pixelmatch Diff Heatmap (`data:image/png;base64,...`) highlighting changed regions.
+    4. Cumulative Layout Shift (`CLS`) & Target Scope Invariants to distinguish
+       intentional edits on `target_selectors` from accidental layout regressions on
+       untouched structural components (navbar, footer, pricing grid, etc.).
+    """
+
+    _comparisons_run: int = 0
+    _regressions_caught: int = 0
+    _intentional_updates_verified: int = 0
+
+    @staticmethod
+    def encode_rgb_grid_to_png(grid: List[List[Tuple[int, int, int]]]) -> bytes:
+        """Encodes a 2D `grid[y][x] = (r, g, b)` into a valid standard PNG byte stream."""
+        height = len(grid)
+        width = len(grid[0]) if height > 0 else 1
+
+        raw_rows = bytearray()
+        for row in grid:
+            raw_rows.append(0)  # Filter type 0 (None)
+            for r, g, b in row:
+                raw_rows.extend((max(0, min(255, int(r))), max(0, min(255, int(g))), max(0, min(255, int(b)))))
+
+        def _chunk(c_type: bytes, data: bytes) -> bytes:
+            crc = zlib.crc32(c_type + data) & 0xFFFFFFFF
+            return struct.pack(">I", len(data)) + c_type + data + struct.pack(">I", crc)
+
+        ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+        compressed = zlib.compress(bytes(raw_rows), level=6)
+        return (
+            b"\x89PNG\r\n\x1a\n"
+            + _chunk(b"IHDR", ihdr)
+            + _chunk(b"IDAT", compressed)
+            + _chunk(b"IEND", b"")
+        )
+
+    @staticmethod
+    def decode_png_to_rgb_grid(png_bytes: bytes) -> Optional[List[List[Tuple[int, int, int]]]]:
+        """Decodes a filter-0 8-bit RGB PNG produced by `encode_rgb_grid_to_png`."""
+        if not png_bytes or not png_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+            return None
+        try:
+            pos = 8
+            width = 0
+            height = 0
+            idat_chunks = bytearray()
+            while pos + 8 <= len(png_bytes):
+                length = struct.unpack(">I", png_bytes[pos:pos + 4])[0]
+                c_type = png_bytes[pos + 4:pos + 8]
+                c_data = png_bytes[pos + 8:pos + 8 + length]
+                pos += 12 + length
+                if c_type == b"IHDR":
+                    width, height, bit_depth, color_type, _, _, _ = struct.unpack(">IIBBBBB", c_data[:13])
+                    if bit_depth != 8 or color_type != 2:
+                        return None
+                elif c_type == b"IDAT":
+                    idat_chunks.extend(c_data)
+                elif c_type == b"IEND":
+                    break
+
+            if width <= 0 or height <= 0 or not idat_chunks:
+                return None
+
+            raw = zlib.decompress(bytes(idat_chunks))
+            stride = 1 + width * 3
+            if len(raw) < height * stride:
+                return None
+
+            grid: List[List[Tuple[int, int, int]]] = []
+            for y in range(height):
+                row_start = y * stride + 1
+                row_pixels: List[Tuple[int, int, int]] = []
+                for x in range(width):
+                    px = row_start + x * 3
+                    row_pixels.append((raw[px], raw[px + 1], raw[px + 2]))
+                grid.append(row_pixels)
+            return grid
+        except Exception:
+            return None
+
+    @classmethod
+    def rasterize_dom_boxes_to_rgb_grid(
+        cls,
+        dom_boxes: List[Dict[str, Any]],
+        viewport_width: int = 1280,
+        viewport_height: int = 720,
+        canvas_width: int = 64,
+        canvas_height: int = 64,
+        bg_rgb: Tuple[int, int, int] = (15, 23, 42),
+    ) -> List[List[Tuple[int, int, int]]]:
+        """
+        Rasterizes DOM bounding boxes (`x, y, width, height, color`) onto a normalized
+        `canvas_width x canvas_height` RGB pixel buffer for deterministic SSIM & dHash comparison.
+        """
+        grid: List[List[Tuple[int, int, int]]] = [
+            [bg_rgb for _ in range(canvas_width)] for _ in range(canvas_height)
+        ]
+        scale_x = canvas_width / max(1.0, float(viewport_width))
+        scale_y = canvas_height / max(1.0, float(viewport_height))
+
+        palette = [
+            (59, 130, 246),   # Blue
+            (16, 185, 129),   # Emerald
+            (245, 158, 11),   # Amber
+            (139, 92, 246),   # Violet
+            (236, 72, 153),   # Pink
+            (14, 165, 233),   # Sky
+        ]
+
+        for idx, box in enumerate(dom_boxes):
+            bx = float(box.get("x", 0))
+            by = float(box.get("y", 0))
+            bw = float(box.get("width", 0))
+            bh = float(box.get("height", 0))
+            if bw <= 0 or bh <= 0:
+                continue
+
+            color_str = str(box.get("color") or box.get("background") or "")
+            rgb = parse_color_to_rgb(color_str)
+            if rgb is None:
+                # Deterministic color from selector hash so distinct elements have distinct luminance
+                sel = str(box.get("selector", f"el_{idx}"))
+                h_idx = sum(ord(ch) for ch in sel) % len(palette)
+                rgb = palette[h_idx]
+
+            x0 = max(0, min(canvas_width, int(round(bx * scale_x))))
+            y0 = max(0, min(canvas_height, int(round(by * scale_y))))
+            x1 = max(0, min(canvas_width, int(round((bx + bw) * scale_x))))
+            y1 = max(0, min(canvas_height, int(round((by + bh) * scale_y))))
+
+            if x1 <= x0 and bw > 0:
+                x1 = min(canvas_width, x0 + 1)
+            if y1 <= y0 and bh > 0:
+                y1 = min(canvas_height, y0 + 1)
+
+            for yy in range(y0, y1):
+                for xx in range(x0, x1):
+                    grid[yy][xx] = rgb
+
+        return grid
+
+    @staticmethod
+    def _rgb_to_luma(rgb: Tuple[int, int, int]) -> float:
+        return 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
+
+    @classmethod
+    def compute_dhash(cls, grid: List[List[Tuple[int, int, int]]]) -> Tuple[int, str]:
+        """
+        Computes a 64-bit Perceptual Difference Hash (`dHash`) by sampling a 9x8 luminance grid
+        and comparing horizontal neighbor intensities.
+        """
+        h = len(grid)
+        w = len(grid[0]) if h > 0 else 1
+        bits = 0
+        bit_pos = 63
+
+        for r in range(8):
+            y = min(h - 1, int((r + 0.5) * h / 8.0))
+            lumas: List[float] = []
+            for c in range(9):
+                x = min(w - 1, int((c + 0.5) * w / 9.0))
+                lumas.append(cls._rgb_to_luma(grid[y][x]))
+            for c in range(8):
+                if lumas[c] > lumas[c + 1]:
+                    bits |= (1 << bit_pos)
+                bit_pos -= 1
+
+        return bits, f"{bits:016x}"
+
+    @staticmethod
+    def hamming_distance_64(hash_a: int, hash_b: int) -> int:
+        return bin(hash_a ^ hash_b).count("1")
+
+    @classmethod
+    def compute_ssim(
+        cls,
+        grid_a: List[List[Tuple[int, int, int]]],
+        grid_b: List[List[Tuple[int, int, int]]],
+        window_size: int = 8,
+    ) -> float:
+        """
+        Computes the Structural Similarity Index (`SSIM` in [0.0, 1.0]) across `window_size x window_size`
+        blocks using the Wang et al. luminance, contrast, and structural covariance formulation.
+        """
+        h = min(len(grid_a), len(grid_b))
+        w = min(len(grid_a[0]) if h > 0 else 0, len(grid_b[0]) if h > 0 else 0)
+        if h == 0 or w == 0:
+            return 1.0
+
+        c1 = (0.01 * 255.0) ** 2
+        c2 = (0.03 * 255.0) ** 2
+
+        window_scores: List[float] = []
+        step = max(1, window_size)
+
+        for y0 in range(0, h, step):
+            for x0 in range(0, w, step):
+                y1 = min(h, y0 + step)
+                x1 = min(w, x0 + step)
+                vals_a: List[float] = []
+                vals_b: List[float] = []
+                for yy in range(y0, y1):
+                    for xx in range(x0, x1):
+                        vals_a.append(cls._rgb_to_luma(grid_a[yy][xx]))
+                        vals_b.append(cls._rgb_to_luma(grid_b[yy][xx]))
+
+                n = len(vals_a)
+                if n == 0:
+                    continue
+                mu_a = sum(vals_a) / n
+                mu_b = sum(vals_b) / n
+
+                var_a = sum((va - mu_a) ** 2 for va in vals_a) / n
+                var_b = sum((vb - mu_b) ** 2 for vb in vals_b) / n
+                cov_ab = sum((vals_a[i] - mu_a) * (vals_b[i] - mu_b) for i in range(n)) / n
+
+                numerator = (2.0 * mu_a * mu_b + c1) * (2.0 * cov_ab + c2)
+                denominator = (mu_a ** 2 + mu_b ** 2 + c1) * (var_a + var_b + c2)
+                ssim_w = numerator / denominator if denominator > 0 else 1.0
+                window_scores.append(max(0.0, min(1.0, ssim_w)))
+
+        return sum(window_scores) / len(window_scores) if window_scores else 1.0
+
+    @classmethod
+    def compare_before_after(
+        cls,
+        before_dom_boxes: Optional[List[Dict[str, Any]]] = None,
+        after_dom_boxes: Optional[List[Dict[str, Any]]] = None,
+        before_png: Optional[bytes] = None,
+        after_png: Optional[bytes] = None,
+        target_selectors: Optional[List[str]] = None,
+        viewport: str = "desktop",
+        pixel_tolerance: int = 18,
+    ) -> PerceptualDiffReport:
+        """
+        Performs a full perceptual visual diff and structural layout shift analysis
+        between the Before (baseline) and After (post-patch) UI states.
+        """
+        cls._comparisons_run += 1
+        vp_spec = STANDARD_VIEWPORTS.get(viewport, STANDARD_VIEWPORTS["desktop"])
+        vp_w, vp_h = vp_spec["width"], vp_spec["height"]
+
+        # 1. Obtain or rasterize 2D RGB pixel grids
+        grid_before = cls.decode_png_to_rgb_grid(before_png) if before_png else None
+        if grid_before is None:
+            grid_before = cls.rasterize_dom_boxes_to_rgb_grid(
+                before_dom_boxes or [],
+                viewport_width=vp_w,
+                viewport_height=vp_h,
+            )
+
+        grid_after = cls.decode_png_to_rgb_grid(after_png) if after_png else None
+        if grid_after is None:
+            grid_after = cls.rasterize_dom_boxes_to_rgb_grid(
+                after_dom_boxes or [],
+                viewport_width=vp_w,
+                viewport_height=vp_h,
+            )
+
+        h = min(len(grid_before), len(grid_after))
+        w = min(len(grid_before[0]) if h > 0 else 0, len(grid_after[0]) if h > 0 else 0)
+        total_pixels = max(1, h * w)
+
+        # 2. Compute 64-bit dHash and SSIM
+        b_hash_int, b_hash_hex = cls.compute_dhash(grid_before)
+        a_hash_int, a_hash_hex = cls.compute_dhash(grid_after)
+        hamming = cls.hamming_distance_64(b_hash_int, a_hash_int)
+        ssim = cls.compute_ssim(grid_before, grid_after)
+
+        # 3. Generate Pixelmatch Diff Mask
+        diff_grid: List[List[Tuple[int, int, int]]] = []
+        changed_pixels = 0
+        for yy in range(h):
+            diff_row: List[Tuple[int, int, int]] = []
+            for xx in range(w):
+                r1, g1, b1 = grid_before[yy][xx]
+                r2, g2, b2 = grid_after[yy][xx]
+                delta = abs(r1 - r2) + abs(g1 - g2) + abs(b1 - b2)
+                if delta > pixel_tolerance:
+                    changed_pixels += 1
+                    diff_row.append((255, 0, 85))  # High-contrast magenta diff highlight
+                else:
+                    # Dimmed grayscale background for unchanged pixels
+                    luma = int(cls._rgb_to_luma((r2, g2, b2)) * 0.35)
+                    diff_row.append((luma, luma, luma))
+            diff_grid.append(diff_row)
+
+        diff_png_bytes = cls.encode_rgb_grid_to_png(diff_grid)
+        diff_data_uri = "data:image/png;base64," + base64.b64encode(diff_png_bytes).decode("ascii")
+        pixel_diff_ratio = changed_pixels / float(total_pixels)
+
+        # 4. Analyze DOM Bounding-Box Layout Shifts (CLS) & Target Invariants
+        target_set = set(target_selectors or [])
+        before_map = {str(b.get("selector", "")): b for b in (before_dom_boxes or []) if b.get("selector")}
+        after_map = {str(b.get("selector", "")): b for b in (after_dom_boxes or []) if b.get("selector")}
+
+        changed_selectors: List[str] = []
+        unintended_shifted: List[str] = []
+        findings: List[SentinelFinding] = []
+        cls_total = 0.0
+        vp_area = float(max(1, vp_w * vp_h))
+
+        for sel, b_box in before_map.items():
+            a_box = after_map.get(sel)
+            is_target = sel in target_set
+
+            if a_box is None:
+                changed_selectors.append(sel)
+                if not is_target:
+                    unintended_shifted.append(sel)
+                    findings.append(
+                        SentinelFinding(
+                            finding_id=f"VDIFF-MISSING-{ len(findings) + 1 }",
+                            category="VISUAL_DIFF",
+                            severity="CRITICAL",
+                            message=f"Untouched structural element '{sel}' disappeared after patch.",
+                            viewport=viewport,
+                            selector=sel,
+                            bounding_box=b_box,
+                            suggested_fix=f"Restore DOM rendering and visibility for '{sel}'.",
+                        )
+                    )
+                continue
+
+            dx = abs(float(a_box.get("x", 0)) - float(b_box.get("x", 0)))
+            dy = abs(float(a_box.get("y", 0)) - float(b_box.get("y", 0)))
+            dw = abs(float(a_box.get("width", 0)) - float(b_box.get("width", 0)))
+            dh = abs(float(a_box.get("height", 0)) - float(b_box.get("height", 0)))
+            color_changed = str(a_box.get("color", "")) != str(b_box.get("color", ""))
+
+            aw = float(a_box.get("width", 0))
+            ah = float(a_box.get("height", 0))
+            ax = float(a_box.get("x", 0))
+
+            if dx > 1.0 or dy > 1.0 or dw > 1.0 or dh > 1.0 or color_changed:
+                changed_selectors.append(sel)
+
+                # Calculate layout shift contribution
+                max_dim = max(1.0, float(vp_w), float(vp_h))
+                distance_fraction = math.hypot(dx, dy) / max_dim
+                impact_area = max(
+                    float(b_box.get("width", 0)) * float(b_box.get("height", 0)),
+                    aw * ah,
+                )
+                impact_fraction = min(1.0, impact_area / vp_area)
+                if not is_target:
+                    cls_total += impact_fraction * distance_fraction
+
+                # Check unintended regressions on non-target elements (or global collapse/overflow)
+                collapsed = (aw <= 0 or ah <= 0) and (float(b_box.get("width", 0)) > 0 and float(b_box.get("height", 0)) > 0)
+                overflowed = (ax + aw) > (vp_w + 2.0)
+
+                if collapsed:
+                    unintended_shifted.append(sel)
+                    findings.append(
+                        SentinelFinding(
+                            finding_id=f"VDIFF-COLLAPSE-{len(findings) + 1}",
+                            category="VISUAL_DIFF",
+                            severity="CRITICAL",
+                            message=f"Element '{sel}' collapsed to zero dimensions ({aw}x{ah}px) after patch.",
+                            viewport=viewport,
+                            selector=sel,
+                            bounding_box=a_box,
+                            suggested_fix=f"Fix flexbox/grid collapse on '{sel}'.",
+                        )
+                    )
+                elif overflowed:
+                    unintended_shifted.append(sel)
+                    findings.append(
+                        SentinelFinding(
+                            finding_id=f"VDIFF-OVERFLOW-{len(findings) + 1}",
+                            category="VISUAL_DIFF",
+                            severity="HIGH",
+                            message=f"Element '{sel}' overflows horizontal viewport (right edge {ax + aw}px > {vp_w}px).",
+                            viewport=viewport,
+                            selector=sel,
+                            bounding_box=a_box,
+                            suggested_fix=f"Constrain width/max-width of '{sel}' within viewport.",
+                        )
+                    )
+                elif not is_target and (dx > 16.0 or dy > 16.0 or dw > 24.0 or dh > 24.0):
+                    unintended_shifted.append(sel)
+                    findings.append(
+                        SentinelFinding(
+                            finding_id=f"VDIFF-SHIFT-{len(findings) + 1}",
+                            category="VISUAL_DIFF",
+                            severity="HIGH",
+                            message=(
+                                f"Unintended layout shift on non-target element '{sel}' "
+                                f"(dx={dx:.1f}px, dy={dy:.1f}px, dw={dw:.1f}px, dh={dh:.1f}px)."
+                            ),
+                            viewport=viewport,
+                            selector=sel,
+                            bounding_box=a_box,
+                            suggested_fix=f"Prevent layout displacement of '{sel}' when modifying {list(target_set)}.",
+                        )
+                    )
+
+        # Also check if pixels changed drastically without DOM metadata (pure screenshot mode)
+        if not before_map and not after_map and ssim < 0.70:
+            findings.append(
+                SentinelFinding(
+                    finding_id="VDIFF-SSIM-DROP-1",
+                    category="VISUAL_DIFF",
+                    severity="HIGH",
+                    message=f"Severe perceptual SSIM drop ({ssim:.3f} < 0.70) detected across viewport '{viewport}'.",
+                    viewport=viewport,
+                    suggested_fix="Inspect diff heatmap mask for unintended layout breakage.",
+                )
+            )
+
+        regression_detected = len(findings) > 0 or len(unintended_shifted) > 0
+        if regression_detected:
+            classification = "UNINTENDED_VISUAL_REGRESSION"
+            cls._regressions_caught += 1
+        elif changed_pixels == 0 and not changed_selectors:
+            classification = "IDENTICAL"
+        else:
+            classification = "INTENTIONAL_TARGET_UPDATE"
+            cls._intentional_updates_verified += 1
+
+        return PerceptualDiffReport(
+            viewport=viewport,
+            ssim_score=ssim,
+            before_dhash=b_hash_hex,
+            after_dhash=a_hash_hex,
+            dhash_hamming_distance=hamming,
+            total_pixels=total_pixels,
+            changed_pixels=changed_pixels,
+            pixel_diff_ratio=pixel_diff_ratio,
+            cumulative_layout_shift=cls_total,
+            classification=classification,
+            regression_detected=regression_detected,
+            diff_mask_data_uri=diff_data_uri,
+            changed_selectors=changed_selectors,
+            unintended_shifted_selectors=unintended_shifted,
+            findings=findings,
+        )
+
+    @classmethod
+    def get_telemetry(cls) -> Dict[str, Any]:
+        return {
+            "engine": "perceptual_ssim_dhash_pixelmatch_cls",
+            "comparisons_run": cls._comparisons_run,
+            "regressions_caught": cls._regressions_caught,
+            "intentional_updates_verified": cls._intentional_updates_verified,
+            "metrics_enabled": ["SSIM", "64bit_dHash", "Pixelmatch_PNG_Heatmap", "CLS_Layout_Shift_Invariant"],
+        }
+
+
+VisualQAManager.compare_before_after = PerceptualVisualDiffEngine.compare_before_after
+
+
