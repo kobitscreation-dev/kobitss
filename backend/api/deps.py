@@ -176,6 +176,17 @@ async def get_current_active_user(request: Request, db: AsyncSession = Depends(g
     return user
 
 
+async def get_optional_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User | None:
+    """Resolves the current active user if valid session or token is present; returns None otherwise without raising 401."""
+    try:
+        user = await get_current_user_from_request(request=request, db=db)
+        if user and getattr(user, "is_active", True):
+            return user
+        return None
+    except Exception:
+        return None
+
+
 async def get_any_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
     """Admin-only dependency: resolves the current user WITHOUT enforcing is_active.
 

@@ -42,6 +42,13 @@ export async function renderAdminConsoleView(container, params = {}) {
         const query = selectedOrg ? `?organization_id=${encodeURIComponent(selectedOrg)}` : '';
         data = await apiFetch(`/agency-admin/financials${query}`);
     } catch (err) {
+        const tok = localStorage.getItem('kobits_token');
+        const errMsg = String((err && err.message) || '').toLowerCase();
+        const isUnauth = !tok || errMsg.includes('credential') || errMsg.includes('not authenticated') || errMsg.includes('unauthorized') || Boolean(err && err.status === 401);
+        if (isUnauth) {
+            window.location.href = '/portal.html?auth_notice=admin_required#login';
+            return;
+        }
         container.innerHTML = `
             <div class="p-8 max-w-3xl mx-auto">
                 <div class="bg-red-950/30 border border-red-500/40 rounded-2xl p-6 text-red-200 space-y-3">

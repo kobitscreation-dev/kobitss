@@ -693,6 +693,17 @@
         <p id="auth-error-text" class="kb-meta" style="color:var(--kb-error)"></p>
       </div>
 
+      <!-- Operator Required Notice state -->
+      <div id="auth-notice" class="hidden" style="
+        margin-bottom:14px;padding:12px 14px;
+        background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);
+        border-radius:var(--kb-radius);">
+        <div style="display:flex;align-items:center;gap:8px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <p id="auth-notice-text" class="kb-meta" style="color:#fbbf24;font-weight:500;font-size:12px;line-height:1.4"></p>
+        </div>
+      </div>
+
       <!-- Auth card -->
       <div style="
         background:var(--kb-surface);border:1px solid var(--kb-border-mid);
@@ -932,7 +943,7 @@
         if (fieldTerms) fieldTerms.classList.add('hidden');
       }
 
-      // Check URL parameters for OAuth notifications
+      // Check URL parameters for OAuth notifications & operator auth requirements
       const urlParams = new URLSearchParams(window.location.search);
       const authErr = urlParams.get('auth_error');
       if (authErr) {
@@ -947,6 +958,22 @@
             errText.textContent = 'External sign-in was cancelled or encountered an error. Please try again or use Email & Password.';
           }
           errBox.classList.remove('hidden');
+        }
+      }
+
+      const authNotice = urlParams.get('auth_notice');
+      if (authNotice) {
+        const noticeBox = document.getElementById('auth-notice');
+        const noticeText = document.getElementById('auth-notice-text');
+        if (noticeBox && noticeText) {
+          if (authNotice === 'console_required') {
+            noticeText.textContent = 'Operator authentication required to access Deep Systems Console';
+          } else if (authNotice === 'admin_required') {
+            noticeText.textContent = 'Operator authentication required to access Agency Operations Hub';
+          } else {
+            noticeText.textContent = decodeURIComponent(authNotice);
+          }
+          noticeBox.classList.remove('hidden');
         }
       }
     }

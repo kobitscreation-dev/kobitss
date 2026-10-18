@@ -1228,8 +1228,9 @@ async def serve_dashboard(request: Request):
         "Expires": "0",
     }
     is_demo = request.query_params.get("demo") == "true" or request.query_params.get("mock") == "true"
+    is_portal_preview = request.query_params.get("portal") == "true" or request.query_params.get("surface") == "portal"
     valid_token = _has_valid_session_token(request)
-    if not valid_token and not settings.KOBITS_DEV_MODE and not is_demo:
+    if not valid_token and not settings.KOBITS_DEV_MODE and not is_demo and not is_portal_preview:
         # Require login for accessing personal workspace
         return RedirectResponse(url="/portal.html#login", status_code=302)
 
@@ -1280,8 +1281,13 @@ async def serve_static(file_path: str, request: Request):
         if os.path.isfile("portal.html"):
             return FileResponse("portal.html", headers=headers)
 
+    # Public Client Portal: allow unauthenticated visitors to view the executive client delivery portal without login friction
+    if clean_path in ("client-portal", "portal-summary"):
+        if os.path.isfile("web/index.html"):
+            return FileResponse("web/index.html", headers=headers)
+
     # Protect personal dashboard workspace routes behind authentication
-    dashboard_routes = ("dashboard", "client-portal", "admin", "console", "web/index.html", "web")
+    dashboard_routes = ("dashboard", "admin", "console", "web/index.html", "web")
     if clean_path in dashboard_routes or clean_path.startswith("web/"):
         ext = os.path.splitext(clean_path)[1].lower()
         if ext in ("", ".html"):

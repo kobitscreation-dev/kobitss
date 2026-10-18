@@ -180,21 +180,81 @@ function syncTriadNavBar(activeSurface, explicitRole) {
     } catch (_) {}
   }
   const normRole = String(role || '').toUpperCase();
-  const isClientOnly = normRole === 'READ_ONLY_REVIEWER' || normRole === 'VIEWER' || normRole === 'CLIENT';
+  const token = localStorage.getItem('kobits_token');
+  const hasAuth = !!token;
+  const isOperator = hasAuth && (normRole === 'OWNER' || normRole === 'ADMIN' || normRole === 'LEAD_ENGINEER' || normRole === 'AGENCY_ADMIN');
+  const isClientPortal = activeSurface === 'portal';
+
+  // Surface switcher & developer control buttons
+  const surfaceSwitcher = document.getElementById('ky-surface-switcher');
   const navPortal = document.getElementById('ky-nav-portal');
   const navAdmin = document.getElementById('ky-nav-admin');
   const navConsole = document.getElementById('ky-nav-console');
+  const btnNewProject = document.getElementById('ky-topbar-new-project');
+  const btnTour = document.getElementById('ky-topbar-tour');
+  const btnNewMission = document.getElementById('ky-topbar-new');
+  const btnGitHub = document.getElementById('ky-topbar-github');
+  const btnSettings = document.getElementById('ky-topbar-settings');
 
-  if (navAdmin) {
-    navAdmin.style.display = isClientOnly ? 'none' : '';
-    navAdmin.classList.toggle('ky-surface-nav-active', activeSurface === 'admin');
-  }
-  if (navConsole) {
-    navConsole.style.display = isClientOnly ? 'none' : '';
-    navConsole.classList.toggle('ky-surface-nav-active', activeSurface === 'console');
-  }
-  if (navPortal) {
-    navPortal.classList.toggle('ky-surface-nav-active', activeSurface === 'portal');
+  // Dedicated Client Topbar elements
+  const clientExecPill = document.getElementById('ky-client-exec-pill');
+  const clientTopbarActions = document.getElementById('ky-client-topbar-actions');
+  const clientLoginBtn = document.getElementById('ky-client-operator-login');
+  const brandLink = document.querySelector('.ky-brand');
+
+  if (isClientPortal && !isOperator) {
+    // ── DEDICATED EXECUTIVE CLIENT TOPBAR ──
+    // Decoupled from internal developer tools: hide switcher tabs and dev buttons completely!
+    if (surfaceSwitcher) surfaceSwitcher.style.display = 'none';
+    if (btnNewProject) btnNewProject.style.display = 'none';
+    if (btnTour) btnTour.style.display = 'none';
+    if (btnNewMission) btnNewMission.style.display = 'none';
+    if (btnGitHub) btnGitHub.style.display = 'none';
+    if (btnSettings) btnSettings.style.display = 'none';
+
+    // Surface clean executive branding and login/sign-out action
+    if (clientExecPill) clientExecPill.style.display = 'inline-flex';
+    if (clientTopbarActions) {
+      clientTopbarActions.style.display = 'inline-flex';
+      if (clientLoginBtn) {
+        if (hasAuth) {
+          clientLoginBtn.textContent = 'Account / Sign Out';
+          clientLoginBtn.href = '/portal.html?logout=1#login';
+        } else {
+          clientLoginBtn.textContent = 'Sign In / Operator Login';
+          clientLoginBtn.href = '/portal.html#login';
+        }
+      }
+    }
+    if (brandLink) brandLink.setAttribute('href', '#portal');
+  } else {
+    // ── OPERATOR / INTERNAL DEVELOPER CONTROL PLANE ──
+    if (clientExecPill) clientExecPill.style.display = 'none';
+    if (clientTopbarActions) clientTopbarActions.style.display = 'none';
+    if (btnNewProject) btnNewProject.style.display = '';
+    if (btnTour) btnTour.style.display = '';
+    if (btnNewMission) btnNewMission.style.display = '';
+    if (btnGitHub) btnGitHub.style.display = '';
+    if (btnSettings) btnSettings.style.display = '';
+    if (brandLink) brandLink.setAttribute('href', '#overview');
+
+    if (surfaceSwitcher) {
+      surfaceSwitcher.style.display = 'inline-flex';
+    }
+    if (navAdmin) {
+      navAdmin.style.display = isOperator ? '' : 'none';
+      navAdmin.classList.toggle('ky-surface-nav-active', activeSurface === 'admin');
+    }
+    if (navConsole) {
+      navConsole.style.display = isOperator ? '' : 'none';
+      navConsole.classList.toggle('ky-surface-nav-active', activeSurface === 'console');
+    }
+    if (navPortal) {
+      navPortal.classList.toggle('ky-surface-nav-active', activeSurface === 'portal');
+      if (isClientPortal && isOperator) {
+        navPortal.setAttribute('title', 'Previewing Executive Client Portal (Operator Mode)');
+      }
+    }
   }
 }
 
@@ -219,12 +279,22 @@ async function dispatchTriadSurfaceRoute(routeStr) {
     return true;
   }
   if (baseRoute === 'admin' || baseRoute === 'agency-admin') {
+    const tok = localStorage.getItem('kobits_token');
+    if (!tok) {
+      window.location.href = '/portal.html?auth_notice=admin_required#login';
+      return true;
+    }
     syncTriadNavBar('admin');
     const mod = await import('./views/admin_console.js');
     await mod.renderAdminConsoleView(view, params);
     return true;
   }
   if (baseRoute === 'console' || baseRoute.startsWith('console/')) {
+    const tok = localStorage.getItem('kobits_token');
+    if (!tok) {
+      window.location.href = '/portal.html?auth_notice=console_required#login';
+      return true;
+    }
     syncTriadNavBar('console');
     const parts = baseRoute.split('/');
     if (parts[1]) params.missionId = parts[1];
