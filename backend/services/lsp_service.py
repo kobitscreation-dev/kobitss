@@ -63,6 +63,21 @@ class HeadlessLSPService:
     # In-memory Symbol Graph cache: repo_path -> (timestamp, mtimes_map, graph_data)
     _graph_cache: Dict[str, Tuple[float, Dict[str, float], Dict[str, Any]]] = {}
 
+    def __init__(self, repo_path: str = "."):
+        self.repo_path = repo_path
+
+    def get_diagnostics(self, file_path: Optional[str] = None, repo_path: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+        return HeadlessLSPService.get_diagnostics(file_path=file_path, repo_path=repo_path or self.repo_path, **kwargs)
+
+    def find_definition(self, symbol: str = "", file_path: Optional[str] = None, line: Optional[int] = None, col: Optional[int] = None, repo_path: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+        return HeadlessLSPService.find_definition(symbol=symbol, file_path=file_path, line=line, col=col, repo_path=repo_path or self.repo_path, **kwargs)
+
+    def find_references(self, symbol: str = "", file_path: Optional[str] = None, repo_path: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+        return HeadlessLSPService.find_references(symbol=symbol, file_path=file_path, repo_path=repo_path or self.repo_path, **kwargs)
+
+    def get_symbol_graph(self, repo_path: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+        return HeadlessLSPService.get_symbol_graph(repo_path=repo_path or self.repo_path, **kwargs)
+
     @classmethod
     def clear_cache(cls):
         """Clear all in-memory AST and Symbol Graph caches."""

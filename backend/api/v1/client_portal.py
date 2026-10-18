@@ -480,6 +480,34 @@ def _build_showcase_portal_summary(
             "total_files": audit_res.metrics.total_files if hasattr(audit_res, "metrics") and audit_res.metrics else 112,
             "executive_summary": audit_res.executive_summary,
             "mermaid_diagram": audit_res.mermaid_diagram,
+            "svg_diagram": (
+                "<svg viewBox='0 0 800 240' xmlns='http://www.w3.org/2000/svg'>"
+                "<rect width='800' height='240' rx='12' fill='#0B1120' stroke='#1E293B' stroke-width='2'/>"
+                "<g id='AutonomousPod' transform='translate(40, 40)'>"
+                "<rect width='200' height='160' rx='8' fill='#1E293B' stroke='#38BDF8' stroke-width='2'/>"
+                "<text x='100' y='40' fill='#38BDF8' font-size='14' font-weight='bold' text-anchor='middle'>Autonomous Pod Engine</text>"
+                "<text x='100' y='70' fill='#94A3B8' font-size='12' text-anchor='middle'>• Fast MicroVM Sandbox</text>"
+                "<text x='100' y='95' fill='#94A3B8' font-size='12' text-anchor='middle'>• Headless LSP Graph</text>"
+                "<text x='100' y='120' fill='#94A3B8' font-size='12' text-anchor='middle'>• TDD Self-Healing</text>"
+                "</g>"
+                "<path d='M 240 120 L 320 120' stroke='#38BDF8' stroke-width='2' stroke-dasharray='4,4'/>"
+                "<g id='API' transform='translate(320, 40)'>"
+                "<rect width='200' height='160' rx='8' fill='#1E293B' stroke='#10B981' stroke-width='2'/>"
+                "<text x='100' y='40' fill='#10B981' font-size='14' font-weight='bold' text-anchor='middle'>Decoupled API Layer</text>"
+                "<text x='100' y='70' fill='#94A3B8' font-size='12' text-anchor='middle'>• Multi-Tenant RBAC</text>"
+                "<text x='100' y='95' fill='#94A3B8' font-size='12' text-anchor='middle'>• SOC2 Hash Chains</text>"
+                "<text x='100' y='120' fill='#94A3B8' font-size='12' text-anchor='middle'>• 5% Operator Gate</text>"
+                "</g>"
+                "<path d='M 520 120 L 600 120' stroke='#10B981' stroke-width='2' stroke-dasharray='4,4'/>"
+                "<g id='Delivery' transform='translate(600, 40)'>"
+                "<rect width='160' height='160' rx='8' fill='#1E293B' stroke='#F59E0B' stroke-width='2'/>"
+                "<text x='80' y='40' fill='#F59E0B' font-size='14' font-weight='bold' text-anchor='middle'>Client Delivery</text>"
+                "<text x='80' y='70' fill='#94A3B8' font-size='12' text-anchor='middle'>• 0-Friction Portal</text>"
+                "<text x='80' y='95' fill='#94A3B8' font-size='12' text-anchor='middle'>• 3-Seal Consensus</text>"
+                "<text x='80' y='120' fill='#94A3B8' font-size='12' text-anchor='middle'>• Live Ephemeral Preview</text>"
+                "</g>"
+                "</svg>"
+            ),
             "markdown_report": audit_res.markdown_report,
         },
         "delivered_prs": [
