@@ -184,24 +184,24 @@
             transition: width 0.08s ease-out;
         }
 
-        @keyframes ky-orbit-landing {
+        @keyframes kb-orbit-landing {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
-        @keyframes ky-blink-landing {
+        @keyframes kb-blink-landing {
             0%, 100% { opacity: 1; }
             50% { opacity: 0; }
         }
-        @keyframes ky-sweep-landing {
+        @keyframes kb-sweep-landing {
             0%, 16% { opacity: 1; }
             17%, 100% { opacity: 0.2; }
         }
-        @keyframes ky-trace-landing {
+        @keyframes kb-trace-landing {
             0% { stroke-dashoffset: 60; }
             50% { stroke-dashoffset: 0; }
             100% { stroke-dashoffset: -60; }
         }
-        @keyframes ky-layout-landing {
+        @keyframes kb-layout-landing {
             0%, 100% { opacity: 0.3; }
             50% { opacity: 0.7; }
         }
@@ -288,7 +288,7 @@
 
         @media (prefers-reduced-motion: reduce) {
             #hero-orb-canvas { display: none; }
-            [style*='animation:ky-'], .animate-spin-slow, .animate-radar-sweep, .animate-shield-trace, .animate-gyro-1, .animate-gyro-2, .animate-undulate-1, .animate-undulate-2 { animation: none !important; }
+            [style*='animation:kb-'], .animate-spin-slow, .animate-radar-sweep, .animate-shield-trace, .animate-gyro-1, .animate-gyro-2, .animate-undulate-1, .animate-undulate-2 { animation: none !important; }
         }
     </style>
 </head>
@@ -334,7 +334,7 @@
                 <button type="button" data-open-early-access="1" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-semibold hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.18)] hover:scale-[1.02] cursor-pointer">
                     Launch Mission
                 </button>
-                <button type="button" id="ky-mobile-menu-toggle" class="lg:hidden text-zinc-400 hover:text-white p-1 rounded-md focus:outline-none" aria-label="Toggle navigation menu">
+                <button type="button" id="kb-mobile-menu-toggle" class="lg:hidden text-zinc-400 hover:text-white p-1 rounded-md focus:outline-none" aria-label="Toggle navigation menu">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                 </button>
             </div>
@@ -342,7 +342,7 @@
     </nav>
 
     <!-- MOBILE NAVIGATION DRAWER -->
-    <div id="ky-mobile-menu" class="fixed top-14 left-0 w-full bg-zinc-950/95 border-b border-zinc-800 backdrop-blur-xl z-40 px-6 py-6 hidden flex-col gap-4 font-mono text-xs uppercase tracking-wider transition-all lg:hidden">
+    <div id="kb-mobile-menu" class="fixed top-14 left-0 w-full bg-zinc-950/95 border-b border-zinc-800 backdrop-blur-xl z-40 px-6 py-6 hidden flex-col gap-4 font-mono text-xs uppercase tracking-wider transition-all lg:hidden">
         <a href="/product.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Product</a>
         <a href="/engineering.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Architecture</a>
         <a href="/how-it-works.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">How It Works</a>
@@ -508,19 +508,19 @@
 
             <!-- 5 Interactive Showcase Tabs -->
             <div class="border-b border-zinc-800 bg-zinc-950/80 px-6 flex items-center gap-2 overflow-x-auto text-xs font-mono">
-                <button class="ky-demo-tab active py-3 px-4 text-white border-b-2 border-white font-medium transition-colors cursor-pointer" data-tab="overview">
+                <button class="kb-demo-tab active py-3 px-4 text-white border-b-2 border-white font-medium transition-colors cursor-pointer" data-tab="overview">
                     1. TDD Reproducer (Red → Green)
                 </button>
-                <button class="ky-demo-tab py-3 px-4 text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent transition-colors cursor-pointer" data-tab="preview">
+                <button class="kb-demo-tab py-3 px-4 text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent transition-colors cursor-pointer" data-tab="preview">
                     2. Ephemeral Web Preview &amp; HMR
                 </button>
-                <button class="ky-demo-tab py-3 px-4 text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent transition-colors cursor-pointer" data-tab="ci">
+                <button class="kb-demo-tab py-3 px-4 text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent transition-colors cursor-pointer" data-tab="ci">
                     3. Self-Healing CI &amp; PR Bot
                 </button>
-                <button class="ky-demo-tab py-3 px-4 text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent transition-colors cursor-pointer" data-tab="memory">
+                <button class="kb-demo-tab py-3 px-4 text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent transition-colors cursor-pointer" data-tab="memory">
                     4. Persistent Team Memory
                 </button>
-                <button class="ky-demo-tab py-3 px-4 text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent transition-colors cursor-pointer" data-tab="governance">
+                <button class="kb-demo-tab py-3 px-4 text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent transition-colors cursor-pointer" data-tab="governance">
                     5. 5% Operator Gate (SOC2)
                 </button>
             </div>
@@ -528,7 +528,7 @@
             <!-- Tab Panels Host -->
             <div class="p-6 md:p-8 bg-[#08080a]">
                 <!-- Panel 1: Overview & Negative-to-Positive TDD Loop -->
-                <div id="tab-overview" class="ky-demo-panel">
+                <div id="tab-overview" class="kb-demo-panel">
                     <!-- Composer Box -->
                     <div class="mb-6 p-4 rounded-xl border border-zinc-800 bg-[#0f0f13]">
                         <label class="block text-[11px] font-mono text-zinc-400 mb-2 uppercase tracking-wider flex items-center justify-between">
@@ -699,7 +699,7 @@
                 </div>
 
                 <!-- Panel 2: Live Ephemeral Web Preview & Port Tunneling -->
-                <div id="tab-preview" class="ky-demo-panel hidden space-y-4">
+                <div id="tab-preview" class="kb-demo-panel hidden space-y-4">
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-zinc-800 text-xs font-mono text-zinc-400 gap-3">
                         <div class="flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -767,7 +767,7 @@
                 </div>
 
                 <!-- Panel 3: Self-Healing CI & PR Reviews -->
-                <div id="tab-ci" class="ky-demo-panel hidden space-y-4 font-mono text-xs">
+                <div id="tab-ci" class="kb-demo-panel hidden space-y-4 font-mono text-xs">
                     <div class="flex items-center justify-between pb-3 border-b border-zinc-800 text-zinc-400">
                         <span>Bi-Directional GitHub Actions CI &amp; PR Review Bot</span>
                         <span class="text-emerald-400">Webhook Listener: Active</span>
@@ -806,7 +806,7 @@
                 </div>
 
                 <!-- Panel 4: Team Memory & Knowledge Graph -->
-                <div id="tab-memory" class="ky-demo-panel hidden space-y-4 font-mono text-xs">
+                <div id="tab-memory" class="kb-demo-panel hidden space-y-4 font-mono text-xs">
                     <div class="flex items-center justify-between pb-3 border-b border-zinc-800 text-zinc-400">
                         <span>Cross-Session Architectural Decision Records (ADRs) &amp; Codebase Rules</span>
                         <span class="text-white">Persistent Memory</span>
@@ -836,7 +836,7 @@
                 </div>
 
                 <!-- Panel 5: Enterprise Governance & 5% Operator Gate -->
-                <div id="tab-governance" class="ky-demo-panel hidden space-y-4 font-mono text-xs">
+                <div id="tab-governance" class="kb-demo-panel hidden space-y-4 font-mono text-xs">
                     <div class="flex items-center justify-between pb-3 border-b border-zinc-800 text-zinc-400">
                         <span>95% Autonomous Execution + 5% High-Leverage Operator Sign-Off</span>
                         <span class="text-emerald-400">All 3 Consensus Seals Granted</span>
@@ -1644,7 +1644,7 @@
                 </div>
                 <h4 class="text-base font-semibold text-white">Application Received!</h4>
                 <p class="text-xs text-zinc-400 mt-2 leading-relaxed">
-                    You're registered for the private cloud rollout. Our team reviews submissions daily and will send your workspace invitation and API credentials shortly.
+                    You're registered for the private early access rollout. Our team reviews submissions daily and will send your workspace invitation and API credentials shortly.
                 </p>
                 <div class="text-[11px] text-zinc-500 mt-3 font-mono">
                     Questions? Reach us at <a href="mailto:kobitscreation@gmail.com" class="text-zinc-300 underline font-sans">kobitscreation@gmail.com</a>
@@ -1659,8 +1659,8 @@
     <!-- CLIENT LOGIC & SCRIPTS -->
     <script>
         // Mobile Navigation Toggle
-        document.getElementById('ky-mobile-menu-toggle')?.addEventListener('click', () => {
-            const menu = document.getElementById('ky-mobile-menu');
+        document.getElementById('kb-mobile-menu-toggle')?.addEventListener('click', () => {
+            const menu = document.getElementById('kb-mobile-menu');
             if (menu) menu.classList.toggle('hidden');
         });
 
@@ -1741,17 +1741,17 @@
         });
 
         // 5. Interactive Showcase Tabs
-        document.querySelectorAll('.ky-demo-tab').forEach(tab => {
+        document.querySelectorAll('.kb-demo-tab').forEach(tab => {
             tab.addEventListener('click', function() {
                 const targetTab = this.getAttribute('data-tab');
-                document.querySelectorAll('.ky-demo-tab').forEach(t => {
+                document.querySelectorAll('.kb-demo-tab').forEach(t => {
                     t.classList.remove('active', 'text-white', 'border-white');
                     t.classList.add('text-zinc-400', 'border-transparent');
                 });
                 this.classList.add('active', 'text-white', 'border-white');
                 this.classList.remove('text-zinc-400', 'border-transparent');
 
-                document.querySelectorAll('.ky-demo-panel').forEach(panel => panel.classList.add('hidden'));
+                document.querySelectorAll('.kb-demo-panel').forEach(panel => panel.classList.add('hidden'));
                 const activePanel = document.getElementById('tab-' + targetTab);
                 if (activePanel) {
                     activePanel.classList.remove('hidden');
@@ -1771,7 +1771,7 @@
             });
         });
 
-        // 7. Simulated Cloud Mission Decomposition
+        // 7. Simulated Mission Decomposition
         const btnDemoRun = document.getElementById('btn-demo-run');
         if (btnDemoRun) {
             btnDemoRun.addEventListener('click', function() {
@@ -1785,9 +1785,9 @@
                 if (window.lucide) lucide.createIcons();
                 
                 setTimeout(() => {
-                    btnDemoRun.innerHTML = '<span>Simulate Cloud Mission</span><i data-lucide="play" class="w-3 h-3 fill-black"></i>';
+                    btnDemoRun.innerHTML = '<span>Simulate Mission</span><i data-lucide="play" class="w-3 h-3 fill-black"></i>';
                     if (window.lucide) lucide.createIcons();
-                    const overviewTab = document.querySelector('.ky-demo-tab[data-tab="overview"]');
+                    const overviewTab = document.querySelector('.kb-demo-tab[data-tab="overview"]');
                     if (overviewTab) overviewTab.click();
                 }, 750);
             });

@@ -171,3 +171,24 @@ def test_no_kyros_or_devin_or_cloud_headlines_in_marketing_pages():
         assert "kyros" not in content.lower(), f"Competitor 'Kyros' found in customer-facing page {page}"
         assert "devin" not in content.lower(), f"Competitor 'Devin' found in customer-facing page {page}"
         assert "The Autonomous Cloud Software Engineer" not in content, f"Headline still contains 'Cloud' in {page}"
+        
+        # Enforce zero occurrences of 'cloud' as a standalone word across all marketing pages
+        cloud_matches = re.findall(r'\bcloud\b', content, re.IGNORECASE)
+        assert len(cloud_matches) == 0, f"Found {len(cloud_matches)} 'cloud' occurrences in {page}: {cloud_matches}"
+
+        # Enforce zero occurrences of 'ky-' competitor prefixes in HTML/CSS/JS
+        ky_matches = re.findall(r'\bky-[a-z0-9_-]+', content, re.IGNORECASE)
+        assert len(ky_matches) == 0, f"Found {len(ky_matches)} 'ky-' prefixed selectors in {page}: {ky_matches}"
+
+
+def test_comparison_page_architecture_and_matrix_invariants():
+    comp_text = Path("comparison.html").read_text(encoding="utf-8")
+    assert "How Kobits Stacks Up" in comp_text, "Missing competitive matrix heading in comparison.html"
+    assert "Multi-Agent Swarm" in comp_text, "Missing Multi-Agent Swarm pillar in comparison.html"
+    assert "140ms MicroVM Isolation" in comp_text, "Missing 140ms MicroVM Isolation pillar in comparison.html"
+    assert "Negative-to-Positive TDD" in comp_text, "Missing Negative-to-Positive TDD in comparison.html"
+    assert "Persistent Knowledge Graph" in comp_text, "Missing Persistent Knowledge Graph in comparison.html"
+    assert "12 Engineering Dimensions Compared" in comp_text, "Missing 12 dimensions spec in comparison.html"
+    assert "KOBITS AUTONOMOUS SE" in comp_text, "Missing footer branding in comparison.html"
+    assert "kb-comparison-menu-toggle" in comp_text, "Missing mobile menu toggle in comparison.html"
+

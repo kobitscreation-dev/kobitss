@@ -103,7 +103,7 @@
       </div>
       <div class="flex items-center gap-3">
         <a href="/landing.html?open_apply=1" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-semibold hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.18)] hover:scale-[1.02]">Apply for Early Access</a>
-        <button type="button" id="ky-comparison-menu-toggle" class="lg:hidden text-zinc-400 hover:text-white p-1 rounded-md focus:outline-none" aria-label="Toggle navigation menu">
+        <button type="button" id="kb-comparison-menu-toggle" class="lg:hidden text-zinc-400 hover:text-white p-1 rounded-md focus:outline-none" aria-label="Toggle navigation menu">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
       </div>
@@ -111,7 +111,7 @@
   </nav>
 
   <!-- MOBILE NAVIGATION DRAWER -->
-  <div id="ky-comparison-menu" class="fixed top-14 left-0 w-full bg-zinc-950/95 border-b border-zinc-800 backdrop-blur-xl z-40 px-6 py-6 hidden flex-col gap-4 font-mono text-xs uppercase tracking-wider transition-all lg:hidden">
+  <div id="kb-comparison-menu" class="fixed top-14 left-0 w-full bg-zinc-950/95 border-b border-zinc-800 backdrop-blur-xl z-40 px-6 py-6 hidden flex-col gap-4 font-mono text-xs uppercase tracking-wider transition-all lg:hidden">
     <a href="/product.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Product</a>
     <a href="/engineering.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Engineering</a>
     <a href="/how-it-works.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">How It Works</a>
@@ -327,6 +327,203 @@
         <div class="mt-8 pt-4 border-t border-emerald-500/20 flex items-center justify-between text-[11px] font-mono relative z-10">
           <span class="text-zinc-400">Outcome: Verified Pull Request with 3 Consensus Seals</span>
           <span class="text-emerald-400 font-bold">&lt; 6 min avg delivery</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 02: COMPETITIVE MATRIX // HOW WE STACK UP -->
+    <div class="mb-16">
+      <div class="mb-8 text-center">
+        <div class="text-[11px] font-mono text-emerald-400 uppercase tracking-widest mb-2">// COMPETITIVE_MATRIX</div>
+        <h2 class="text-2xl md:text-4xl font-semibold text-white tracking-tight">How Kobits Stacks Up</h2>
+        <p class="text-xs text-zinc-400 mt-2 max-w-xl mx-auto">See how an autonomous, governed multi-agent engineering platform compares across delivery paradigms.</p>
+      </div>
+
+      <!-- Desktop Matrix Table -->
+      <div class="hidden md:block rounded-xl border border-zinc-800 bg-[#0c0c10] overflow-hidden shadow-2xl mb-8">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-zinc-800 bg-zinc-900/70 font-mono text-zinc-400 uppercase tracking-wider">
+                <th class="py-4 px-5">Capability / Dimension</th>
+                <th class="py-4 px-5 text-emerald-300 font-bold bg-emerald-950/30 border-x border-emerald-500/20">
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Kobits (Autonomous SE)</span>
+                  </div>
+                </th>
+                <th class="py-4 px-5">Single-Agent Tools</th>
+                <th class="py-4 px-5">AI Code Copilots</th>
+                <th class="py-4 px-5">Dev Agencies</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-800/60 font-mono">
+              <tr class="hover:bg-white/[0.02] transition-colors">
+                <td class="py-4 px-5 text-white font-medium font-sans">Engineering Architecture</td>
+                <td class="py-4 px-5 text-emerald-200 bg-emerald-950/20 font-semibold border-x border-emerald-500/20">
+                  <span class="text-emerald-400 mr-1">✓</span> 21 Specialized Autonomous Domain Agents
+                </td>
+                <td class="py-4 px-5 text-zinc-400">1 Monolithic Generalist Agent</td>
+                <td class="py-4 px-5 text-zinc-500">Inline Autocomplete Assistant</td>
+                <td class="py-4 px-5 text-zinc-400">5–15 Human Contractors</td>
+              </tr>
+              <tr class="hover:bg-white/[0.02] transition-colors">
+                <td class="py-4 px-5 text-white font-medium font-sans">Verification Standard</td>
+                <td class="py-4 px-5 text-emerald-200 bg-emerald-950/20 font-semibold border-x border-emerald-500/20">
+                  <span class="text-emerald-400 mr-1">✓</span> Negative-to-Positive TDD (Red → Green Proof)
+                </td>
+                <td class="py-4 px-5 text-zinc-400">Speculative Self-Review</td>
+                <td class="py-4 px-5 text-zinc-500">Zero (Developer verifies)</td>
+                <td class="py-4 px-5 text-zinc-400">Manual QA Sprints (Days of review)</td>
+              </tr>
+              <tr class="hover:bg-white/[0.02] transition-colors">
+                <td class="py-4 px-5 text-white font-medium font-sans">Execution Sandboxing</td>
+                <td class="py-4 px-5 text-emerald-200 bg-emerald-950/20 font-semibold border-x border-emerald-500/20">
+                  <span class="text-emerald-400 mr-1">✓</span> 100% Isolated Remote MicroVMs (&lt;150ms boot)
+                </td>
+                <td class="py-4 px-5 text-zinc-400">Container / Virtual Host</td>
+                <td class="py-4 px-5 text-zinc-500">Developer Local Host (Pollutes git tree)</td>
+                <td class="py-4 px-5 text-zinc-400">Contractor Laptops / Staging servers</td>
+              </tr>
+              <tr class="hover:bg-white/[0.02] transition-colors">
+                <td class="py-4 px-5 text-white font-medium font-sans">GitHub CI &amp; PR Workflow</td>
+                <td class="py-4 px-5 text-emerald-200 bg-emerald-950/20 font-semibold border-x border-emerald-500/20">
+                  <span class="text-emerald-400 mr-1">✓</span> Native Self-Healing CI &amp; PR Auto-Commits
+                </td>
+                <td class="py-4 px-5 text-zinc-400">Branch creation (Human fixes red CI)</td>
+                <td class="py-4 px-5 text-zinc-500">Manual copy-paste into editor</td>
+                <td class="py-4 px-5 text-zinc-400">Manual developer PR submission</td>
+              </tr>
+              <tr class="hover:bg-white/[0.02] transition-colors">
+                <td class="py-4 px-5 text-white font-medium font-sans">Persistent Memory</td>
+                <td class="py-4 px-5 text-emerald-200 bg-emerald-950/20 font-semibold border-x border-emerald-500/20">
+                  <span class="text-emerald-400 mr-1">✓</span> Knowledge Graph &amp; Cross-Session ADR Index
+                </td>
+                <td class="py-4 px-5 text-zinc-400">Sliding Context Window (Resets per session)</td>
+                <td class="py-4 px-5 text-zinc-500">Short File Buffer (Resets every turn)</td>
+                <td class="py-4 px-5 text-zinc-400">Stale Confluence Docs (Lost in turnover)</td>
+              </tr>
+              <tr class="hover:bg-white/[0.02] transition-colors">
+                <td class="py-4 px-5 text-white font-medium font-sans">Governance &amp; Audit</td>
+                <td class="py-4 px-5 text-emerald-200 bg-emerald-950/20 font-semibold border-x border-emerald-500/20">
+                  <span class="text-emerald-400 mr-1">✓</span> SOC2 HMAC-SHA256 Audit + 3 Consensus Seals
+                </td>
+                <td class="py-4 px-5 text-zinc-400">Unaudited Code Output</td>
+                <td class="py-4 px-5 text-zinc-500">Unaudited Token Stream</td>
+                <td class="py-4 px-5 text-zinc-400">Paper NDAs only</td>
+              </tr>
+              <tr class="hover:bg-white/[0.02] transition-colors">
+                <td class="py-4 px-5 text-white font-medium font-sans">Human Operator Gate</td>
+                <td class="py-4 px-5 text-emerald-200 bg-emerald-950/20 font-semibold border-x border-emerald-500/20">
+                  <span class="text-emerald-400 mr-1">✓</span> The 5% Operator Gate (Review &amp; 1-click merge)
+                </td>
+                <td class="py-4 px-5 text-zinc-400">50% Manual Prompt Steering &amp; Babysitting</td>
+                <td class="py-4 px-5 text-zinc-500">90% of the cognitive labor on developer</td>
+                <td class="py-4 px-5 text-zinc-400">Daily Standups &amp; Sprint Planning</td>
+              </tr>
+              <tr class="hover:bg-white/[0.02] transition-colors">
+                <td class="py-4 px-5 text-white font-medium font-sans">Turnaround Velocity</td>
+                <td class="py-4 px-5 text-emerald-200 bg-emerald-950/20 font-semibold border-x border-emerald-500/20">
+                  <span class="text-emerald-400 mr-1">✓</span> 4 to 8 Minutes to Verified PR
+                </td>
+                <td class="py-4 px-5 text-zinc-400">Hours per task</td>
+                <td class="py-4 px-5 text-zinc-500">Continuous typing assistant</td>
+                <td class="py-4 px-5 text-zinc-400">3 to 6 Months per project</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Mobile Matrix Cards -->
+      <div class="md:hidden space-y-4 mb-12">
+        <div class="p-5 rounded-xl border border-emerald-500/40 bg-emerald-950/20 shadow-lg">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-bold text-white">Kobits (Autonomous SE)</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Platform</span>
+          </div>
+          <dl class="space-y-2 text-xs font-mono">
+            <div class="flex justify-between border-b border-zinc-800/80 pb-1.5"><dt class="text-zinc-500">Team Model</dt><dd class="text-emerald-300 font-semibold text-right">21 Specialized Domain Agents</dd></div>
+            <div class="flex justify-between border-b border-zinc-800/80 pb-1.5"><dt class="text-zinc-500">Verification</dt><dd class="text-emerald-300 font-semibold text-right">Negative-to-Positive TDD</dd></div>
+            <div class="flex justify-between border-b border-zinc-800/80 pb-1.5"><dt class="text-zinc-500">Sandbox</dt><dd class="text-emerald-300 font-semibold text-right">100% Remote MicroVMs</dd></div>
+            <div class="flex justify-between border-b border-zinc-800/80 pb-1.5"><dt class="text-zinc-500">CI/CD</dt><dd class="text-emerald-300 font-semibold text-right">Self-Healing CI Auto-Commits</dd></div>
+            <div class="flex justify-between border-b border-zinc-800/80 pb-1.5"><dt class="text-zinc-500">Memory</dt><dd class="text-emerald-300 font-semibold text-right">Persistent Knowledge Graph</dd></div>
+            <div class="flex justify-between pt-1"><dt class="text-zinc-500">Turnaround</dt><dd class="text-emerald-400 font-bold text-right">&lt; 6 Minutes / PR</dd></div>
+          </dl>
+        </div>
+
+        <div class="p-5 rounded-xl border border-zinc-800 bg-zinc-950/60">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-semibold text-zinc-300">Single-Agent Tools</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-zinc-400">Single Bot</span>
+          </div>
+          <dl class="space-y-2 text-xs font-mono text-zinc-400">
+            <div class="flex justify-between border-b border-zinc-900 pb-1.5"><dt class="text-zinc-500">Team Model</dt><dd class="text-right">1 Generalist Agent</dd></div>
+            <div class="flex justify-between border-b border-zinc-900 pb-1.5"><dt class="text-zinc-500">Verification</dt><dd class="text-right">Self-Review only</dd></div>
+            <div class="flex justify-between border-b border-zinc-900 pb-1.5"><dt class="text-zinc-500">Memory</dt><dd class="text-right">Sliding window (Resets)</dd></div>
+            <div class="flex justify-between pt-1"><dt class="text-zinc-500">Turnaround</dt><dd class="text-right">Hours per task</dd></div>
+          </dl>
+        </div>
+
+        <div class="p-5 rounded-xl border border-zinc-800 bg-zinc-950/60">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-semibold text-zinc-300">AI Code Copilots</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-zinc-400">IDE Tool</span>
+          </div>
+          <dl class="space-y-2 text-xs font-mono text-zinc-400">
+            <div class="flex justify-between border-b border-zinc-900 pb-1.5"><dt class="text-zinc-500">Team Model</dt><dd class="text-right">Inline Assistant</dd></div>
+            <div class="flex justify-between border-b border-zinc-900 pb-1.5"><dt class="text-zinc-500">Verification</dt><dd class="text-right">0% (Developer verifies)</dd></div>
+            <div class="flex justify-between border-b border-zinc-900 pb-1.5"><dt class="text-zinc-500">Memory</dt><dd class="text-right">File buffer only</dd></div>
+            <div class="flex justify-between pt-1"><dt class="text-zinc-500">Turnaround</dt><dd class="text-right">Continuous manual labor</dd></div>
+          </dl>
+        </div>
+
+        <div class="p-5 rounded-xl border border-zinc-800 bg-zinc-950/60">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-semibold text-zinc-300">Traditional Dev Agencies</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-zinc-400">Contractors</span>
+          </div>
+          <dl class="space-y-2 text-xs font-mono text-zinc-400">
+            <div class="flex justify-between border-b border-zinc-900 pb-1.5"><dt class="text-zinc-500">Team Model</dt><dd class="text-right">5–15 Human Developers</dd></div>
+            <div class="flex justify-between border-b border-zinc-900 pb-1.5"><dt class="text-zinc-500">Cost &amp; Velocity</dt><dd class="text-right">$50K–$250K • 3–6 Months</dd></div>
+            <div class="flex justify-between border-b border-zinc-900 pb-1.5"><dt class="text-zinc-500">Governance</dt><dd class="text-right">Paper NDAs only</dd></div>
+            <div class="flex justify-between pt-1"><dt class="text-zinc-500">Turnaround</dt><dd class="text-right">Months per delivery</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <!-- 4 Architectural Advantage Pillars -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-16">
+        <div class="card-wire p-5 rounded-xl">
+          <div class="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center mb-3 text-emerald-400">
+            <i data-lucide="users" class="w-4 h-4"></i>
+          </div>
+          <h3 class="text-sm font-semibold text-white mb-1.5">Multi-Agent Swarm</h3>
+          <p class="text-xs text-zinc-400 leading-relaxed">21 specialized domain agents coordinating in parallel with strict separation of concerns.</p>
+        </div>
+
+        <div class="card-wire p-5 rounded-xl">
+          <div class="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center mb-3 text-emerald-400">
+            <i data-lucide="server" class="w-4 h-4"></i>
+          </div>
+          <h3 class="text-sm font-semibold text-white mb-1.5">140ms MicroVM Isolation</h3>
+          <p class="text-xs text-zinc-400 leading-relaxed">Dedicated Linux kernels boot in cleanrooms with zero host blast radius and zero local dependencies.</p>
+        </div>
+
+        <div class="card-wire p-5 rounded-xl">
+          <div class="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center mb-3 text-emerald-400">
+            <i data-lucide="flask-conical" class="w-4 h-4"></i>
+          </div>
+          <h3 class="text-sm font-semibold text-white mb-1.5">Negative-to-Positive TDD</h3>
+          <p class="text-xs text-zinc-400 leading-relaxed">Proves defect exists with a failing test before editing code, then verifies 100% green regression suite.</p>
+        </div>
+
+        <div class="card-wire p-5 rounded-xl">
+          <div class="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center mb-3 text-emerald-400">
+            <i data-lucide="database" class="w-4 h-4"></i>
+          </div>
+          <h3 class="text-sm font-semibold text-white mb-1.5">Persistent Knowledge Graph</h3>
+          <p class="text-xs text-zinc-400 leading-relaxed">Architectural Decision Records and codebase conventions compound permanently across missions.</p>
         </div>
       </div>
     </div>
@@ -556,8 +753,8 @@
 
   <script>
     lucide.createIcons();
-    const toggleBtn = document.getElementById('ky-comparison-menu-toggle');
-    const mobileMenu = document.getElementById('ky-comparison-menu');
+    const toggleBtn = document.getElementById('kb-comparison-menu-toggle');
+    const mobileMenu = document.getElementById('kb-comparison-menu');
     if (toggleBtn && mobileMenu) {
       toggleBtn.addEventListener('click', () => {
         mobileMenu.classList.toggle('hidden');

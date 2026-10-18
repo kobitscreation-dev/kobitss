@@ -102,7 +102,7 @@
             </div>
             <div class="flex items-center gap-3">
                 <a href="/landing.html?open_apply=1" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-medium hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)] hover:scale-[1.02]">Apply for Early Access</a>
-                <button type="button" id="ky-pricing-menu-toggle" class="lg:hidden text-zinc-400 hover:text-white p-1 rounded-md focus:outline-none" aria-label="Toggle navigation menu">
+                <button type="button" id="kb-pricing-menu-toggle" class="lg:hidden text-zinc-400 hover:text-white p-1 rounded-md focus:outline-none" aria-label="Toggle navigation menu">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                 </button>
             </div>
@@ -110,7 +110,7 @@
     </nav>
 
     <!-- MOBILE NAVIGATION DRAWER -->
-    <div id="ky-pricing-menu" class="fixed top-14 left-0 w-full bg-zinc-950/95 border-b border-zinc-800 backdrop-blur-xl z-40 px-6 py-6 hidden flex-col gap-4 font-mono text-xs uppercase tracking-wider transition-all lg:hidden">
+    <div id="kb-pricing-menu" class="fixed top-14 left-0 w-full bg-zinc-950/95 border-b border-zinc-800 backdrop-blur-xl z-40 px-6 py-6 hidden flex-col gap-4 font-mono text-xs uppercase tracking-wider transition-all lg:hidden">
         <a href="/product.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Product</a>
         <a href="/engineering.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">Engineering</a>
         <a href="/how-it-works.html" class="text-zinc-300 hover:text-white py-2 border-b border-zinc-900">How It Works</a>
@@ -314,8 +314,8 @@
 
     <script>
         lucide.createIcons();
-        const toggleBtn = document.getElementById('ky-pricing-menu-toggle');
-        const mobileMenu = document.getElementById('ky-pricing-menu');
+        const toggleBtn = document.getElementById('kb-pricing-menu-toggle');
+        const mobileMenu = document.getElementById('kb-pricing-menu');
         if (toggleBtn && mobileMenu) {
             toggleBtn.addEventListener('click', () => {
                 mobileMenu.classList.toggle('hidden');
