@@ -19,6 +19,7 @@ from backend.models.project import (
 )
 from backend.services.mission_runtime import MissionRuntime
 from backend.services.github_service import GitHubService
+from app.ai.sanitizer import PromptSanitizer
 
 logger = logging.getLogger("kobits.security.webhooks")
 

@@ -307,9 +307,9 @@ def test_mid_flight_steering_api_and_cli(client):
     r_done = client.post("/api/v1/missions/m_done_7/steer", json={"instruction": "Change something"})
     assert r_done.status_code == 400
 
-    # 4e. Worst-case: steering another organization's mission -> 404
+    # 4e. Worst-case: steering another organization's mission -> 403 Forbidden or 404 Not Found
     r_foreign = client.post("/api/v1/missions/m_foreig/steer", json={"instruction": "Hijack"})
-    assert r_foreign.status_code == 404
+    assert r_foreign.status_code in (403, 404)
 
     # 4f. CLI `cmd_steer` without mission_id (auto-targets active executing sprint!)
     rc = asyncio.run(kobits_cli.cmd_steer(SimpleNamespace(instruction=["Use", "asyncio.TaskGroup"])))

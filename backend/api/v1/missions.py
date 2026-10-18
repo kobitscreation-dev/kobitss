@@ -479,21 +479,24 @@ async def _resolve_owned_mission(db: AsyncSession, mission_ref: str, org_id: str
             )
         ).scalars().first()
         if foreign_mission and foreign_mission.organization_id != org_id:
-            from backend.services.auth_service import log_audit_event
-            await log_audit_event(
-                db=db,
-                org_id=org_id,
+            from backend.services.soc2_audit_service import AuditEvent, SOC2AuditService
+            await SOC2AuditService.log_rbac_event(
+                db,
+                event=AuditEvent.RBAC_ACCESS_DENIED,
                 user_id=user_id,
-                action="rbac.cross_tenant_denied",
+                organization_id=foreign_mission.organization_id,
                 resource_type="mission",
                 resource_id=foreign_mission.id,
-                details={
+                status="DENIED",
+                detail={
+                    "action": "missions.resolve_mission",
+                    "reason": "cross_tenant_mission_prefix_access_attempt",
+                    "severity": "HIGH",
                     "target_org_id": foreign_mission.organization_id,
                     "caller_org_id": org_id,
-                    "reason": "Cross-tenant mission prefix access blocked",
                 },
-                severity="HIGH",
             )
+            await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Cross-tenant access denied: Mission belongs to another organization.",

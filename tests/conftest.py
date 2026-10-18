@@ -40,16 +40,31 @@ async def setup_db():
     def _wipe_and_create(sync_conn):
         if "sqlite" in str(engine.url):
             sync_conn.exec_driver_sql("PRAGMA foreign_keys = OFF")
-            rows = sync_conn.exec_driver_sql(
-                "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'"
-            ).fetchall()
-            for name, tbl_type in rows:
-                if tbl_type == "view":
-                    sync_conn.exec_driver_sql(f'DROP VIEW IF EXISTS "{name}"')
-                else:
-                    sync_conn.exec_driver_sql(f'DROP TABLE IF EXISTS "{name}"')
+            try:
+                sync_conn.exec_driver_sql("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                pass
+            views = [r[0] for r in sync_conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='view'").fetchall()]
+            for v in views:
+                try:
+                    sync_conn.exec_driver_sql(f'DROP VIEW IF EXISTS "{v}"')
+                except Exception:
+                    pass
+            tables = [r[0] for r in sync_conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall()]
+            for t in tables:
+                try:
+                    sync_conn.exec_driver_sql(f'DROP TABLE IF EXISTS "{t}"')
+                except Exception:
+                    pass
+            try:
+                sync_conn.exec_driver_sql("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                pass
         else:
-            Base.metadata.drop_all(sync_conn, checkfirst=True)
+            try:
+                Base.metadata.drop_all(sync_conn, checkfirst=True)
+            except Exception:
+                pass
         Base.metadata.create_all(sync_conn, checkfirst=True)
 
     def _wipe_teardown(sync_conn):
@@ -59,14 +74,27 @@ async def setup_db():
                 "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'"
             ).fetchall()
             for name, tbl_type in rows:
-                if tbl_type == "view":
-                    sync_conn.exec_driver_sql(f'DROP VIEW IF EXISTS "{name}"')
-                else:
-                    sync_conn.exec_driver_sql(f'DROP TABLE IF EXISTS "{name}"')
+                try:
+                    if tbl_type == "view":
+                        sync_conn.exec_driver_sql(f'DROP VIEW IF EXISTS "{name}"')
+                    else:
+                        sync_conn.exec_driver_sql(f'DROP TABLE IF EXISTS "{name}"')
+                except Exception:
+                    pass
         else:
-            Base.metadata.drop_all(sync_conn, checkfirst=True)
+            try:
+                Base.metadata.drop_all(sync_conn, checkfirst=True)
+            except Exception:
+                pass
 
     await engine.dispose()
+    try:
+        for f in ["./test_kobits.db", "./test_kobits.db-shm", "./test_kobits.db-wal"]:
+            if os.path.exists(f):
+                os.remove(f)
+    except Exception:
+        pass
+
     async with engine.begin() as conn:
         await conn.run_sync(_wipe_and_create)
     

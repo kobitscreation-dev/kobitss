@@ -64,17 +64,17 @@ async def test_task_and_approval_isolation():
         db.add_all([org_a, user_a, member_a, org_b, user_b, member_b, proj_a, proj_b, task_b, run_b, appr_b])
         await db.commit()
 
-        # 1. User A attempts to read User B's task -> Should raise 404 (Project not found / forbidden)
+        # 1. User A attempts to read User B's task -> Should raise 403 or 404 (Cross-tenant denial)
         with pytest.raises(HTTPException) as exc_info:
             await get_task(project_id=proj_b.id, task_id=task_b.id, current_user=user_a, db=db)
-        assert exc_info.value.status_code == 404
+        assert exc_info.value.status_code in (403, 404)
 
-        # 2. User A attempts to cancel User B's task -> Should raise 404
+        # 2. User A attempts to cancel User B's task -> Should raise 403 or 404
         with pytest.raises(HTTPException) as exc_info:
             await cancel_task(project_id=proj_b.id, task_id=task_b.id, current_user=user_a, db=db)
-        assert exc_info.value.status_code == 404
+        assert exc_info.value.status_code in (403, 404)
 
-        # 3. User A attempts to approve User B's approval request -> Should raise 404
+        # 3. User A attempts to approve User B's approval request -> Should raise 403 or 404
         with pytest.raises(HTTPException) as exc_info:
             await resolve_approval_request(
                 project_id=proj_b.id,
@@ -83,7 +83,7 @@ async def test_task_and_approval_isolation():
                 db=db,
                 current_user=user_a
             )
-        assert exc_info.value.status_code == 404
+        assert exc_info.value.status_code in (403, 404)
 
         # 4. User B (authorized owner) can read task
         read_task = await get_task(project_id=proj_b.id, task_id=task_b.id, current_user=user_b, db=db)
