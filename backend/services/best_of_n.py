@@ -868,6 +868,8 @@ class MCTSHypothesisExplorer:
         cls._total_searches += 1
         base_cp = SandboxRollbackManager.create_checkpoint(sandbox_dir, "mcts_root")
         base_sha = (base_cp if isinstance(base_cp, str) else getattr(base_cp, "commit_sha", None)) or "unknown"
+        base_diag = HeadlessLSPService.get_diagnostics(workspace_dir=sandbox_dir)
+        baseline_lsp_errors = int(base_diag.get("error_count", 0))
 
         root = MCTSNode(
             node_id="root",
@@ -985,14 +987,15 @@ class MCTSHypothesisExplorer:
                 cls._backpropagate(selected, 0.0, node_map)
                 continue
 
-            # Check LSP compiler diagnostics
+            # Check LSP compiler diagnostics relative to pre-existing baseline
             diag_res = HeadlessLSPService.get_diagnostics(workspace_dir=sandbox_dir)
             lsp_err_count = int(diag_res.get("error_count", 0))
-            selected.lsp_errors = lsp_err_count
+            new_lsp_errors = max(0, lsp_err_count - baseline_lsp_errors)
+            selected.lsp_errors = new_lsp_errors
 
-            if lsp_err_count >= 3:
+            if new_lsp_errors >= 3:
                 selected.pruned = True
-                selected.prune_reason = f"Cascading compiler errors ({lsp_err_count} LSP errors)"
+                selected.prune_reason = f"Cascading compiler errors ({new_lsp_errors} new LSP errors)"
                 cls._total_branches_pruned += 1
                 cls._backpropagate(selected, 0.05, node_map)
                 continue
@@ -1013,7 +1016,7 @@ class MCTSHypothesisExplorer:
                 )
                 repro_ok = (repro_res.exit_code == 0)
             else:
-                repro_ok = (lsp_err_count == 0)
+                repro_ok = (new_lsp_errors == 0)
             selected.reproducer_passed = repro_ok
 
             reg_ok = True
@@ -1032,7 +1035,7 @@ class MCTSHypothesisExplorer:
             selected.regression_passed = reg_ok
 
             # 4. REWARD CALCULATION & PRUNING / EXPANSION
-            if repro_ok and reg_ok and lsp_err_count == 0:
+            if repro_ok and reg_ok and new_lsp_errors == 0:
                 parsimony_bonus = max(0.0, 0.15 - (selected.lines_changed * 0.0005))
                 reward = min(1.0, 0.85 + parsimony_bonus)
                 cls._backpropagate(selected, reward, node_map)
@@ -1049,7 +1052,7 @@ class MCTSHypothesisExplorer:
                 cls._backpropagate(selected, 0.15, node_map)
             else:
                 # Partial progress (e.g. has child refinements to expand on next MCTS iteration)
-                partial_reward = 0.55 if (repro_ok or lsp_err_count == 0) else 0.35
+                partial_reward = 0.55 if (repro_ok or new_lsp_errors == 0) else 0.35
                 cls._backpropagate(selected, partial_reward, node_map)
 
         pruned_nodes = [n for n in all_nodes if n.pruned]

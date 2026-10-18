@@ -928,6 +928,7 @@ from backend.api.v1 import client_portal, agency_admin
 app.include_router(client_portal.router, prefix="/api/v1/client-portal", tags=["Dashboard 1: Executive Client Portal"])
 app.include_router(client_portal.router, prefix="/api/v1/portal", tags=["Dashboard 1: Executive Client Portal"])
 app.include_router(agency_admin.router, prefix="/api/v1/agency-admin", tags=["Dashboard 2: Agency Operations & Financial Hub"])
+app.include_router(agency_admin.router, prefix="/api/v1/agency", tags=["Dashboard 2: Agency Operations & Financial Hub"])
 app.include_router(agency_admin.router, prefix="/api/v1/admin", tags=["Dashboard 2: Agency Operations & Financial Hub"])
 app.include_router(agency_admin.router, prefix="/api/v1/console", tags=["Dashboard 3: Deep Systems & MicroVM Mission Control"])
 
