@@ -127,3 +127,26 @@ def test_lsp_diagnostics_on_critical_frontend_and_backend_modules():
     for rel_path in target_files:
         diag = HeadlessLSPService.get_diagnostics(file_path=rel_path, repo_path=".")
         assert diag["error_count"] == 0, f"Diagnostics error in {rel_path}: {diag['diagnostics']}"
+
+
+def test_marketing_satellite_pages_navigation_and_footer_parity():
+    pages = [
+        "engineering.html",
+        "how-it-works.html",
+        "pricing.html",
+        "product.html",
+        "security.html",
+        "comparison.html",
+    ]
+    for page in pages:
+        path = Path(page)
+        assert path.exists(), f"{page} missing"
+        content = path.read_text(encoding="utf-8")
+        assert "/comparison.html" in content, f"{page} is missing /comparison.html link"
+        assert "/product.html" in content, f"{page} is missing /product.html link"
+        assert "/engineering.html" in content, f"{page} is missing /engineering.html link"
+        assert "/how-it-works.html" in content, f"{page} is missing /how-it-works.html link"
+        assert "/security.html" in content, f"{page} is missing /security.html link"
+        assert "/pricing.html" in content, f"{page} is missing /pricing.html link"
+        assert "KOBITS AUTONOMOUS CLOUD SE" in content, f"{page} is missing KOBITS AUTONOMOUS CLOUD SE branding"
+
