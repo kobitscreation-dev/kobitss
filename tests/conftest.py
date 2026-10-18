@@ -36,22 +36,49 @@ async def setup_db():
     This prevents wiping the production/development database.
     """
     from sqlalchemy import text
-    await engine.dispose()
-    # Clean setup: disable foreign keys so table drops/creates and isolated unit mocks work reliably
-    async with engine.begin() as conn:
+
+    def _wipe_and_create(sync_conn):
         if "sqlite" in str(engine.url):
-            await conn.execute(text("PRAGMA foreign_keys = OFF"))
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
+            sync_conn.exec_driver_sql("PRAGMA foreign_keys = OFF")
+            rows = sync_conn.exec_driver_sql(
+                "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+            for name, tbl_type in rows:
+                if tbl_type == "view":
+                    sync_conn.exec_driver_sql(f'DROP VIEW IF EXISTS "{name}"')
+                else:
+                    sync_conn.exec_driver_sql(f'DROP TABLE IF EXISTS "{name}"')
+        else:
+            Base.metadata.drop_all(sync_conn, checkfirst=True)
+        Base.metadata.create_all(sync_conn, checkfirst=True)
+
+    def _wipe_teardown(sync_conn):
+        if "sqlite" in str(engine.url):
+            sync_conn.exec_driver_sql("PRAGMA foreign_keys = OFF")
+            rows = sync_conn.exec_driver_sql(
+                "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+            for name, tbl_type in rows:
+                if tbl_type == "view":
+                    sync_conn.exec_driver_sql(f'DROP VIEW IF EXISTS "{name}"')
+                else:
+                    sync_conn.exec_driver_sql(f'DROP TABLE IF EXISTS "{name}"')
+        else:
+            Base.metadata.drop_all(sync_conn, checkfirst=True)
+
+    await engine.dispose()
+    async with engine.begin() as conn:
+        await conn.run_sync(_wipe_and_create)
     
     yield
     
     # Drop all tables after the test completes to maintain isolation
     await engine.dispose()
-    async with engine.begin() as conn:
-        if "sqlite" in str(engine.url):
-            await conn.execute(text("PRAGMA foreign_keys = OFF"))
-        await conn.run_sync(Base.metadata.drop_all)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(_wipe_teardown)
+    except Exception:
+        pass
 
 @pytest.fixture(autouse=True)
 def isolate_test_state():
