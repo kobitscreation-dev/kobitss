@@ -253,11 +253,54 @@ def _build_21_agent_roster(
             else round(tokens * 0.000008, 4)
         )
         latency_ms = 620 + idx * 35 if is_core else 280 + idx * 18
-        thought_trace = (
+        raw_trace = (
             (matched_dec.reason if matched_dec and matched_dec.reason else None)
             or (matched_run.output_text if matched_run and matched_run.output_text else None)
             or default_trace
         )
+
+        # Parse structured trace metadata and evaluate true execution status
+        summary_val = raw_trace
+        changes_val: List[str] = []
+        recommendations_val: List[str] = []
+        risks_val: List[str] = []
+        agent_status = "VERIFIED" if is_core else "COMPLETED"
+
+        if raw_trace and isinstance(raw_trace, str):
+            clean_trace = raw_trace.strip()
+            # Unescape unicode em-dashes
+            clean_trace = clean_trace.replace("\\u2014", "—")
+            if clean_trace.startswith("{") and clean_trace.endswith("}"):
+                try:
+                    import json
+                    parsed_json = json.loads(clean_trace)
+                    if isinstance(parsed_json, dict):
+                        if parsed_json.get("status"):
+                            parsed_st = str(parsed_json["status"]).upper()
+                            if parsed_st in ("FAILED", "ERROR", "FAILURE"):
+                                agent_status = "FAILED"
+                            elif parsed_st in ("SUCCESS", "VERIFIED"):
+                                agent_status = "VERIFIED" if is_core else "COMPLETED"
+                            elif parsed_st in ("RUNNING", "IN_PROGRESS"):
+                                agent_status = "RUNNING"
+                        if parsed_json.get("summary"):
+                            summary_val = str(parsed_json["summary"]).replace("\\u2014", "—")
+                        if isinstance(parsed_json.get("changes"), list):
+                            changes_val = [str(c).replace("\\u2014", "—") for c in parsed_json["changes"]]
+                        if isinstance(parsed_json.get("recommendations"), list):
+                            recommendations_val = [str(r).replace("\\u2014", "—") for r in parsed_json["recommendations"]]
+                        if isinstance(parsed_json.get("risks"), list):
+                            risks_val = [str(k).replace("\\u2014", "—") for k in parsed_json["risks"]]
+                except Exception:
+                    pass
+            elif "Provider error" in clean_trace or "Error code:" in clean_trace or "API Error" in clean_trace:
+                agent_status = "FAILED"
+
+        if matched_run and getattr(matched_run, "status", None):
+            run_st = str(matched_run.status).upper()
+            if run_st in ("FAILED", "ERROR", "FAILURE"):
+                agent_status = "FAILED"
+
         roster.append(
             {
                 "agent_id": f"agent-{idx:02d}-{name.lower()}",
@@ -266,11 +309,15 @@ def _build_21_agent_roster(
                 "role": role,
                 "cluster": cluster,
                 "is_core_lead": is_core,
-                "status": "VERIFIED" if is_core else "COMPLETED",
+                "status": agent_status,
                 "latency_ms": latency_ms,
                 "tokens_used": tokens,
                 "cost_usd": cost,
-                "thought_trace": thought_trace,
+                "thought_trace": summary_val or raw_trace,
+                "raw_trace": raw_trace,
+                "changes": changes_val,
+                "recommendations": recommendations_val,
+                "risks": risks_val,
                 "depends_on": [] if idx == 1 else ([core_specs[idx - 2][0]] if idx <= 5 else ["Axiom", "Nexus"]),
             }
         )

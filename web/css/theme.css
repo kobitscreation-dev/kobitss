@@ -1742,3 +1742,10 @@ button, select, input, textarea { font: inherit; color: inherit; }
   display: block;
   margin: 0 auto;
 }
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+

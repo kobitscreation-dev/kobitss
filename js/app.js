@@ -244,6 +244,16 @@ async function fetchDashboard(silent = false) {
   const initialCurH = getEffectiveTriadRoute();
   if (isTriadSurfaceRoute(initialCurH)) {
     if (!silent) await dispatchTriadSurfaceRoute(initialCurH);
+    if (!state.dashboard) {
+      get('/org/dashboard').then(data => {
+        if (data) {
+          state.dashboard = data;
+          populateProjectSelect(data);
+        }
+      }).catch(() => {
+        populateProjectSelect(null);
+      });
+    }
     return;
   }
   const isMissionRoute = initialCurH.startsWith('missions') || initialCurH.startsWith('mission');
@@ -388,7 +398,7 @@ function populateProjectSelect(data) {
       }
     } else {
       sel.innerHTML = `
-        <option value="default" selected>Primary Engineering Workspace</option>
+        <option value="default" selected>Kobits Core Workspace</option>
         <option value="__new__">+ Create New Project…</option>
       `;
     }

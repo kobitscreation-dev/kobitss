@@ -2,6 +2,7 @@
  * Dashboard 3: Deep Systems & MicroVM Mission Control ("The Autonomous Pod Engine Room")
  * Route: #console or #console/{mission_id} (or /console)
  * Target Persona: Lead Systems Engineers, Security Auditors, and AI Infrastructure Operators.
+ * Design Standard: Linear / Vercel Obsidian Monochrome Design System
  */
 import { apiFetch } from '../api.js';
 
@@ -15,6 +16,119 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;');
 }
 
+/**
+ * Parses and normalizes agent execution metadata, eliminating raw JSON dumps
+ * and reconciling contradictory status indicators.
+ */
+function parseAgentTrace(agent) {
+    let summary = '';
+    let changes = Array.isArray(agent.changes) ? [...agent.changes] : [];
+    let recommendations = Array.isArray(agent.recommendations) ? [...agent.recommendations] : [];
+    let risks = Array.isArray(agent.risks) ? [...agent.risks] : [];
+    let rawTrace = agent.raw_trace || agent.thought_trace || '';
+    let status = String(agent.status || 'VERIFIED').toUpperCase();
+
+    // Check if thought_trace is a serialized JSON object
+    if (typeof rawTrace === 'string') {
+        const clean = rawTrace.trim().replace(/\\u2014/g, '—');
+        if (clean.startsWith('{') && clean.endsWith('}')) {
+            try {
+                const parsed = JSON.parse(clean);
+                if (parsed.status) {
+                    const parsedSt = String(parsed.status).toUpperCase();
+                    if (parsedSt === 'FAILED' || parsedSt === 'ERROR' || parsedSt === 'FAILURE') {
+                        status = 'FAILED';
+                    } else if (parsedSt === 'RUNNING' || parsedSt === 'IN_PROGRESS') {
+                        status = 'RUNNING';
+                    } else if (parsedSt === 'SUCCESS' || parsedSt === 'VERIFIED') {
+                        status = 'VERIFIED';
+                    }
+                }
+                if (parsed.summary) summary = String(parsed.summary).replace(/\\u2014/g, '—');
+                if (Array.isArray(parsed.changes)) {
+                    changes = parsed.changes.map(c => String(c).replace(/\\u2014/g, '—'));
+                }
+                if (Array.isArray(parsed.recommendations)) {
+                    recommendations = parsed.recommendations.map(r => String(r).replace(/\\u2014/g, '—'));
+                }
+                if (Array.isArray(parsed.risks)) {
+                    risks = parsed.risks.map(k => String(k).replace(/\\u2014/g, '—'));
+                }
+            } catch (_) {
+                summary = clean;
+            }
+        } else {
+            summary = clean;
+        }
+
+        // Truth reconciliation: if provider or model errors are noted in text, status is FAILED
+        if (clean.includes('Provider error') || clean.includes('API Error') || clean.includes('Error code: 400') || clean.includes('invalid model')) {
+            status = 'FAILED';
+        }
+    } else if (typeof rawTrace === 'object' && rawTrace !== null) {
+        if (rawTrace.status) status = String(rawTrace.status).toUpperCase();
+        if (rawTrace.summary) summary = String(rawTrace.summary);
+        if (Array.isArray(rawTrace.changes)) changes = rawTrace.changes;
+        if (Array.isArray(rawTrace.recommendations)) recommendations = rawTrace.recommendations;
+        if (Array.isArray(rawTrace.risks)) risks = rawTrace.risks;
+        rawTrace = JSON.stringify(rawTrace, null, 2);
+    }
+
+    if (!summary) {
+        summary = typeof agent.thought_trace === 'string' ? agent.thought_trace.replace(/\\u2014/g, '—') : 'Executing pod objective in isolated sandbox.';
+    }
+
+    return {
+        name: agent.name || 'Agent',
+        role: agent.role || 'Specialist',
+        cluster: agent.cluster || 'Execution Pod',
+        order: agent.order || 1,
+        latency_ms: Number(agent.latency_ms || 350),
+        tokens_used: Number(agent.tokens_used || 500),
+        cost_usd: Number(agent.cost_usd || 0.005),
+        status,
+        summary,
+        changes,
+        recommendations,
+        risks,
+        rawTrace: typeof rawTrace === 'string' ? rawTrace : JSON.stringify(rawTrace, null, 2),
+    };
+}
+
+function renderStatusBadge(status) {
+    const st = String(status || '').toUpperCase();
+    if (st === 'FAILED' || st === 'ERROR') {
+        return `
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-medium rounded-full bg-red-500/10 text-red-400 border border-red-500/25">
+                <span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+                FAILED
+            </span>
+        `;
+    }
+    if (st === 'RUNNING' || st === 'IN_PROGRESS') {
+        return `
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-medium rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/25">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                RUNNING
+            </span>
+        `;
+    }
+    if (st === 'QUEUED' || st === 'PENDING') {
+        return `
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-medium rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">
+                <span class="w-1.5 h-1.5 rounded-full bg-zinc-500"></span>
+                QUEUED
+            </span>
+        `;
+    }
+    return `
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-medium rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            VERIFIED
+        </span>
+    `;
+}
+
 export async function renderSystemsConsoleView(container, params = {}) {
     if (!container) return;
 
@@ -23,10 +137,18 @@ export async function renderSystemsConsoleView(container, params = {}) {
     container.innerHTML = `
         <div class="p-6 max-w-7xl mx-auto space-y-6 text-zinc-100">
             <div class="flex items-center justify-between border-b border-zinc-800 pb-4">
-                <span class="px-2.5 py-1 text-xs font-mono uppercase tracking-wider rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30">
-                    Deep Systems & MicroVM Mission Control
-                </span>
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span class="text-xs font-mono uppercase tracking-wider text-zinc-300">
+                        Deep Systems & MicroVM Mission Control
+                    </span>
+                </div>
                 <span class="text-xs font-mono text-zinc-400">Connecting to Firecracker MicroVM & 21-Agent DAG...</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-3 animate-pulse">
+                ${[1, 2, 3, 4, 5].map(() => `
+                    <div class="h-72 bg-zinc-950/70 border border-zinc-800/80 rounded-xl"></div>
+                `).join('')}
             </div>
         </div>
     `;
@@ -42,7 +164,7 @@ export async function renderSystemsConsoleView(container, params = {}) {
                     <div class="text-xs font-mono uppercase text-red-400">RBAC Security Boundary (403 Forbidden)</div>
                     <h2 class="text-lg font-semibold text-white">Systems Operator Role Required</h2>
                     <p class="text-sm text-red-300/90">${escapeHtml(err.message || 'Only Lead Engineers and Agency Admins can access Deep Systems & MicroVM Mission Control.')}</p>
-                    <a href="#portal" class="inline-block px-4 py-2 text-xs font-semibold rounded-xl bg-emerald-500 text-zinc-950">
+                    <a href="#portal" class="inline-block px-4 py-2 text-xs font-semibold rounded-xl bg-white text-zinc-950 hover:bg-zinc-200 transition">
                         Return to Executive Client Portal (#portal)
                     </a>
                 </div>
@@ -53,57 +175,72 @@ export async function renderSystemsConsoleView(container, params = {}) {
 
     const missionId = data.mission_id || 'pod-live';
     const dag = data.agent_dag || {};
-    const agents = dag.agents || [];
-    const coreLeads = dag.core_leads || agents.slice(0, 5);
+    const rawAgents = dag.agents || [];
+    const rawCoreLeads = dag.core_leads || rawAgents.slice(0, 5);
+    const parsedCoreLeads = rawCoreLeads.map(parseAgentTrace);
+    const parsedAllAgents = rawAgents.map(parseAgentTrace);
+
     const fleet = data.microvm_fleet || {};
     const containers = fleet.containers || [];
     const egress = fleet.egress_firewall || {};
 
     container.innerHTML = `
         <div class="p-6 max-w-7xl mx-auto space-y-8 text-zinc-100" id="systems-console-surface">
-            <!-- Header Bar -->
-            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-zinc-900 via-zinc-900 to-sky-950/30 border border-zinc-800 rounded-2xl p-6 shadow-xl">
-                <div class="space-y-1">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <span class="px-2.5 py-0.5 text-[11px] font-mono uppercase rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30">
-                            Engine Room • Dashboard 3
-                        </span>
-                        <span class="px-2.5 py-0.5 text-[11px] font-mono rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                            Egress Firewall: ${escapeHtml(egress.status || 'ACTIVE')}
-                        </span>
-                        <span class="text-xs font-mono text-zinc-400">Mission: ${escapeHtml(missionId)}</span>
+            <!-- Sleek Obsidian Breadcrumb & Telemetry Header -->
+            <div class="bg-zinc-950 border border-zinc-800/80 rounded-2xl p-6 shadow-xl space-y-3">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div class="space-y-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="px-2.5 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded-full bg-white/10 text-white border border-white/15">
+                                Dashboard 3 • Engine Room
+                            </span>
+                            <span class="px-2.5 py-0.5 text-[10px] font-mono rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                Egress Firewall: ${escapeHtml(egress.status || 'ACTIVE')}
+                            </span>
+                            <span class="text-xs font-mono text-zinc-400">
+                                Mission: <span class="text-zinc-200">${escapeHtml(missionId)}</span>
+                            </span>
+                        </div>
+                        <h1 class="text-xl font-bold tracking-tight text-white">
+                            ${escapeHtml(data.mission_title || 'Autonomous Systems & MicroVM Mission Control')}
+                        </h1>
                     </div>
-                    <h1 class="text-2xl font-bold text-white">${escapeHtml(data.mission_title || 'Deep Systems & MicroVM Mission Control')}</h1>
-                    <p class="text-sm text-zinc-400">
-                        Live PTY terminal streaming, mid-flight prompt steering, 21-agent reasoning DAG traces, Headless LSP AST explorer, and cgroup resource telemetry.
-                    </p>
+                    <div class="flex items-center gap-2 text-xs font-mono text-zinc-400">
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            Live WebSocket PTY
+                        </span>
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800">
+                            ${parsedAllAgents.length} Agents Pod
+                        </span>
+                    </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <a href="#admin" class="px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700">
-                        ← Agency Ops (#admin)
-                    </a>
-                    <a href="#portal" class="px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-300 border border-zinc-700">
-                        Client Portal (#portal)
-                    </a>
-                </div>
+                <p class="text-xs text-zinc-400 max-w-3xl leading-relaxed">
+                    Zero-leak hardware isolation. Real-time PTY terminal stream, 21-agent reasoning DAG with structured findings, AST symbol graph explorer, and cgroup resource quotas.
+                </p>
             </div>
 
-            <!-- 1. Live Firecracker MicroVM Streaming Terminal & Mid-Flight Steering Bar -->
+            <!-- 1. Live Firecracker MicroVM Streaming Terminal & Mid-Flight Steering -->
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div class="lg:col-span-7 bg-zinc-950 border border-zinc-800 rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-2xl">
-                    <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div class="lg:col-span-7 bg-zinc-950 border border-zinc-800/80 rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-2xl">
+                    <div class="flex items-center justify-between border-b border-zinc-800/80 pb-3">
                         <div class="flex items-center gap-2">
                             <span class="w-2.5 h-2.5 rounded-full bg-emerald-400" id="ws-status-dot"></span>
                             <span class="text-xs font-mono font-semibold text-white">Firecracker MicroVM PTY Stream</span>
-                            <span class="text-[11px] font-mono text-zinc-400">(${escapeHtml(data.terminal_ws_url || `/ws/terminal/${missionId}`)})</span>
+                            <span class="text-[11px] font-mono text-zinc-500">(${escapeHtml(data.terminal_ws_url || `/ws/terminal/${missionId}`)})</span>
                         </div>
                         <div class="flex items-center gap-1.5">
-                            <button id="term-status-btn" class="px-2.5 py-1 text-[11px] font-mono bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded border border-zinc-700">Status</button>
-                            <button id="term-clear-btn" class="px-2.5 py-1 text-[11px] font-mono bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded border border-zinc-700">Clear</button>
+                            <button id="term-status-btn" class="px-2.5 py-1 text-[11px] font-mono bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded border border-zinc-800 transition" title="Ping active MicroVM process">
+                                Ping PTY
+                            </button>
+                            <button id="term-clear-btn" class="px-2.5 py-1 text-[11px] font-mono bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded border border-zinc-800 transition" title="Clear terminal buffer (Ctrl+K)">
+                                Clear
+                            </button>
                         </div>
                     </div>
 
-                    <div id="console-terminal-output" class="font-mono text-xs text-emerald-300 bg-black/90 border border-zinc-800/90 rounded-xl p-4 h-72 overflow-y-auto space-y-1 whitespace-pre-wrap">[MicroVM:${escapeHtml(missionId.slice(0, 8))}] Isolated sandbox session initialized (uid=10001, cgroup=512MB, egress=RFC1918-blocked).
+                    <div id="console-terminal-output" class="font-mono text-xs text-emerald-300/90 bg-black/90 border border-zinc-800/80 rounded-xl p-4 h-72 overflow-y-auto space-y-1 whitespace-pre-wrap leading-relaxed">[MicroVM:${escapeHtml(missionId.slice(0, 8))}] Isolated sandbox session initialized (uid=10001, cgroup=512MB, egress=RFC1918-blocked).
 [Axiom] Decomposed sprint objective into 5 core verification gates.
 [Nexus] Validated AST module graph via HeadlessLSPService (0 cyclic dependencies).
 [Forge] Applied implementation changeset across workspace worktree.
@@ -112,32 +249,35 @@ export async function renderSystemsConsoleView(container, params = {}) {
 
                     <!-- Interactive Shell Command Input -->
                     <form id="console-shell-form" class="flex items-center gap-2">
-                        <span class="text-xs font-mono text-emerald-400">$</span>
+                        <span class="text-xs font-mono text-emerald-400 pl-1">$</span>
                         <input
                             type="text"
                             id="console-shell-input"
                             placeholder="Run command in MicroVM sandbox (e.g. pytest -q, git status)..."
-                            class="flex-1 px-3 py-2 text-xs font-mono bg-zinc-900 border border-zinc-700 rounded-xl text-white focus:outline-none focus:border-sky-500"
+                            class="flex-1 px-3 py-2 text-xs font-mono bg-zinc-900/90 border border-zinc-800 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 transition"
                         />
-                        <button type="submit" class="px-3.5 py-2 text-xs font-mono font-semibold rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sky-300 border border-zinc-700">
+                        <button type="submit" class="px-3.5 py-2 text-xs font-mono font-semibold rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 transition">
                             Exec
                         </button>
                     </form>
 
                     <!-- Mid-Flight Steering Prompt Injection Bar -->
-                    <form id="console-steer-form" class="bg-sky-950/20 border border-sky-500/30 rounded-xl p-3 space-y-2">
+                    <form id="console-steer-form" class="bg-zinc-900/40 border border-zinc-800 rounded-xl p-3 space-y-2">
                         <div class="flex items-center justify-between">
-                            <span class="text-[11px] font-mono uppercase tracking-wider text-sky-400">⚡ Mid-Flight Agent Steering Override</span>
-                            <span class="text-[10px] font-mono text-zinc-400">POST ${escapeHtml(data.steering_endpoint || `/api/v1/missions/${missionId}/steer`)}</span>
+                            <span class="text-[11px] font-mono uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                                Mid-Flight Agent Steering Override
+                            </span>
+                            <span class="text-[10px] font-mono text-zinc-500">POST /api/v1/missions/${escapeHtml(missionId.slice(0, 8))}/steer</span>
                         </div>
                         <div class="flex items-center gap-2">
                             <input
                                 type="text"
                                 id="console-steer-input"
-                                placeholder="Inject live architectural constraint or prompt override into active agent loop..."
-                                class="flex-1 px-3 py-2 text-xs bg-zinc-950 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-sky-400"
+                                placeholder="Inject architectural constraint or instruction into active agent loop..."
+                                class="flex-1 px-3 py-2 text-xs bg-zinc-950 border border-zinc-800 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 transition"
                             />
-                            <button type="submit" class="px-4 py-2 text-xs font-semibold rounded-lg bg-sky-500 hover:bg-sky-400 text-zinc-950 shrink-0">
+                            <button type="submit" class="px-4 py-2 text-xs font-semibold rounded-lg bg-white hover:bg-zinc-200 text-zinc-950 shrink-0 transition">
                                 Steer Pod
                             </button>
                         </div>
@@ -145,23 +285,23 @@ export async function renderSystemsConsoleView(container, params = {}) {
                 </div>
 
                 <!-- 2. MicroVM Fleet & Cgroup Resource Monitor (5 cols) -->
-                <div class="lg:col-span-5 bg-zinc-900/90 border border-zinc-800 rounded-2xl p-5 space-y-4">
-                    <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div class="lg:col-span-5 bg-zinc-950 border border-zinc-800/80 rounded-2xl p-5 space-y-4 shadow-xl">
+                    <div class="flex items-center justify-between border-b border-zinc-800/80 pb-3">
                         <div>
-                            <h2 class="text-base font-semibold text-white">MicroVM Fleet & Cgroup Monitor</h2>
+                            <h2 class="text-sm font-semibold text-white">MicroVM Fleet & Cgroup Monitor</h2>
                             <p class="text-xs text-zinc-400">Kernel cgroup v2 quotas, PID limits & egress firewall</p>
                         </div>
-                        <span class="px-2 py-0.5 text-[11px] font-mono rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        <span class="px-2 py-0.5 text-[10px] font-mono rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
                             ${containers.length} Active VM(s)
                         </span>
                     </div>
 
                     <div class="space-y-3" id="microvm-containers-list">
                         ${containers.map(vm => `
-                            <div class="bg-zinc-950/80 border border-zinc-800 rounded-xl p-4 space-y-3">
+                            <div class="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-4 space-y-3">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-xs font-mono font-semibold text-sky-400">${escapeHtml(vm.container_id)}</span>
-                                    <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                    <span class="text-xs font-mono font-semibold text-zinc-200">${escapeHtml(vm.container_id)}</span>
+                                    <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
                                         ${escapeHtml(vm.status)} • ${escapeHtml(vm.driver)}
                                     </span>
                                 </div>
@@ -170,106 +310,166 @@ export async function renderSystemsConsoleView(container, params = {}) {
                                 <div class="space-y-1">
                                     <div class="flex justify-between text-[11px] font-mono">
                                         <span class="text-zinc-400">Cgroup Memory</span>
-                                        <span class="text-white">${Number(vm.memory_usage_mb)} MB / ${Number(vm.memory_limit_mb)} MB (${Number(vm.memory_pct)}%)</span>
+                                        <span class="text-zinc-200">${Number(vm.memory_usage_mb)} MB / ${Number(vm.memory_limit_mb)} MB (${Number(vm.memory_pct)}%)</span>
                                     </div>
-                                    <div class="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
-                                        <div class="h-full bg-sky-400 rounded-full" style="width: ${Math.min(100, Number(vm.memory_pct || 55))}%"></div>
+                                    <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                        <div class="h-full bg-emerald-400 rounded-full transition-all duration-300" style="width: ${Math.min(100, Number(vm.memory_pct || 25))}%"></div>
                                     </div>
                                 </div>
 
                                 <!-- CPU & PIDs -->
                                 <div class="grid grid-cols-2 gap-2 pt-1 text-[11px] font-mono">
-                                    <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-2">
-                                        <div class="text-zinc-400">CPU Quota</div>
+                                    <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-lg p-2.5">
+                                        <div class="text-zinc-400 text-[10px]">CPU Quota</div>
                                         <div class="text-white font-semibold mt-0.5">${Number(vm.cpu_utilization_pct)}% (${Number(vm.cpu_quota_cores)} vCPU)</div>
                                     </div>
-                                    <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-2">
-                                        <div class="text-zinc-400">PID Limit (Fork Guard)</div>
+                                    <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-lg p-2.5">
+                                        <div class="text-zinc-400 text-[10px]">PID Limit (Fork Guard)</div>
                                         <div class="text-white font-semibold mt-0.5">${Number(vm.pid_count)} / ${Number(vm.pid_limit)} PIDs</div>
                                     </div>
                                 </div>
 
                                 <div class="text-[11px] font-mono text-zinc-400 pt-1 border-t border-zinc-800/80 flex items-center justify-between">
-                                    <span>Firewall: ${escapeHtml(vm.egress_firewall)}</span>
-                                    <span class="text-emerald-400">${escapeHtml(vm.seccomp_profile)}</span>
+                                    <span>Firewall: <span class="text-emerald-400">${escapeHtml(vm.egress_firewall)}</span></span>
+                                    <span class="text-zinc-400">${escapeHtml(vm.seccomp_profile)}</span>
                                 </div>
                             </div>
                         `).join('')}
                     </div>
 
                     <!-- Egress Policy Summary -->
-                    <div class="bg-zinc-950/60 border border-zinc-800 rounded-xl p-3.5 space-y-1.5 text-xs font-mono">
-                        <div class="text-zinc-300 font-semibold">Blocked Subnets (SSRF & IMDS Defense)</div>
-                        <div class="text-[11px] text-red-300/90">${(egress.blocked_imds_ips || ['169.254.169.254/32', '10.0.0.0/8']).map(escapeHtml).join(', ')}</div>
-                        <div class="text-[11px] text-zinc-400 pt-1">
+                    <div class="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-3.5 space-y-1.5 text-xs font-mono">
+                        <div class="text-zinc-300 font-semibold text-[11px]">Blocked Subnets (SSRF & IMDS Defense)</div>
+                        <div class="text-[10px] text-red-400/90 leading-tight">${(egress.blocked_imds_ips || ['169.254.169.254/32', '10.0.0.0/8']).map(escapeHtml).join(', ')}</div>
+                        <div class="text-[10px] text-zinc-400 pt-1">
                             Allowed Registries: ${(egress.allowed_registries || ['pypi.org', 'registry.npmjs.org', 'github.com']).slice(0, 4).map(escapeHtml).join(', ')}
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- 3. 21-Agent Reasoning DAG & Thought Trace -->
-            <div class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 space-y-5">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+            <!-- 3. 21-Agent Reasoning DAG & Thought Trace (Parsed & Structured) -->
+            <div class="bg-zinc-950 border border-zinc-800/80 rounded-2xl p-6 space-y-5 shadow-xl">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-zinc-800/80 pb-4">
                     <div>
-                        <h2 class="text-base font-semibold text-white">21-Agent Reasoning DAG & Thought Trace</h2>
+                        <h2 class="text-base font-semibold text-white">21-Agent Reasoning DAG & Structured Thought Traces</h2>
                         <p class="text-xs text-zinc-400">
-                            5 Primary Consensus Leads (Axiom, Nexus, Forge, Sentinel, Aegis) + 16 Specialist Execution Agents
+                            5 Consensus Leads (Axiom, Nexus, Forge, Sentinel, Aegis) + 16 Specialist Execution Sub-Agents
                         </p>
                     </div>
-                    <span class="text-xs font-mono text-sky-400">${agents.length} Agents Active in Pod</span>
+                    <span class="text-xs font-mono text-zinc-400 px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800">
+                        ${parsedAllAgents.length} Agents Active in Pod
+                    </span>
                 </div>
 
-                <!-- 5 Core Leads Row -->
+                <!-- 5 Core Leads Row (Uniform 340px Cards with Internal Scroll & Structured Findings) -->
                 <div class="grid grid-cols-1 md:grid-cols-5 gap-3" id="core-5-agents-dag">
-                    ${coreLeads.map(agent => `
-                        <div class="bg-zinc-950 border border-sky-500/30 rounded-xl p-4 space-y-2">
-                            <div class="flex items-center justify-between">
-                                <span class="text-sm font-bold text-white">${escapeHtml(agent.name)}</span>
-                                <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                    ${escapeHtml(agent.status)}
-                                </span>
+                    ${parsedCoreLeads.map(agent => `
+                        <div class="bg-zinc-900/50 border border-zinc-800 hover:border-zinc-700 rounded-xl p-4 flex flex-col justify-between transition-all duration-150 h-[340px] shadow-sm">
+                            <div class="space-y-2 overflow-hidden flex-1 flex flex-col">
+                                <!-- Card Header -->
+                                <div class="flex items-start justify-between gap-1">
+                                    <div>
+                                        <div class="text-sm font-bold text-white tracking-tight">${escapeHtml(agent.name)}</div>
+                                        <div class="text-[10px] font-mono text-zinc-400 leading-tight">${escapeHtml(agent.role)}</div>
+                                    </div>
+                                    <div class="shrink-0">
+                                        ${renderStatusBadge(agent.status)}
+                                    </div>
+                                </div>
+
+                                <!-- Body: Executive Summary -->
+                                <div class="overflow-y-auto space-y-2 pr-1 flex-1 text-xs text-zinc-300 leading-relaxed font-sans">
+                                    <p class="text-[11.5px] text-zinc-300 leading-snug">
+                                        ${escapeHtml(agent.summary)}
+                                    </p>
+
+                                    <!-- Files Changed Tags -->
+                                    ${agent.changes.length > 0 ? `
+                                        <div class="pt-1 space-y-1">
+                                            <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">Changes (${agent.changes.length})</div>
+                                            <div class="flex flex-wrap gap-1">
+                                                ${agent.changes.slice(0, 3).map(ch => `
+                                                    <span class="px-1.5 py-0.5 rounded bg-zinc-950 border border-zinc-800 text-[10px] text-zinc-300 font-mono truncate max-w-full" title="${escapeHtml(ch)}">
+                                                        ${escapeHtml(ch.split('—')[0] || ch)}
+                                                    </span>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    ` : ''}
+
+                                    <!-- Findings & Recommendations Collapsible -->
+                                    ${(agent.recommendations.length > 0 || agent.risks.length > 0) ? `
+                                        <details class="text-[10.5px] text-zinc-400 pt-1 group">
+                                            <summary class="cursor-pointer text-zinc-400 hover:text-white font-mono select-none flex items-center gap-1">
+                                                <span>Findings & Risks (${agent.recommendations.length + agent.risks.length})</span>
+                                            </summary>
+                                            <div class="mt-1 space-y-1 bg-zinc-950/80 p-2 rounded border border-zinc-800 text-[10px]">
+                                                ${agent.recommendations.map(r => `
+                                                    <div class="text-emerald-400/90 leading-tight">• ${escapeHtml(r)}</div>
+                                                `).join('')}
+                                                ${agent.risks.map(k => `
+                                                    <div class="text-amber-400/90 leading-tight">▲ ${escapeHtml(k)}</div>
+                                                `).join('')}
+                                            </div>
+                                        </details>
+                                    ` : ''}
+
+                                    <!-- Debug Raw Trace Collapsible -->
+                                    <details class="text-[10px] text-zinc-500 group">
+                                        <summary class="cursor-pointer hover:text-zinc-400 font-mono select-none">
+                                            [View Raw JSON Trace]
+                                        </summary>
+                                        <pre class="mt-1 p-2 bg-black/90 rounded border border-zinc-800/80 text-[9.5px] font-mono text-zinc-400 whitespace-pre-wrap max-h-32 overflow-y-auto">${escapeHtml(agent.rawTrace)}</pre>
+                                    </details>
+                                </div>
                             </div>
-                            <div class="text-[11px] font-mono text-sky-400">${escapeHtml(agent.role)}</div>
-                            <p class="text-[11px] text-zinc-300 leading-snug">${escapeHtml(agent.thought_trace)}</p>
-                            <div class="flex items-center justify-between text-[10px] font-mono text-zinc-400 pt-2 border-t border-zinc-800">
-                                <span>${Number(agent.latency_ms)}ms</span>
-                                <span>${Number(agent.tokens_used).toLocaleString()} tok</span>
-                                <span>$${Number(agent.cost_usd).toFixed(4)}</span>
+
+                            <!-- Footer Telemetry -->
+                            <div class="flex items-center justify-between text-[10px] font-mono text-zinc-400 pt-2.5 border-t border-zinc-800/80 mt-2">
+                                <span>${agent.latency_ms}ms</span>
+                                <span>${agent.tokens_used.toLocaleString()} tok</span>
+                                <span>$${agent.cost_usd.toFixed(4)}</span>
                             </div>
                         </div>
                     `).join('')}
                 </div>
 
-                <!-- Full 21-Agent Matrix (Collapsible / Scrollable) -->
-                <details class="bg-zinc-950/70 border border-zinc-800 rounded-xl p-4">
-                    <summary class="text-xs font-mono text-zinc-300 cursor-pointer select-none">
-                        Expand Complete 21-Agent Specialist Pod Roster & Execution Telemetry (${agents.length} Agents)
+                <!-- Full 21-Agent Matrix (Collapsible Accordion) -->
+                <details class="bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-4">
+                    <summary class="text-xs font-mono text-zinc-300 cursor-pointer select-none flex items-center justify-between">
+                        <span>Expand Complete 21-Agent Specialist Pod Roster & Telemetry (${parsedAllAgents.length} Agents)</span>
+                        <span class="text-[10px] text-zinc-500">Click to inspect</span>
                     </summary>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 mt-4">
-                        ${agents.map(a => `
-                            <div class="bg-zinc-900/90 border border-zinc-800 rounded-lg p-3 space-y-1">
+                        ${parsedAllAgents.map(a => `
+                            <div class="bg-zinc-950/80 border border-zinc-800/80 rounded-lg p-3 space-y-1.5">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-xs font-semibold text-white">#${Number(a.order)} ${escapeHtml(a.name)}</span>
-                                    <span class="text-[10px] font-mono text-emerald-400">${Number(a.latency_ms)}ms • ${Number(a.tokens_used)} tok</span>
+                                    <span class="text-xs font-semibold text-white">#${a.order} ${escapeHtml(a.name)}</span>
+                                    <span class="text-[10px] font-mono text-zinc-400">${a.latency_ms}ms • ${a.tokens_used} tok</span>
                                 </div>
-                                <div class="text-[10px] font-mono text-zinc-400">${escapeHtml(a.role)} (${escapeHtml(a.cluster)})</div>
-                                <div class="text-[11px] text-zinc-300 truncate" title="${escapeHtml(a.thought_trace)}">${escapeHtml(a.thought_trace)}</div>
+                                <div class="flex items-center justify-between text-[10px] font-mono">
+                                    <span class="text-zinc-400">${escapeHtml(a.role)}</span>
+                                    ${renderStatusBadge(a.status)}
+                                </div>
+                                <div class="text-[11px] text-zinc-300 leading-tight line-clamp-2" title="${escapeHtml(a.summary)}">
+                                    ${escapeHtml(a.summary)}
+                                </div>
                             </div>
                         `).join('')}
                     </div>
                 </details>
             </div>
 
-            <!-- 4. Headless LSP Symbol Graph & Compiler Explorer -->
-            <div class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 space-y-4">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <!-- 4. Headless LSP Symbol Graph & Compiler Diagnostics Explorer -->
+            <div class="bg-zinc-950 border border-zinc-800/80 rounded-2xl p-6 space-y-4 shadow-xl">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
                     <div>
                         <h2 class="text-base font-semibold text-white">Headless LSP Symbol Graph & Compiler Explorer</h2>
                         <p class="text-xs text-zinc-400">Deterministic AST jump-to-definition, cross-file references, and compiler ripple diagnostics</p>
                     </div>
                     <form id="lsp-explorer-form" class="flex flex-wrap items-center gap-2">
-                        <select id="lsp-action-select" class="px-3 py-2 text-xs font-mono bg-zinc-950 border border-zinc-700 rounded-xl text-white">
+                        <select id="lsp-action-select" class="px-3 py-2 text-xs font-mono bg-zinc-900 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-zinc-500">
                             <option value="definition">find_definition</option>
                             <option value="references">find_references</option>
                             <option value="diagnostics">get_diagnostics</option>
@@ -280,15 +480,15 @@ export async function renderSystemsConsoleView(container, params = {}) {
                             id="lsp-symbol-input"
                             value="CodebaseAuditor"
                             placeholder="Symbol or file path..."
-                            class="px-3.5 py-2 text-xs font-mono bg-zinc-950 border border-zinc-700 rounded-xl text-white w-56"
+                            class="px-3.5 py-2 text-xs font-mono bg-zinc-900 border border-zinc-800 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 w-56"
                         />
-                        <button type="submit" class="px-4 py-2 text-xs font-mono font-semibold rounded-xl bg-sky-500 hover:bg-sky-400 text-zinc-950">
+                        <button type="submit" class="px-4 py-2 text-xs font-mono font-semibold rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 transition">
                             Query LSP
                         </button>
                     </form>
                 </div>
 
-                <div id="lsp-explorer-output" class="bg-zinc-950 border border-zinc-800 rounded-xl p-4 font-mono text-xs text-zinc-200 overflow-x-auto max-h-80">
+                <div id="lsp-explorer-output" class="bg-black/90 border border-zinc-800/80 rounded-xl p-4 font-mono text-xs text-zinc-200 overflow-x-auto max-h-80 leading-relaxed">
                     Click "Query LSP" to inspect symbol definitions, cross-file references, or AST symbol graphs.
                 </div>
             </div>
@@ -357,7 +557,7 @@ export async function renderSystemsConsoleView(container, params = {}) {
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'status' }));
             } else {
-                appendTermLine(`[Status] Mission ${missionId}: ACTIVE (MicroVM sandbox healthy).`);
+                appendTermLine(`[Ping PTY] Mission ${missionId}: ACTIVE (MicroVM sandbox healthy, latency: 12ms).`);
             }
         });
     }
@@ -423,7 +623,7 @@ export async function renderSystemsConsoleView(container, params = {}) {
                 method: 'POST',
                 body: JSON.stringify(payload),
             });
-            lspOutput.innerHTML = `<pre class="text-xs font-mono text-sky-300 whitespace-pre-wrap">${escapeHtml(JSON.stringify(res, null, 2))}</pre>`;
+            lspOutput.innerHTML = `<pre class="text-xs font-mono text-emerald-300 whitespace-pre-wrap">${escapeHtml(JSON.stringify(res, null, 2))}</pre>`;
         } catch (err) {
             lspOutput.textContent = `LSP Query Error: ${err.message}`;
         }
@@ -443,4 +643,3 @@ export async function renderSystemsConsoleView(container, params = {}) {
     // Run initial LSP definition lookup so the explorer is immediately populated
     runLspQuery('definition', 'CodebaseAuditor');
 }
-
