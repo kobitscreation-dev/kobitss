@@ -1685,7 +1685,27 @@ class HeadlessLSPService:
             for fname, (min_p, max_p) in ts_funcs.items():
                 for call_m in re.finditer(rf"\b(?<!function\s){re.escape(fname)}\s*\(([^()]*)\)", stripped):
                     args_str = call_m.group(1).strip()
-                    arg_count = 0 if not args_str else len([a for a in args_str.split(",") if a.strip()])
+                    if not args_str:
+                        arg_count = 0
+                    else:
+                        parsed_args = []
+                        curr_arg = []
+                        in_quote = None
+                        for ch in args_str:
+                            if ch in ("'", '"', '`') and not in_quote:
+                                in_quote = ch
+                                curr_arg.append(ch)
+                            elif ch == in_quote:
+                                in_quote = None
+                                curr_arg.append(ch)
+                            elif ch == ',' and not in_quote:
+                                parsed_args.append("".join(curr_arg).strip())
+                                curr_arg = []
+                            else:
+                                curr_arg.append(ch)
+                        if curr_arg:
+                            parsed_args.append("".join(curr_arg).strip())
+                        arg_count = len([a for a in parsed_args if a])
                     if arg_count < min_p or arg_count > max_p:
                         diagnostics.append({
                             "file": rel_path,

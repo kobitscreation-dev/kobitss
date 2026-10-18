@@ -402,7 +402,7 @@ export async function renderClientPortalView(container, params = {}) {
                                                 <span class="text-xs font-semibold text-emerald-400">${escapeHtml(secSeal.label || 'Security Verified')}</span>
                                                 <span class="text-[10px] font-mono text-zinc-400">(${escapeHtml(secSeal.agent || 'Aegis')})</span>
                                             </div>
-                                            <p class="text-[11px] text-zinc-300 leading-snug">${escapeHtml(secSeal.summary || '0 CVEs, 0 leaked secrets')}</p>
+                                            <p class="text-[11px] text-zinc-300 leading-snug">${escapeHtml(secSeal.summary || '0 CVEs / 0 leaked secrets')}</p>
                                         </div>
                                     </div>
 

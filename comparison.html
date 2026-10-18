@@ -135,44 +135,56 @@
           </thead>
           <tbody class="divide-y divide-zinc-800/60 font-mono">
             <tr class="hover:bg-white/[0.02] transition-colors">
-              <td class="py-4 px-6 text-white font-medium font-sans">Time to Start</td>
-              <td class="py-4 px-6 text-white bg-white/5 font-bold">Minutes (instant repo connect)</td>
-              <td class="py-4 px-6 text-zinc-400">2–6 weeks sourcing &amp; kickoff</td>
-              <td class="py-4 px-6 text-zinc-400">Minutes</td>
-            </tr>
-            <tr class="hover:bg-white/[0.02] transition-colors">
-              <td class="py-4 px-6 text-white font-medium font-sans">Autonomous Cleanroom Isolation</td>
+              <td class="py-4 px-6 text-white font-medium font-sans">Execution Environment</td>
               <td class="py-4 px-6 text-white bg-white/5 font-bold flex items-center gap-2">
-                <i data-lucide="check" class="w-4 h-4 text-white"></i> Ephemeral MicroVMs
+                <i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> 100% Remote Ephemeral MicroVMs (140ms boot, 0 local install)
               </td>
-              <td class="py-4 px-6 text-zinc-400">Manual staging setup</td>
+              <td class="py-4 px-6 text-zinc-400">Manual staging or contractor laptops</td>
               <td class="py-4 px-6 text-zinc-500 flex items-center gap-1.5">
-                <i data-lucide="x" class="w-4 h-4 text-zinc-600"></i> No sandboxing (pollutes local tree)
+                <i data-lucide="x" class="w-4 h-4 text-zinc-600"></i> Local host only (pollutes git working tree)
               </td>
             </tr>
             <tr class="hover:bg-white/[0.02] transition-colors">
-              <td class="py-4 px-6 text-white font-medium font-sans">Hard Test-Driven Verification</td>
-              <td class="py-4 px-6 text-white bg-white/5 font-bold">100% Pytest + AST Pass Gate</td>
-              <td class="py-4 px-6 text-zinc-400">Manual QA sprint</td>
-              <td class="py-4 px-6 text-zinc-500">None (probabilistic guessing)</td>
+              <td class="py-4 px-6 text-white font-medium font-sans">Bug Fixing &amp; TDD</td>
+              <td class="py-4 px-6 text-white bg-white/5 font-bold">Negative-to-Positive TDD (Proves defect, verifies green)</td>
+              <td class="py-4 px-6 text-zinc-400">Manual QA sprint (Days of back-and-forth)</td>
+              <td class="py-4 px-6 text-zinc-500">None (Probabilistic guessing, 0 test runs)</td>
             </tr>
             <tr class="hover:bg-white/[0.02] transition-colors">
-              <td class="py-4 px-6 text-white font-medium font-sans">Security Auditing</td>
-              <td class="py-4 px-6 text-white bg-white/5 font-bold">Included (Aegis Agent)</td>
-              <td class="py-4 px-6 text-zinc-400">Separate audit engagement</td>
-              <td class="py-4 px-6 text-zinc-500">Basic linting only</td>
+              <td class="py-4 px-6 text-white font-medium font-sans">GitHub CI &amp; PR Workflow</td>
+              <td class="py-4 px-6 text-white bg-white/5 font-bold">Autonomous Self-Healing CI &amp; Bi-directional PR Review Bot</td>
+              <td class="py-4 px-6 text-zinc-400">Manual review &amp; delayed push</td>
+              <td class="py-4 px-6 text-zinc-500">None (Developer must copy-paste snippets)</td>
             </tr>
             <tr class="hover:bg-white/[0.02] transition-colors">
-              <td class="py-4 px-6 text-white font-medium font-sans">Cross-Session Memory</td>
-              <td class="py-4 px-6 text-white bg-white/5 font-bold">Persistent SQLite + Vector Index</td>
-              <td class="py-4 px-6 text-zinc-400">Confluence docs (lost in churn)</td>
-              <td class="py-4 px-6 text-zinc-500">None (resets every session)</td>
+              <td class="py-4 px-6 text-white font-medium font-sans">Live Web Application Preview</td>
+              <td class="py-4 px-6 text-white bg-white/5 font-bold">Instant In-Browser Preview &amp; WebSocket HMR Tunneling</td>
+              <td class="py-4 px-6 text-zinc-400">Dedicated staging servers required</td>
+              <td class="py-4 px-6 text-zinc-500">Local localhost only (Manual dev server setup)</td>
             </tr>
             <tr class="hover:bg-white/[0.02] transition-colors">
-              <td class="py-4 px-6 text-white font-medium font-sans">Cost Structure</td>
-              <td class="py-4 px-6 text-white bg-white/5 font-bold">Usage Credits ($29 / $99)</td>
-              <td class="py-4 px-6 text-zinc-400">$10,000+ monthly retainer</td>
-              <td class="py-4 px-6 text-zinc-400">$20 / seat / month (developer required)</td>
+              <td class="py-4 px-6 text-white font-medium font-sans">Cross-Session Team Memory</td>
+              <td class="py-4 px-6 text-white bg-white/5 font-bold">Persistent Knowledge Graph &amp; ADR Convention Index</td>
+              <td class="py-4 px-6 text-zinc-400">Confluence docs (Lost in employee churn)</td>
+              <td class="py-4 px-6 text-zinc-500">Short sliding window (Resets every session)</td>
+            </tr>
+            <tr class="hover:bg-white/[0.02] transition-colors">
+              <td class="py-4 px-6 text-white font-medium font-sans">Security &amp; Compliance</td>
+              <td class="py-4 px-6 text-white bg-white/5 font-bold">SOC2 HMAC-SHA256 Audit Trail + 3 Consensus Seals</td>
+              <td class="py-4 px-6 text-zinc-400">Paper NDAs only</td>
+              <td class="py-4 px-6 text-zinc-500">Unaudited (Risk of code leak in training data)</td>
+            </tr>
+            <tr class="hover:bg-white/[0.02] transition-colors">
+              <td class="py-4 px-6 text-white font-medium font-sans">Human Effort Required</td>
+              <td class="py-4 px-6 text-white bg-white/5 font-bold">The 5% Operator Gate (Review &amp; 1-click sign-off)</td>
+              <td class="py-4 px-6 text-zinc-400">Daily standups, sprint planning, client syncs</td>
+              <td class="py-4 px-6 text-zinc-400">90% of the work falls on the human developer</td>
+            </tr>
+            <tr class="hover:bg-white/[0.02] transition-colors">
+              <td class="py-4 px-6 text-white font-medium font-sans">Final Deliverable</td>
+              <td class="py-4 px-6 text-white bg-white/5 font-bold">Tested, verified, reviewed Git Pull Request in minutes</td>
+              <td class="py-4 px-6 text-zinc-400">Monthly invoices &amp; delayed deliverables</td>
+              <td class="py-4 px-6 text-zinc-400">Raw code snippets</td>
             </tr>
           </tbody>
         </table>
