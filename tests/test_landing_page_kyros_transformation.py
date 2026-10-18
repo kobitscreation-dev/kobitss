@@ -1,9 +1,9 @@
 """
-Automated Verification Suite for Kobits Autonomous Cloud Software Engineer Landing Page.
+Automated Verification Suite for Kobits Autonomous Software Engineer Landing Page.
 Tests:
 1. Route integrity for root (/), /landing, /pricing, /comparison, /product, /engineering, /security, /how-it-works.
-2. Content invariants for Kyros / Devin-tier positioning:
-   - Hero Headline: "The Autonomous Cloud Software Engineer" / "Assign an outcome. Kobits delivers a verified PR."
+2. Content invariants for Autonomous SE positioning:
+   - Hero Headline: "The Autonomous Software Engineer" / "Assign an outcome. Kobits delivers a verified PR."
    - The 6 Core Pillars:
      * Zero-Local Footprint & Remote MicroVMs
      * Negative-to-Positive TDD Reproducer (Red -> Green)
@@ -14,6 +14,7 @@ Tests:
    - CTAs: "Launch Mission", "Connect GitHub", "Executive Portal".
 3. HTML structural integrity and syntax validation.
 4. Compiler / LSP diagnostics across frontend modules.
+5. Strict verification that 'Kyros' and competitor references are completely purged from public pages.
 """
 
 import os
@@ -54,9 +55,10 @@ async def test_landing_page_kyros_devin_content_invariants():
         assert res.status_code == 200
         html = res.text
 
-        # 1. Brand & Positioning Headline
+        # 1. Brand & Positioning Headline: Autonomous Software Engineer (NO Cloud in H1)
         assert "The Autonomous" in html
-        assert "Cloud Software Engineer" in html
+        assert "Software Engineer" in html
+        assert "The Autonomous Cloud Software Engineer" not in html
         assert "Assign an outcome. Kobits delivers a verified PR." in html
 
         # 2. Key Pillars
@@ -96,7 +98,7 @@ def test_index_and_landing_html_parity_and_syntax():
 
     # Invariants on index.html
     assert "<!DOCTYPE html>" in index_text
-    assert "<title>Kobits — The Autonomous Cloud Software Engineer</title>" in index_text
+    assert "<title>Kobits — The Autonomous Software Engineer</title>" in index_text
     assert 'id="workspace-showcase"' in index_text
     assert 'id="modal-early-access"' in index_text
     assert 'id="demo-diff-modal"' in index_text
@@ -104,8 +106,10 @@ def test_index_and_landing_html_parity_and_syntax():
 
     # Both landing and index must have the new positioning
     assert "The Autonomous" in landing_text
-    assert "Cloud Software Engineer" in landing_text
+    assert "Software Engineer" in landing_text
     assert "Negative-to-Positive TDD" in landing_text
+    assert "The Autonomous Cloud Software Engineer" not in landing_text
+    assert "The Autonomous Cloud Software Engineer" not in index_text
 
     # Check for basic unclosed HTML tags
     open_body = len(re.findall(r"<body\b", index_text, re.IGNORECASE))
@@ -148,5 +152,22 @@ def test_marketing_satellite_pages_navigation_and_footer_parity():
         assert "/how-it-works.html" in content, f"{page} is missing /how-it-works.html link"
         assert "/security.html" in content, f"{page} is missing /security.html link"
         assert "/pricing.html" in content, f"{page} is missing /pricing.html link"
-        assert "KOBITS AUTONOMOUS CLOUD SE" in content, f"{page} is missing KOBITS AUTONOMOUS CLOUD SE branding"
+        assert "KOBITS AUTONOMOUS SE" in content, f"{page} is missing KOBITS AUTONOMOUS SE branding"
 
+
+def test_no_kyros_or_devin_or_cloud_headlines_in_marketing_pages():
+    pages = [
+        "index.html",
+        "landing.html",
+        "comparison.html",
+        "engineering.html",
+        "how-it-works.html",
+        "pricing.html",
+        "product.html",
+        "security.html",
+    ]
+    for page in pages:
+        content = Path(page).read_text(encoding="utf-8")
+        assert "kyros" not in content.lower(), f"Competitor 'Kyros' found in customer-facing page {page}"
+        assert "devin" not in content.lower(), f"Competitor 'Devin' found in customer-facing page {page}"
+        assert "The Autonomous Cloud Software Engineer" not in content, f"Headline still contains 'Cloud' in {page}"

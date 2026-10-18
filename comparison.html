@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Kobits — Autonomous Engineering Comparison</title>
-  <meta name="description" content="Compare Kobits autonomous software engineering against traditional software development agencies, in-house hiring, and basic single-file AI copilots.">
+  <meta name="description" content="Compare Kobits autonomous software engineering against traditional software development agencies, in-house headcount scaling, and basic single-file AI copilots.">
   
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -13,7 +13,7 @@
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -29,6 +29,7 @@
             kb: {
               bg: '#050505',
               surface: '#0f0f11',
+              surface2: '#16161c',
               border: '#222226',
               accent: '#ffffff',
             }
@@ -59,6 +60,20 @@
       box-shadow: 0 0 25px rgba(255, 255, 255, 0.03);
       transform: translateY(-2px);
     }
+    .card-wire::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 16px; height: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.25);
+      border-left: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 6px 0 0 0;
+    }
+    .technical-grid {
+      background-image: linear-gradient(to right, #1f1f23 1px, transparent 1px),
+                        linear-gradient(to bottom, #1f1f23 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
   </style>
 </head>
 <body class="selection:bg-white/20">
@@ -87,7 +102,7 @@
         <a href="/pricing.html" class="hover:text-white transition-colors">Pricing</a>
       </div>
       <div class="flex items-center gap-3">
-        <a href="/landing.html?open_apply=1" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-medium hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.15)] hover:scale-[1.02]">Apply for Early Access</a>
+        <a href="/landing.html?open_apply=1" class="bg-white text-black px-4 py-1.5 rounded-full text-xs font-semibold hover:bg-zinc-200 transition-all shadow-[0_0_15px_rgba(255,255,255,0.18)] hover:scale-[1.02]">Apply for Early Access</a>
         <button type="button" id="ky-comparison-menu-toggle" class="lg:hidden text-zinc-400 hover:text-white p-1 rounded-md focus:outline-none" aria-label="Toggle navigation menu">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
@@ -110,86 +125,405 @@
   <!-- HEADER -->
   <header class="pt-40 pb-16 px-6 max-w-[1200px] mx-auto text-center relative">
     <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-800 bg-zinc-950 text-xs font-mono text-zinc-400 mb-6">
-      <span class="w-1.5 h-1.5 rounded-full bg-white"></span>
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
       <span>BENCHMARK // ARCHITECTURAL COMPARISON</span>
     </div>
     <h1 class="text-4xl md:text-6xl font-medium tracking-tight text-white mb-6">
-      How Kobits Compares<br>
-      <span class="text-zinc-500">to Traditional Alternatives</span>
+      The Paradigm Shift in Software Delivery<br>
+      <span class="text-zinc-500">Autonomous Software Engineer vs. Legacy Paradigms</span>
     </h1>
-    <p class="text-zinc-400 text-base max-w-xl mx-auto leading-relaxed">
-      Compare Kobits autonomous multi-agent engineering against external dev agencies, internal headcount scaling, and interactive IDE chat copilots.
+    <p class="text-zinc-400 text-base max-w-2xl mx-auto leading-relaxed">
+      Explore why modern technology organizations are moving beyond local IDE copilots and expensive human agencies to Kobits' autonomous, test-verified pull request platform.
     </p>
   </header>
 
-  <!-- COMPARISON TABLE -->
-  <section class="pb-28 px-6 max-w-[1000px] mx-auto">
-    <div class="card-wire rounded-xl overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse text-xs">
-          <thead>
-            <tr class="border-b border-zinc-800 bg-zinc-900/60 font-mono text-zinc-400 uppercase tracking-wider">
-              <th class="py-4 px-6">Capability</th>
-              <th class="py-4 px-6 text-white font-bold bg-white/5">Kobits</th>
-              <th class="py-4 px-6">Dev Agencies</th>
-              <th class="py-4 px-6">AI Copilots</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-zinc-800/60 font-mono">
-            <tr class="hover:bg-white/[0.02] transition-colors">
-              <td class="py-4 px-6 text-white font-medium font-sans">Execution Environment</td>
-              <td class="py-4 px-6 text-white bg-white/5 font-bold flex items-center gap-2">
-                <i data-lucide="check" class="w-4 h-4 text-emerald-400"></i> 100% Remote Ephemeral MicroVMs (140ms boot, 0 local install)
-              </td>
-              <td class="py-4 px-6 text-zinc-400">Manual staging or contractor laptops</td>
-              <td class="py-4 px-6 text-zinc-500 flex items-center gap-1.5">
-                <i data-lucide="x" class="w-4 h-4 text-zinc-600"></i> Local host only (pollutes git working tree)
-              </td>
-            </tr>
-            <tr class="hover:bg-white/[0.02] transition-colors">
-              <td class="py-4 px-6 text-white font-medium font-sans">Bug Fixing &amp; TDD</td>
-              <td class="py-4 px-6 text-white bg-white/5 font-bold">Negative-to-Positive TDD (Proves defect, verifies green)</td>
-              <td class="py-4 px-6 text-zinc-400">Manual QA sprint (Days of back-and-forth)</td>
-              <td class="py-4 px-6 text-zinc-500">None (Probabilistic guessing, 0 test runs)</td>
-            </tr>
-            <tr class="hover:bg-white/[0.02] transition-colors">
-              <td class="py-4 px-6 text-white font-medium font-sans">GitHub CI &amp; PR Workflow</td>
-              <td class="py-4 px-6 text-white bg-white/5 font-bold">Autonomous Self-Healing CI &amp; Bi-directional PR Review Bot</td>
-              <td class="py-4 px-6 text-zinc-400">Manual review &amp; delayed push</td>
-              <td class="py-4 px-6 text-zinc-500">None (Developer must copy-paste snippets)</td>
-            </tr>
-            <tr class="hover:bg-white/[0.02] transition-colors">
-              <td class="py-4 px-6 text-white font-medium font-sans">Live Web Application Preview</td>
-              <td class="py-4 px-6 text-white bg-white/5 font-bold">Instant In-Browser Preview &amp; WebSocket HMR Tunneling</td>
-              <td class="py-4 px-6 text-zinc-400">Dedicated staging servers required</td>
-              <td class="py-4 px-6 text-zinc-500">Local localhost only (Manual dev server setup)</td>
-            </tr>
-            <tr class="hover:bg-white/[0.02] transition-colors">
-              <td class="py-4 px-6 text-white font-medium font-sans">Cross-Session Team Memory</td>
-              <td class="py-4 px-6 text-white bg-white/5 font-bold">Persistent Knowledge Graph &amp; ADR Convention Index</td>
-              <td class="py-4 px-6 text-zinc-400">Confluence docs (Lost in employee churn)</td>
-              <td class="py-4 px-6 text-zinc-500">Short sliding window (Resets every session)</td>
-            </tr>
-            <tr class="hover:bg-white/[0.02] transition-colors">
-              <td class="py-4 px-6 text-white font-medium font-sans">Security &amp; Compliance</td>
-              <td class="py-4 px-6 text-white bg-white/5 font-bold">SOC2 HMAC-SHA256 Audit Trail + 3 Consensus Seals</td>
-              <td class="py-4 px-6 text-zinc-400">Paper NDAs only</td>
-              <td class="py-4 px-6 text-zinc-500">Unaudited (Risk of code leak in training data)</td>
-            </tr>
-            <tr class="hover:bg-white/[0.02] transition-colors">
-              <td class="py-4 px-6 text-white font-medium font-sans">Human Effort Required</td>
-              <td class="py-4 px-6 text-white bg-white/5 font-bold">The 5% Operator Gate (Review &amp; 1-click sign-off)</td>
-              <td class="py-4 px-6 text-zinc-400">Daily standups, sprint planning, client syncs</td>
-              <td class="py-4 px-6 text-zinc-400">90% of the work falls on the human developer</td>
-            </tr>
-            <tr class="hover:bg-white/[0.02] transition-colors">
-              <td class="py-4 px-6 text-white font-medium font-sans">Final Deliverable</td>
-              <td class="py-4 px-6 text-white bg-white/5 font-bold">Tested, verified, reviewed Git Pull Request in minutes</td>
-              <td class="py-4 px-6 text-zinc-400">Monthly invoices &amp; delayed deliverables</td>
-              <td class="py-4 px-6 text-zinc-400">Raw code snippets</td>
-            </tr>
-          </tbody>
-        </table>
+  <!-- SECTION 01: HIGH-CONTRAST SIDE-BY-SIDE PARADIGM COMPARISON -->
+  <section class="pb-20 px-6 max-w-[1200px] mx-auto">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
+      <!-- Left Card: The Traditional Paradigm -->
+      <div class="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-7 md:p-9 relative overflow-hidden backdrop-blur-md flex flex-col justify-between group hover:border-zinc-700 transition-all shadow-xl">
+        <div>
+          <div class="flex items-center justify-between gap-3 mb-6">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-rose-500/30 bg-rose-950/20 text-[10px] font-mono text-rose-300">
+              <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+              <span>LEGACY PARADIGM // HIGH FRICTION &amp; ACCUMULATED DEBT</span>
+            </div>
+            <span class="text-[11px] font-mono text-zinc-600 uppercase">Status Quo</span>
+          </div>
+
+          <h2 class="text-2xl font-semibold text-white tracking-tight mb-2">Traditional Software Delivery</h2>
+          <p class="text-xs text-zinc-400 leading-relaxed mb-8">
+            Manual reproduction cycles, unverified copilot guesses, and broken CI pipelines that constantly bottleneck senior engineering bandwidth.
+          </p>
+
+          <!-- Traditional Pain Points -->
+          <div class="space-y-4">
+            <div class="p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/30">
+              <div class="flex items-start gap-3.5">
+                <div class="w-7 h-7 rounded-lg bg-rose-950/40 border border-rose-800/40 flex items-center justify-center shrink-0 mt-0.5 text-rose-400">
+                  <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <h3 class="text-xs font-semibold text-zinc-200">Manual Reproduction Cycles</h3>
+                    <span class="text-[10px] font-mono text-rose-400">HOURS LOST</span>
+                  </div>
+                  <p class="text-[11px] text-zinc-400 leading-relaxed mt-1">
+                    Engineers spend hours isolating customer bugs, reproducing flaky stack traces, and manually wrestling with local environment drift.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/30">
+              <div class="flex items-start gap-3.5">
+                <div class="w-7 h-7 rounded-lg bg-rose-950/40 border border-rose-800/40 flex items-center justify-center shrink-0 mt-0.5 text-rose-400">
+                  <i data-lucide="x-circle" class="w-4 h-4"></i>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <h3 class="text-xs font-semibold text-zinc-200">Brittle Copilot Code Dumps</h3>
+                    <span class="text-[10px] font-mono text-rose-400">0% TEST PROOF</span>
+                  </div>
+                  <p class="text-[11px] text-zinc-400 leading-relaxed mt-1">
+                    Interactive autocomplete tools generate speculative snippets with zero test execution, leaving human developers to verify and fix compile errors.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/30">
+              <div class="flex items-start gap-3.5">
+                <div class="w-7 h-7 rounded-lg bg-rose-950/40 border border-rose-800/40 flex items-center justify-center shrink-0 mt-0.5 text-rose-400">
+                  <i data-lucide="git-pull-request" class="w-4 h-4"></i>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <h3 class="text-xs font-semibold text-zinc-200">Broken CI &amp; Review Babysitting</h3>
+                    <span class="text-[10px] font-mono text-rose-400">MANUAL CYCLES</span>
+                  </div>
+                  <p class="text-[11px] text-zinc-400 leading-relaxed mt-1">
+                    Commits break remote CI suites, pulling developers into tedious cycles of re-reading logs, fixing linter complaints, and re-pushing commits.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/30">
+              <div class="flex items-start gap-3.5">
+                <div class="w-7 h-7 rounded-lg bg-rose-950/40 border border-rose-800/40 flex items-center justify-center shrink-0 mt-0.5 text-rose-400">
+                  <i data-lucide="database" class="w-4 h-4"></i>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <h3 class="text-xs font-semibold text-zinc-200">Forgotten Repository Context</h3>
+                    <span class="text-[10px] font-mono text-rose-400">CONTEXT RESETS</span>
+                  </div>
+                  <p class="text-[11px] text-zinc-400 leading-relaxed mt-1">
+                    Chat windows reset every session. Architectural guidelines (ADRs), team conventions, and historical bug patterns are lost immediately.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-8 pt-4 border-t border-zinc-800/80 flex items-center justify-between text-[11px] font-mono text-zinc-500">
+          <span>Outcome: High engineer burnout &amp; regression leaks</span>
+          <span class="text-rose-400">~12h avg turnaround</span>
+        </div>
+      </div>
+
+      <!-- Right Card: Autonomous Engineering with Kobits -->
+      <div class="rounded-2xl border border-emerald-500/40 bg-gradient-to-b from-white/[0.04] via-[#0d0d12] to-[#08080a] p-7 md:p-9 relative overflow-hidden backdrop-blur-md flex flex-col justify-between shadow-[0_0_50px_rgba(16,185,129,0.08)] group hover:border-emerald-400/60 transition-all">
+        <div class="absolute -top-24 -right-24 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div>
+          <div class="flex items-center justify-between gap-3 mb-6 relative z-10">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-500/40 bg-emerald-950/40 text-[10px] font-mono text-emerald-300">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>KOBITS AUTONOMOUS SE // VERIFIED PR DELIVERY</span>
+            </div>
+            <span class="text-[11px] font-mono text-emerald-400 font-semibold uppercase">Autonomous Leap</span>
+          </div>
+
+          <h2 class="text-2xl font-semibold text-white tracking-tight mb-2 relative z-10">Autonomous Engineering with Kobits</h2>
+          <p class="text-xs text-zinc-300 leading-relaxed mb-8 relative z-10">
+            Deterministic execution in isolated MicroVMs with automated test synthesis, self-healing CI auto-commits, and a 5% human operator gate.
+          </p>
+
+          <!-- Autonomous Superpowers -->
+          <div class="space-y-4 relative z-10">
+            <div class="p-4 rounded-xl border border-emerald-500/20 bg-emerald-950/15 group-hover:border-emerald-500/30 transition-colors">
+              <div class="flex items-start gap-3.5">
+                <div class="w-7 h-7 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
+                  <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <h3 class="text-xs font-semibold text-white">Negative-to-Positive TDD Reproducer</h3>
+                    <span class="text-[10px] font-mono text-emerald-300 font-bold">RED → GREEN PROOF</span>
+                  </div>
+                  <p class="text-[11px] text-zinc-300 leading-relaxed mt-1">
+                    Synthesizes an automated reproduction test that proves the bug exists (RED), applies surgical edits, and verifies the suite turns GREEN before pushing.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-xl border border-emerald-500/20 bg-emerald-950/15 group-hover:border-emerald-500/30 transition-colors">
+              <div class="flex items-start gap-3.5">
+                <div class="w-7 h-7 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
+                  <i data-lucide="shield-check" class="w-4 h-4"></i>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <h3 class="text-xs font-semibold text-white">Zero-Local MicroVM Sandboxing</h3>
+                    <span class="text-[10px] font-mono text-emerald-300 font-bold">140MS PROVISIONING</span>
+                  </div>
+                  <p class="text-[11px] text-zinc-300 leading-relaxed mt-1">
+                    Dedicated Linux MicroVMs boot with complete compilers and test suites. Zero host contamination, zero dependencies on your machine, zero blast radius.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-xl border border-emerald-500/20 bg-emerald-950/15 group-hover:border-emerald-500/30 transition-colors">
+              <div class="flex items-start gap-3.5">
+                <div class="w-7 h-7 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
+                  <i data-lucide="git-merge" class="w-4 h-4"></i>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <h3 class="text-xs font-semibold text-white">Self-Healing CI &amp; PR Review Auto-Commits</h3>
+                    <span class="text-[10px] font-mono text-emerald-300 font-bold">100% AUTONOMOUS</span>
+                  </div>
+                  <p class="text-[11px] text-zinc-300 leading-relaxed mt-1">
+                    Listens directly to GitHub Actions CI failure webhooks, reproduces defects in cleanrooms, pushes verified fixes, and auto-addresses PR review comments.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-xl border border-emerald-500/20 bg-emerald-950/15 group-hover:border-emerald-500/30 transition-colors">
+              <div class="flex items-start gap-3.5">
+                <div class="w-7 h-7 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
+                  <i data-lucide="database" class="w-4 h-4"></i>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <h3 class="text-xs font-semibold text-white">Persistent Knowledge Graph &amp; 5% Operator Gate</h3>
+                    <span class="text-[10px] font-mono text-emerald-300 font-bold">HUMAN-IN-THE-LOOP</span>
+                  </div>
+                  <p class="text-[11px] text-zinc-300 leading-relaxed mt-1">
+                    Retains repository architecture and past fixes across missions. 95% of execution velocity is automated, leaving the critical 5% for executive 1-click PR sign-off.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-8 pt-4 border-t border-emerald-500/20 flex items-center justify-between text-[11px] font-mono relative z-10">
+          <span class="text-zinc-400">Outcome: Verified Pull Request with 3 Consensus Seals</span>
+          <span class="text-emerald-400 font-bold">&lt; 6 min avg delivery</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 02: 12-DIMENSION DETAILED EVALUATION SPECIFICATION -->
+    <div class="mb-12 text-center">
+      <div class="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">ARCHITECTURAL SPECIFICATION</div>
+      <h2 class="text-2xl md:text-4xl font-semibold text-white tracking-tight">12 Engineering Dimensions Compared</h2>
+      <p class="text-xs text-zinc-400 mt-2 max-w-xl mx-auto">A rigorous breakdown of developer experience, runtime reliability, and cryptographic verification.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-16">
+      <!-- Dim 1 -->
+      <div class="card-wire p-6 rounded-xl">
+        <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 01</div>
+        <h3 class="text-sm font-semibold text-white mb-3">Execution Environment</h3>
+        <div class="space-y-2 text-xs font-mono">
+          <div class="p-2.5 rounded bg-zinc-900/60 text-zinc-400 border border-zinc-800">
+            <span class="text-rose-400 font-bold mr-1.5">✕</span> Legacy: Runs on developer host machine or unmanaged contractor laptops.
+          </div>
+          <div class="p-2.5 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/40">
+            <span class="text-emerald-400 font-bold mr-1.5">✓</span> Kobits: 100% Remote Ephemeral MicroVMs (Boot in 140ms, zero local install).
+          </div>
+        </div>
+      </div>
+
+      <!-- Dim 2 -->
+      <div class="card-wire p-6 rounded-xl">
+        <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 02</div>
+        <h3 class="text-sm font-semibold text-white mb-3">Verification Standard</h3>
+        <div class="space-y-2 text-xs font-mono">
+          <div class="p-2.5 rounded bg-zinc-900/60 text-zinc-400 border border-zinc-800">
+            <span class="text-rose-400 font-bold mr-1.5">✕</span> Legacy: Probabilistic guesswork; 0 test runs or verification before commit.
+          </div>
+          <div class="p-2.5 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/40">
+            <span class="text-emerald-400 font-bold mr-1.5">✓</span> Kobits: Negative-to-Positive TDD (Proves defect, executes 100% green fix).
+          </div>
+        </div>
+      </div>
+
+      <!-- Dim 3 -->
+      <div class="card-wire p-6 rounded-xl">
+        <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 03</div>
+        <h3 class="text-sm font-semibold text-white mb-3">CI/CD &amp; PR Workflow</h3>
+        <div class="space-y-2 text-xs font-mono">
+          <div class="p-2.5 rounded bg-zinc-900/60 text-zinc-400 border border-zinc-800">
+            <span class="text-rose-400 font-bold mr-1.5">✕</span> Legacy: Manual developer pushes; hours lost debugging red CI matrices.
+          </div>
+          <div class="p-2.5 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/40">
+            <span class="text-emerald-400 font-bold mr-1.5">✓</span> Kobits: Native Self-Healing CI &amp; Bi-directional PR Review auto-commits.
+          </div>
+        </div>
+      </div>
+
+      <!-- Dim 4 -->
+      <div class="card-wire p-6 rounded-xl">
+        <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 04</div>
+        <h3 class="text-sm font-semibold text-white mb-3">Live Web Preview &amp; HMR</h3>
+        <div class="space-y-2 text-xs font-mono">
+          <div class="p-2.5 rounded bg-zinc-900/60 text-zinc-400 border border-zinc-800">
+            <span class="text-rose-400 font-bold mr-1.5">✕</span> Legacy: Localhost only; requires manual environment setup &amp; port binding.
+          </div>
+          <div class="p-2.5 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/40">
+            <span class="text-emerald-400 font-bold mr-1.5">✓</span> Kobits: Instant In-Browser Preview &amp; WebSocket HMR Tunneling.
+          </div>
+        </div>
+      </div>
+
+      <!-- Dim 5 -->
+      <div class="card-wire p-6 rounded-xl">
+        <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 05</div>
+        <h3 class="text-sm font-semibold text-white mb-3">Cross-Session Team Memory</h3>
+        <div class="space-y-2 text-xs font-mono">
+          <div class="p-2.5 rounded bg-zinc-900/60 text-zinc-400 border border-zinc-800">
+            <span class="text-rose-400 font-bold mr-1.5">✕</span> Legacy: Short sliding window; prompts reset context every single conversation.
+          </div>
+          <div class="p-2.5 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/40">
+            <span class="text-emerald-400 font-bold mr-1.5">✓</span> Kobits: Persistent Knowledge Graph &amp; ADR Convention Index across missions.
+          </div>
+        </div>
+      </div>
+
+      <!-- Dim 6 -->
+      <div class="card-wire p-6 rounded-xl">
+        <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 06</div>
+        <h3 class="text-sm font-semibold text-white mb-3">Security &amp; SOC2 Compliance</h3>
+        <div class="space-y-2 text-xs font-mono">
+          <div class="p-2.5 rounded bg-zinc-900/60 text-zinc-400 border border-zinc-800">
+            <span class="text-rose-400 font-bold mr-1.5">✕</span> Legacy: Paper NDAs; unverified training risks on proprietary code.
+          </div>
+          <div class="p-2.5 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/40">
+            <span class="text-emerald-400 font-bold mr-1.5">✓</span> Kobits: SOC2 HMAC-SHA256 Audit Trail + 3 Consensus Seals (Aegis, Sentinel, Nexus).
+          </div>
+        </div>
+      </div>
+
+      <!-- Dim 7 -->
+      <div class="card-wire p-6 rounded-xl">
+        <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 07</div>
+        <h3 class="text-sm font-semibold text-white mb-3">Human Operator Leverage</h3>
+        <div class="space-y-2 text-xs font-mono">
+          <div class="p-2.5 rounded bg-zinc-900/60 text-zinc-400 border border-zinc-800">
+            <span class="text-rose-400 font-bold mr-1.5">✕</span> Legacy: 90% of the cognitive labor falls on the human software engineer.
+          </div>
+          <div class="p-2.5 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/40">
+            <span class="text-emerald-400 font-bold mr-1.5">✓</span> Kobits: The 5% Operator Gate (Review cleanroom diff &amp; 1-click sign-off).
+          </div>
+        </div>
+      </div>
+
+      <!-- Dim 8 -->
+      <div class="card-wire p-6 rounded-xl">
+        <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 08</div>
+        <h3 class="text-sm font-semibold text-white mb-3">Final Deliverable</h3>
+        <div class="space-y-2 text-xs font-mono">
+          <div class="p-2.5 rounded bg-zinc-900/60 text-zinc-400 border border-zinc-800">
+            <span class="text-rose-400 font-bold mr-1.5">✕</span> Legacy: Raw code snippets that require human fixing or monthly contractor invoices.
+          </div>
+          <div class="p-2.5 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/40">
+            <span class="text-emerald-400 font-bold mr-1.5">✓</span> Kobits: Tested, verified, and reviewed Git Pull Request in minutes.
+          </div>
+        </div>
+      </div>
+
+      <!-- Dim 9 -->
+      <div class="card-wire p-6 rounded-xl">
+        <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 09</div>
+        <h3 class="text-sm font-semibold text-white mb-3">Local Blast Radius</h3>
+        <div class="space-y-2 text-xs font-mono">
+          <div class="p-2.5 rounded bg-zinc-900/60 text-zinc-400 border border-zinc-800">
+            <span class="text-rose-400 font-bold mr-1.5">✕</span> Legacy: Pollutes local filesystem; risks accidental deletion or dependency drift.
+          </div>
+          <div class="p-2.5 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/40">
+            <span class="text-emerald-400 font-bold mr-1.5">✓</span> Kobits: 100% ephemeral isolation; zero host dependencies or blast radius.
+          </div>
+        </div>
+      </div>
+
+      <!-- Dim 10 -->
+      <div class="card-wire p-6 rounded-xl">
+        <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 10</div>
+        <h3 class="text-sm font-semibold text-white mb-3">Turnaround Velocity</h3>
+        <div class="space-y-2 text-xs font-mono">
+          <div class="p-2.5 rounded bg-zinc-900/60 text-zinc-400 border border-zinc-800">
+            <span class="text-rose-400 font-bold mr-1.5">✕</span> Legacy: 4 to 24 hours per ticket turnaround with multiple context switches.
+          </div>
+          <div class="p-2.5 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/40">
+            <span class="text-emerald-400 font-bold mr-1.5">✓</span> Kobits: 4 to 8 minutes from issue assignment to verified Pull Request.
+          </div>
+        </div>
+      </div>
+
+      <!-- Dim 11 -->
+      <div class="card-wire p-6 rounded-xl">
+        <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 11</div>
+        <h3 class="text-sm font-semibold text-white mb-3">Multi-Agent Specialization</h3>
+        <div class="space-y-2 text-xs font-mono">
+          <div class="p-2.5 rounded bg-zinc-900/60 text-zinc-400 border border-zinc-800">
+            <span class="text-rose-400 font-bold mr-1.5">✕</span> Legacy: Monolithic generalist model forced to do all tasks in one prompt.
+          </div>
+          <div class="p-2.5 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/40">
+            <span class="text-emerald-400 font-bold mr-1.5">✓</span> Kobits: 21 specialized autonomous domain agents coordinating in parallel.
+          </div>
+        </div>
+      </div>
+
+      <!-- Dim 12 -->
+      <div class="card-wire p-6 rounded-xl">
+        <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 12</div>
+        <h3 class="text-sm font-semibold text-white mb-3">Regression Invariants</h3>
+        <div class="space-y-2 text-xs font-mono">
+          <div class="p-2.5 rounded bg-zinc-900/60 text-zinc-400 border border-zinc-800">
+            <span class="text-rose-400 font-bold mr-1.5">✕</span> Legacy: Frequent regressions; untested edge cases slipped into main branch.
+          </div>
+          <div class="p-2.5 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/40">
+            <span class="text-emerald-400 font-bold mr-1.5">✓</span> Kobits: 100% regression suite pass rate enforced before PR is opened.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CTA BANNER -->
+    <div class="p-8 md:p-12 rounded-2xl bg-zinc-950 border border-zinc-800 text-center relative overflow-hidden">
+      <div class="absolute inset-0 technical-grid opacity-15"></div>
+      <div class="relative z-10 max-w-xl mx-auto">
+        <h2 class="text-2xl md:text-3xl font-semibold text-white mb-3">Ready to Eliminate Copilot Babysitting?</h2>
+        <p class="text-xs text-zinc-400 leading-relaxed mb-6 font-mono">
+          Connect your GitHub repository and experience autonomous negative-to-positive TDD pull request delivery.
+        </p>
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <a href="/landing.html?open_apply=1" class="bg-white text-black px-6 py-2.5 rounded-full text-xs font-semibold hover:bg-zinc-200 transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)]">
+            Launch Mission
+          </a>
+          <a href="/engineering.html" class="px-5 py-2.5 rounded-full text-xs font-mono text-zinc-300 hover:text-white border border-zinc-800 hover:border-zinc-700 transition-colors">
+            Explore Architecture →
+          </a>
+        </div>
       </div>
     </div>
   </section>
@@ -204,7 +538,7 @@
           <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
         </svg>
       </div>
-      <span>KOBITS AUTONOMOUS CLOUD SE</span>
+      <span>KOBITS AUTONOMOUS SE</span>
     </a>
     <div class="flex flex-wrap items-center justify-center gap-6 text-zinc-500">
       <a href="/product.html" class="hover:text-zinc-300 transition-colors">PRODUCT</a>
