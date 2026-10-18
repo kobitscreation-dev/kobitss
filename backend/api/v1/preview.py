@@ -361,6 +361,45 @@ async def configure_preview_port(
     }
 
 
+@router.get("/{mission_id}/cdp-stream")
+async def get_cdp_browser_stream(
+    mission_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Returns a live 30fps Chrome DevTools Protocol (CDP) Screencast frame packet
+    with agent cursor reticle coordinates, interactive DOM bounding boxes, and Vision QA overlay.
+    """
+    mission = await db.get(Mission, mission_id)
+    if mission:
+        await _verify_preview_tenant_access(request, mission, db)
+    from backend.services.browser_engine import CDPStreamManager
+
+    session = CDPStreamManager.get_or_create_session(mission_id)
+    return session.capture_cdp_frame()
+
+
+@router.post("/{mission_id}/cdp-input")
+async def dispatch_cdp_browser_input(
+    mission_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Dispatches interactive mouse/keyboard/navigation events (`Input.dispatchMouseEvent`,
+    `Input.dispatchKeyEvent`) directly into the live CDP browser canvas.
+    """
+    mission = await db.get(Mission, mission_id)
+    if mission:
+        await _verify_preview_tenant_access(request, mission, db)
+    from backend.services.browser_engine import CDPStreamManager
+
+    payload = await request.json()
+    session = CDPStreamManager.get_or_create_session(mission_id)
+    return await session.dispatch_input_event(payload)
+
+
 ALL_PREVIEW_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"]
 
 

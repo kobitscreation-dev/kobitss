@@ -10,6 +10,7 @@ Explores N parallel candidate patch trajectories for a problem:
 """
 
 import os
+import sys
 import shlex
 import inspect
 import logging
@@ -19,7 +20,7 @@ import shutil
 import tempfile
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional, Callable, Any, Union, List, Tuple
+from typing import Optional, Callable, Any, Union, List, Tuple, Dict, Set
 
 from backend.services.sandbox_rollback import SandboxRollbackManager
 from backend.services.reproducer_engine import ReproducerEngine, ReproducerExecution
@@ -645,6 +646,455 @@ class BestOfNExplorer:
 
     # Developer convenience alias
     explore_best_of_n = explore_and_select
+
+    @classmethod
+    async def explore_mcts(
+        cls,
+        sandbox_dir: str,
+        hypotheses: List[Dict[str, Any]],
+        reproducer_script: str = "reproduce_issue.py",
+        regression_cmd: Optional[Union[str, List[str]]] = None,
+        max_iterations: int = 12,
+        exploration_c: float = 1.414,
+    ) -> "MCTSSearchResult":
+        """Convenience entrypoint on BestOfNExplorer to run full MCTS Hypothesis Search."""
+        return await MCTSHypothesisExplorer.search(
+            sandbox_dir=sandbox_dir,
+            hypotheses=hypotheses,
+            reproducer_script=reproducer_script,
+            regression_cmd=regression_cmd,
+            max_iterations=max_iterations,
+            exploration_c=exploration_c,
+        )
+
+
+@dataclass
+class MCTSNode:
+    """
+    A node in the Monte Carlo Tree Search (MCTS) Architectural Hypothesis Tree (Gap 5).
+    """
+    node_id: str
+    hypothesis_name: str
+    strategy_description: str = ""
+    parent_id: Optional[str] = None
+    depth: int = 0
+    visits: int = 0
+    total_reward: float = 0.0
+    mean_reward: float = 0.0
+    pruned: bool = False
+    prune_reason: str = ""
+    reproducer_passed: bool = False
+    regression_passed: bool = False
+    lsp_errors: int = 0
+    circular_dependency_detected: bool = False
+    lines_changed: int = 0
+    checkpoint_sha: str = ""
+    children: List["MCTSNode"] = field(default_factory=list)
+    generator_fn: Optional[Callable[[str], Any]] = field(default=None, repr=False)
+
+    def uct_score(self, parent_visits: int, exploration_c: float = 1.414) -> float:
+        """
+        Upper Confidence Bound 1 applied to Trees (UCT):
+            UCT = (W_i / N_i) + c * sqrt(ln(N_p) / N_i)
+        Pruned dead-end nodes return -infinity so they are never re-expanded.
+        """
+        import math
+
+        if self.pruned:
+            return float("-inf")
+        if self.visits == 0:
+            return float("inf")
+        exploitation = self.total_reward / self.visits
+        exploration = exploration_c * math.sqrt(math.log(max(1, parent_visits)) / self.visits)
+        return exploitation + exploration
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "node_id": self.node_id,
+            "hypothesis_name": self.hypothesis_name,
+            "strategy_description": self.strategy_description,
+            "parent_id": self.parent_id,
+            "depth": self.depth,
+            "visits": self.visits,
+            "total_reward": round(self.total_reward, 4),
+            "mean_reward": round(self.mean_reward, 4),
+            "pruned": self.pruned,
+            "prune_reason": self.prune_reason,
+            "reproducer_passed": self.reproducer_passed,
+            "regression_passed": self.regression_passed,
+            "lsp_errors": self.lsp_errors,
+            "circular_dependency_detected": self.circular_dependency_detected,
+            "lines_changed": self.lines_changed,
+            "checkpoint_sha": self.checkpoint_sha,
+            "children": [c.to_dict() for c in self.children],
+        }
+
+
+@dataclass
+class MCTSSearchResult:
+    """Result of a Monte Carlo Tree Search over competing architectural hypotheses."""
+    root: MCTSNode
+    all_nodes: List[MCTSNode]
+    winning_node: Optional[MCTSNode]
+    pruned_nodes: List[MCTSNode]
+    iterations_executed: int
+    success: bool
+    selection_reason: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "success": self.success,
+            "iterations_executed": self.iterations_executed,
+            "total_nodes_explored": len(self.all_nodes),
+            "pruned_branches_count": len(self.pruned_nodes),
+            "winning_node": self.winning_node.to_dict() if self.winning_node else None,
+            "pruned_nodes": [n.to_dict() for n in self.pruned_nodes],
+            "selection_reason": self.selection_reason,
+            "tree": self.root.to_dict(),
+        }
+
+
+class MCTSHypothesisExplorer:
+    """
+    Monte Carlo Tree Search (MCTS) & Hypothesis Branching Engine (Gap 5).
+
+    Replaces linear retry loops on complex architectural refactors by:
+    1. Selection (UCB1 / UCT): Balancing exploitation of high-reward partial patches with
+       exploration of untried architectural hypotheses.
+    2. Expansion: Spawning child refinement hypotheses when a branch partially succeeds
+       (e.g., reproducer passes or LSP errors decrease).
+    3. Simulation & Evaluation: Running fast HeadlessLSPService compiler/circular-import checks
+       before executing the TDD reproducer and regression suite.
+    4. Dead-End Pruning & Backpropagation: Immediately pruning branches that introduce
+       circular dependencies, syntax errors, or cascading regressions (`node.pruned = True`),
+       and backpropagating normalized rewards `[0.0, 1.0]` up the ancestor chain.
+    """
+
+    _total_searches: int = 0
+    _total_nodes_evaluated: int = 0
+    _total_branches_pruned: int = 0
+    _last_tree_snapshot: Optional[Dict[str, Any]] = None
+
+    @staticmethod
+    def _detect_circular_imports(sandbox_dir: str) -> Tuple[bool, str]:
+        """
+        Scans Python and JS/TS files in `sandbox_dir` to detect circular import cycles
+        (`A -> B -> A`).
+        """
+        import ast
+
+        adj: Dict[str, Set[str]] = {}
+        for root, dirs, files in os.walk(sandbox_dir):
+            dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ("node_modules", "__pycache__", "venv", ".venv")]
+            for fn in files:
+                if fn.endswith(".py"):
+                    mod_name = os.path.splitext(fn)[0]
+                    full_p = os.path.join(root, fn)
+                    adj.setdefault(mod_name, set())
+                    try:
+                        with open(full_p, "r", encoding="utf-8", errors="ignore") as f:
+                            tree = ast.parse(f.read())
+                        for node in ast.walk(tree):
+                            if isinstance(node, ast.ImportFrom) and node.module:
+                                target = node.module.split(".")[-1]
+                                if target != mod_name:
+                                    adj[mod_name].add(target)
+                            elif isinstance(node, ast.Import):
+                                for alias in node.names:
+                                    target = alias.name.split(".")[-1]
+                                    if target != mod_name:
+                                        adj[mod_name].add(target)
+                    except Exception:
+                        pass
+
+        # DFS cycle check
+        visited: Set[str] = set()
+        stack: Set[str] = set()
+
+        def dfs(node: str, path: List[str]) -> Optional[str]:
+            visited.add(node)
+            stack.add(node)
+            for nbr in adj.get(node, set()):
+                if nbr not in adj:
+                    continue
+                if nbr in stack:
+                    cycle_str = " -> ".join(path + [nbr])
+                    return f"Circular dependency detected: {cycle_str}"
+                if nbr not in visited:
+                    res = dfs(nbr, path + [nbr])
+                    if res:
+                        return res
+            stack.remove(node)
+            return None
+
+        for mod in list(adj.keys()):
+            if mod not in visited:
+                cycle = dfs(mod, [mod])
+                if cycle:
+                    return True, cycle
+        return False, ""
+
+    @classmethod
+    def _backpropagate(cls, node: MCTSNode, reward: float, node_map: Dict[str, MCTSNode]) -> None:
+        curr: Optional[MCTSNode] = node
+        while curr is not None:
+            curr.visits += 1
+            curr.total_reward += reward
+            curr.mean_reward = curr.total_reward / curr.visits
+            curr = node_map.get(curr.parent_id) if curr.parent_id else None
+
+    @classmethod
+    async def search(
+        cls,
+        sandbox_dir: str,
+        hypotheses: List[Dict[str, Any]],
+        reproducer_script: str = "reproduce_issue.py",
+        regression_cmd: Optional[Union[str, List[str]]] = None,
+        max_iterations: int = 12,
+        exploration_c: float = 1.414,
+    ) -> MCTSSearchResult:
+        """
+        Executes MCTS over a set of candidate architectural hypotheses.
+
+        Each entry in `hypotheses` supports:
+        - `name`: Hypothesis identifier (e.g. `"Hypothesis A: In-Place Patch"`)
+        - `description`: Strategy description
+        - `generator`: Callable `(sandbox_dir) -> None` applying the code transformation
+        - `refinements` (optional): List of child hypothesis dicts to expand if this branch
+          is not pruned and yields promising partial reward.
+        """
+        from backend.services.lsp_service import HeadlessLSPService
+
+        cls._total_searches += 1
+        base_cp = SandboxRollbackManager.create_checkpoint(sandbox_dir, "mcts_root")
+        base_sha = (base_cp if isinstance(base_cp, str) else getattr(base_cp, "commit_sha", None)) or "unknown"
+
+        root = MCTSNode(
+            node_id="root",
+            hypothesis_name="Base Repository State",
+            strategy_description="Unpatched baseline commit",
+            parent_id=None,
+            depth=0,
+            visits=1,
+            total_reward=0.1,
+            mean_reward=0.1,
+            checkpoint_sha=base_sha,
+        )
+        node_map: Dict[str, MCTSNode] = {"root": root}
+        all_nodes: List[MCTSNode] = [root]
+        pending_refinements: Dict[str, List[Dict[str, Any]]] = {}
+
+        # Attach top-level hypotheses as children of root
+        for idx, h in enumerate(hypotheses):
+            nid = f"h_{idx + 1}"
+            child = MCTSNode(
+                node_id=nid,
+                hypothesis_name=h.get("name", f"Hypothesis {idx + 1}"),
+                strategy_description=h.get("description", ""),
+                parent_id="root",
+                depth=1,
+                generator_fn=h.get("generator"),
+            )
+            root.children.append(child)
+            node_map[nid] = child
+            all_nodes.append(child)
+            if h.get("refinements"):
+                pending_refinements[nid] = list(h["refinements"])
+
+        winning_node: Optional[MCTSNode] = None
+        iterations_run = 0
+
+        for _ in range(max_iterations):
+            # 1. SELECTION via UCB1 (UCT)
+            selectable_leaves = [
+                n for n in all_nodes
+                if n.node_id != "root" and not n.pruned and n.visits == 0
+            ]
+            if not selectable_leaves:
+                # Check if any visited non-pruned node has unexpanded refinements
+                expandable = [
+                    n for n in all_nodes
+                    if not n.pruned and n.visits > 0 and pending_refinements.get(n.node_id)
+                ]
+                if expandable:
+                    best_parent = max(
+                        expandable,
+                        key=lambda n: n.uct_score(max(1, node_map[n.parent_id].visits if n.parent_id else 1), exploration_c),
+                    )
+                    refs = pending_refinements.pop(best_parent.node_id, [])
+                    for r_idx, ref_spec in enumerate(refs):
+                        child_id = f"{best_parent.node_id}_r{r_idx + 1}"
+                        c_node = MCTSNode(
+                            node_id=child_id,
+                            hypothesis_name=ref_spec.get("name", f"Refinement {child_id}"),
+                            strategy_description=ref_spec.get("description", ""),
+                            parent_id=best_parent.node_id,
+                            depth=best_parent.depth + 1,
+                            generator_fn=ref_spec.get("generator"),
+                        )
+                        best_parent.children.append(c_node)
+                        node_map[child_id] = c_node
+                        all_nodes.append(c_node)
+                        if ref_spec.get("refinements"):
+                            pending_refinements[child_id] = list(ref_spec["refinements"])
+                    selectable_leaves = [
+                        n for n in all_nodes
+                        if n.node_id != "root" and not n.pruned and n.visits == 0
+                    ]
+
+            if not selectable_leaves:
+                break
+
+            # Select leaf with highest UCT priority relative to its parent
+            selected = max(
+                selectable_leaves,
+                key=lambda n: n.uct_score(
+                    parent_visits=max(1, node_map[n.parent_id].visits if n.parent_id else 1),
+                    exploration_c=exploration_c,
+                ),
+            )
+            iterations_run += 1
+            cls._total_nodes_evaluated += 1
+
+            # 2. RESET SANDBOX TO PARENT CHECKPOINT (or base_sha)
+            parent_node = node_map.get(selected.parent_id) if selected.parent_id else root
+            target_base_sha = (parent_node.checkpoint_sha if parent_node and parent_node.checkpoint_sha else base_sha)
+            if target_base_sha and target_base_sha != "unknown":
+                SandboxRollbackManager.rollback(sandbox_dir, target_base_sha)
+
+            # 3. SIMULATION: Execute hypothesis generator
+            try:
+                if selected.generator_fn:
+                    res = selected.generator_fn(sandbox_dir)
+                    if asyncio.iscoroutine(res):
+                        await res
+            except Exception as e:
+                selected.pruned = True
+                selected.prune_reason = f"Generator exception: {e}"
+                cls._total_branches_pruned += 1
+                cls._backpropagate(selected, 0.0, node_map)
+                continue
+
+            # Check circular dependencies first (instant static gate)
+            has_cycle, cycle_msg = cls._detect_circular_imports(sandbox_dir)
+            if has_cycle:
+                selected.circular_dependency_detected = True
+                selected.pruned = True
+                selected.prune_reason = cycle_msg
+                cls._total_branches_pruned += 1
+                cls._backpropagate(selected, 0.0, node_map)
+                continue
+
+            # Check LSP compiler diagnostics
+            diag_res = HeadlessLSPService.get_diagnostics(workspace_dir=sandbox_dir)
+            lsp_err_count = int(diag_res.get("error_count", 0))
+            selected.lsp_errors = lsp_err_count
+
+            if lsp_err_count >= 3:
+                selected.pruned = True
+                selected.prune_reason = f"Cascading compiler errors ({lsp_err_count} LSP errors)"
+                cls._total_branches_pruned += 1
+                cls._backpropagate(selected, 0.05, node_map)
+                continue
+
+            # Commit node state so child refinements can branch from this hypothesis
+            node_cp = SandboxRollbackManager.create_checkpoint(sandbox_dir, f"mcts_{selected.node_id}")
+            selected.checkpoint_sha = (node_cp if isinstance(node_cp, str) else getattr(node_cp, "commit_sha", None)) or base_sha
+            ins, dels, _files_changed, _diff_text = BestOfNExplorer.extract_diff_stats(sandbox_dir, base_sha)
+            selected.lines_changed = ins + dels
+
+            # Run TDD Reproducer & Regression suite
+            repro_path = os.path.join(sandbox_dir, reproducer_script)
+            if os.path.isfile(repro_path):
+                repro_res = ReproducerEngine.execute_script(
+                    sandbox_dir,
+                    reproducer_script,
+                    timeout=20,
+                )
+                repro_ok = (repro_res.exit_code == 0)
+            else:
+                repro_ok = (lsp_err_count == 0)
+            selected.reproducer_passed = repro_ok
+
+            reg_ok = True
+            if repro_ok and regression_cmd:
+                try:
+                    reg_proc = subprocess.run(
+                        regression_cmd,
+                        cwd=sandbox_dir,
+                        capture_output=True,
+                        text=True,
+                        timeout=25,
+                    )
+                    reg_ok = (reg_proc.returncode == 0)
+                except Exception:
+                    reg_ok = False
+            selected.regression_passed = reg_ok
+
+            # 4. REWARD CALCULATION & PRUNING / EXPANSION
+            if repro_ok and reg_ok and lsp_err_count == 0:
+                parsimony_bonus = max(0.0, 0.15 - (selected.lines_changed * 0.0005))
+                reward = min(1.0, 0.85 + parsimony_bonus)
+                cls._backpropagate(selected, reward, node_map)
+                if winning_node is None or reward > winning_node.mean_reward:
+                    winning_node = selected
+                # Expand child refinements if any exist, otherwise we have a verified winner
+                if not pending_refinements.get(selected.node_id):
+                    break
+            elif not repro_ok and not pending_refinements.get(selected.node_id):
+                # Leaf hypothesis failed reproducer and has no refinements -> prune dead end
+                selected.pruned = True
+                selected.prune_reason = "Reproducer test failed on leaf hypothesis"
+                cls._total_branches_pruned += 1
+                cls._backpropagate(selected, 0.15, node_map)
+            else:
+                # Partial progress (e.g. has child refinements to expand on next MCTS iteration)
+                partial_reward = 0.55 if (repro_ok or lsp_err_count == 0) else 0.35
+                cls._backpropagate(selected, partial_reward, node_map)
+
+        pruned_nodes = [n for n in all_nodes if n.pruned]
+
+        if winning_node and winning_node.checkpoint_sha:
+            SandboxRollbackManager.rollback(sandbox_dir, winning_node.checkpoint_sha)
+            result = MCTSSearchResult(
+                root=root,
+                all_nodes=all_nodes,
+                winning_node=winning_node,
+                pruned_nodes=pruned_nodes,
+                iterations_executed=iterations_run,
+                success=True,
+                selection_reason=(
+                    f"MCTS selected '{winning_node.hypothesis_name}' (node={winning_node.node_id}, "
+                    f"depth={winning_node.depth}, reward={winning_node.mean_reward:.3f}) after pruning "
+                    f"{len(pruned_nodes)} dead-end branch(es)."
+                ),
+            )
+        else:
+            if base_sha != "unknown":
+                SandboxRollbackManager.rollback(sandbox_dir, base_sha)
+            result = MCTSSearchResult(
+                root=root,
+                all_nodes=all_nodes,
+                winning_node=None,
+                pruned_nodes=pruned_nodes,
+                iterations_executed=iterations_run,
+                success=False,
+                selection_reason="No MCTS hypothesis branch satisfied both reproducer and regression suites.",
+            )
+
+        cls._last_tree_snapshot = result.to_dict()
+        return result
+
+    @classmethod
+    def get_telemetry(cls) -> Dict[str, Any]:
+        return {
+            "algorithm": "Monte Carlo Tree Search (UCB1 / UCT)",
+            "total_searches": cls._total_searches,
+            "total_nodes_evaluated": cls._total_nodes_evaluated,
+            "total_branches_pruned": cls._total_branches_pruned,
+            "dead_end_pruning_enabled": True,
+            "last_search_tree": cls._last_tree_snapshot,
+        }
 
 
 

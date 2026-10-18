@@ -1506,6 +1506,24 @@ async def get_systems_console_telemetry(
             }
         )
 
+    from backend.services.prompt_cache import PromptCacheOptimizer
+    from backend.services.browser_engine import CDPStreamManager
+    from backend.services.best_of_n import MCTSHypothesisExplorer
+
+    warm_pool_telemetry = (
+        CloudMicroVMSandbox.get_warm_pool_telemetry()
+        if hasattr(CloudMicroVMSandbox, "get_warm_pool_telemetry")
+        else {}
+    )
+    lsp_daemon_telemetry = (
+        HeadlessLSPService.get_daemon_telemetry()
+        if hasattr(HeadlessLSPService, "get_daemon_telemetry")
+        else {}
+    )
+    prompt_cache_telemetry = PromptCacheOptimizer.get_global_cache_telemetry()
+    cdp_stream_telemetry = CDPStreamManager.get_telemetry()
+    mcts_telemetry = MCTSHypothesisExplorer.get_telemetry()
+
     return {
         "organization_id": org.id,
         "mission_id": target_mid,
@@ -1530,7 +1548,13 @@ async def get_systems_console_telemetry(
             },
             "security_posture": sec_audit,
             "containers": active_containers,
+            "warm_snapshot_pool": warm_pool_telemetry,
         },
+        "warm_snapshot_pool": warm_pool_telemetry,
+        "lsp_daemon_status": lsp_daemon_telemetry,
+        "prompt_cache_economics": prompt_cache_telemetry,
+        "cdp_browser_stream": cdp_stream_telemetry,
+        "mcts_search_tree": mcts_telemetry,
     }
 
 

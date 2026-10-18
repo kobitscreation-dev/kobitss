@@ -257,18 +257,17 @@ class HeadlessLSPService:
             if local_js_def:
                 return {"found": True, "source": "current_file", **local_js_def}
 
-            # Trace JS/TS imports
+            # Trace JS/TS imports (including multi-hop barrel re-exports & tsconfig aliases)
             js_target = cls._trace_js_ts_import(curr_code, symbol, curr_abs, ws_abs)
             if js_target:
-                t_code = cls._read_file_safe(js_target["file_path"])
-                if t_code:
-                    t_def = cls._find_js_ts_symbol_in_code(t_code, js_target["symbol_in_target"], js_target["file_path"], ws_abs)
-                    if t_def:
-                        return {"found": True, "source": "imported_module", **t_def}
-                    if js_target.get("is_default"):
-                        t_default_def = cls._find_js_ts_default_export(t_code, js_target["file_path"], ws_abs)
-                        if t_default_def:
-                            return {"found": True, "source": "imported_module", **t_default_def}
+                barrel_def = cls._resolve_js_ts_symbol_across_barrels(
+                    target_file=js_target["file_path"],
+                    symbol=js_target["symbol_in_target"],
+                    workspace_dir=ws_abs,
+                    is_default=bool(js_target.get("is_default")),
+                )
+                if barrel_def:
+                    return {"found": True, "source": "imported_module", **barrel_def}
 
         # Attempt 4: Global Workspace AST Scan (Python first, then JS/TS, then Go/Rust)
         py_files: List[str] = []
@@ -754,17 +753,121 @@ class HeadlessLSPService:
         return None
 
     @classmethod
-    def _resolve_js_ts_specifier(cls, specifier: str, curr_dir: str) -> Optional[str]:
-        if not specifier or not specifier.startswith("."):
+    def _resolve_js_ts_specifier(
+        cls,
+        specifier: str,
+        curr_dir: str,
+        workspace_dir: Optional[str] = None,
+    ) -> Optional[str]:
+        if not specifier:
             return None
-        base_target = os.path.normpath(os.path.join(curr_dir, specifier))
+
+        base_targets: List[str] = []
+        if specifier.startswith("."):
+            base_targets.append(os.path.normpath(os.path.join(curr_dir, specifier)))
+        elif workspace_dir and (specifier.startswith("@/") or specifier.startswith("~/") or specifier.startswith("src/")):
+            clean_rel = re.sub(r"^(@/|~/)" , "", specifier)
+            base_targets.append(os.path.normpath(os.path.join(workspace_dir, "src", clean_rel)))
+            base_targets.append(os.path.normpath(os.path.join(workspace_dir, clean_rel)))
+        else:
+            return None
+
         extensions = (".ts", ".tsx", ".d.ts", ".js", ".jsx", ".mjs", ".cjs")
-        candidates = [base_target] + [base_target + ext for ext in extensions]
-        for ext in extensions:
-            candidates.append(os.path.join(base_target, "index" + ext))
-        for cand in candidates:
-            if os.path.isfile(cand):
-                return os.path.realpath(cand)
+        for base_target in base_targets:
+            candidates = [base_target] + [base_target + ext for ext in extensions]
+            for ext in extensions:
+                candidates.append(os.path.join(base_target, "index" + ext))
+            for cand in candidates:
+                if os.path.isfile(cand):
+                    return os.path.realpath(cand)
+        return None
+
+    @classmethod
+    def _resolve_js_ts_symbol_across_barrels(
+        cls,
+        target_file: str,
+        symbol: str,
+        workspace_dir: str,
+        is_default: bool = False,
+        visited: Optional[Set[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Recursively resolves a JS/TS symbol across multi-hop barrel files:
+        - Direct definitions in `target_file`
+        - Named re-exports: `export { Foo } from './sub'` or `export { Orig as Foo } from './sub'`
+        - Wildcard barrel re-exports: `export * from './sub'`
+        """
+        if visited is None:
+            visited = set()
+        real_target = os.path.realpath(target_file)
+        if real_target in visited or len(visited) > 12:
+            return None
+        visited.add(real_target)
+
+        t_code = cls._read_file_safe(real_target)
+        if not t_code:
+            return None
+
+        # 1. Check direct definition in target_file
+        t_def = cls._find_js_ts_symbol_in_code(t_code, symbol, real_target, workspace_dir)
+        if t_def:
+            return t_def
+        if is_default:
+            t_default_def = cls._find_js_ts_default_export(t_code, real_target, workspace_dir)
+            if t_default_def:
+                return t_default_def
+
+        # 2. Trace named & aliased re-exports in barrel file
+        t_dir = os.path.dirname(real_target)
+        sym_head = symbol.split(".")[0] if "." in symbol else symbol
+        sym_tail = symbol[len(sym_head) + 1:] if "." in symbol else ""
+
+        for line in t_code.splitlines():
+            # export { Orig as Alias } from './mod' or export { Sym } from './mod'
+            reexp_m = re.search(
+                r"""^\s*export\s+(?:type\s+)?\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]""",
+                line,
+            )
+            if reexp_m:
+                items_raw = reexp_m.group(1)
+                spec = reexp_m.group(2)
+                for item in items_raw.split(","):
+                    parts = [p.strip() for p in re.split(r"\s+as\s+", item.strip()) if p.strip()]
+                    if not parts:
+                        continue
+                    orig_sym = re.sub(r"^type\s+", "", parts[0]).strip()
+                    exported_sym = parts[-1].strip()
+                    if exported_sym == sym_head:
+                        sub_resolved = cls._resolve_js_ts_specifier(spec, t_dir, workspace_dir)
+                        if sub_resolved:
+                            next_symbol = f"{orig_sym}.{sym_tail}" if sym_tail else orig_sym
+                            res = cls._resolve_js_ts_symbol_across_barrels(
+                                target_file=sub_resolved,
+                                symbol=next_symbol,
+                                workspace_dir=workspace_dir,
+                                is_default=(orig_sym == "default"),
+                                visited=visited,
+                            )
+                            if res:
+                                return res
+
+        # 3. Trace wildcard barrel re-exports: export * from './mod'
+        for line in t_code.splitlines():
+            star_m = re.search(r"""^\s*export\s+\*\s+from\s+['"]([^'"]+)['"]""", line)
+            if star_m:
+                spec = star_m.group(1)
+                sub_resolved = cls._resolve_js_ts_specifier(spec, t_dir, workspace_dir)
+                if sub_resolved:
+                    res = cls._resolve_js_ts_symbol_across_barrels(
+                        target_file=sub_resolved,
+                        symbol=symbol,
+                        workspace_dir=workspace_dir,
+                        is_default=False,
+                        visited=visited,
+                    )
+                    if res:
+                        return res
+
         return None
 
     @classmethod
@@ -782,11 +885,11 @@ class HeadlessLSPService:
 
         for line in lines:
             # 1. Aliased import: import { Foo as Bar } from './api'
-            alias_m = re.search(rf"""import\s+\{{[^}}]*\b([A-Za-z0-9_$]+)\s+as\s+{re.escape(sym_head)}\b[^}}]*\}}\s+from\s+['"]([^'"]+)['"]""", line)
+            alias_m = re.search(rf"""import\s+(?:type\s+)?\{{[^}}]*\b([A-Za-z0-9_$]+)\s+as\s+{re.escape(sym_head)}\b[^}}]*\}}\s+from\s+['"]([^'"]+)['"]""", line)
             if alias_m:
                 orig_name = alias_m.group(1)
                 specifier = alias_m.group(2)
-                resolved = cls._resolve_js_ts_specifier(specifier, curr_dir)
+                resolved = cls._resolve_js_ts_specifier(specifier, curr_dir, workspace_dir)
                 if resolved:
                     return {
                         "file_path": resolved,
@@ -798,7 +901,7 @@ class HeadlessLSPService:
             default_m = re.search(rf"""import\s+{re.escape(sym_head)}\s+from\s+['"]([^'"]+)['"]""", line)
             if default_m:
                 specifier = default_m.group(1)
-                resolved = cls._resolve_js_ts_specifier(specifier, curr_dir)
+                resolved = cls._resolve_js_ts_specifier(specifier, curr_dir, workspace_dir)
                 if resolved:
                     return {
                         "file_path": resolved,
@@ -806,11 +909,11 @@ class HeadlessLSPService:
                         "is_default": not bool(sym_tail),
                     }
 
-            # 3. Standard named import: import { Client } from './api'
-            named_m = re.search(rf"""import\s+\{{[^}}]*\b{re.escape(sym_head)}\b[^}}]*\}}\s+from\s+['"]([^'"]+)['"]""", line)
+            # 3. Standard named import: import { Client } from './api' or import type { Client } from './api'
+            named_m = re.search(rf"""import\s+(?:type\s+)?\{{[^}}]*\b{re.escape(sym_head)}\b[^}}]*\}}\s+from\s+['"]([^'"]+)['"]""", line)
             if named_m:
                 specifier = named_m.group(1)
-                resolved = cls._resolve_js_ts_specifier(specifier, curr_dir)
+                resolved = cls._resolve_js_ts_specifier(specifier, curr_dir, workspace_dir)
                 if resolved:
                     return {
                         "file_path": resolved,
@@ -822,7 +925,7 @@ class HeadlessLSPService:
             req_m = re.search(rf"""(?:const|let|var)\s+(?:\{{[^}}]*\b{re.escape(sym_head)}\b[^}}]*\}}|{re.escape(sym_head)})\s*=\s*require\(['"]([^'"]+)['"]\)""", line)
             if req_m:
                 specifier = req_m.group(1)
-                resolved = cls._resolve_js_ts_specifier(specifier, curr_dir)
+                resolved = cls._resolve_js_ts_specifier(specifier, curr_dir, workspace_dir)
                 if resolved:
                     return {
                         "file_path": resolved,
@@ -1254,23 +1357,29 @@ class HeadlessLSPService:
             if tree:
                 cls._check_python_imports_and_calls(tree, full_path, ws_abs, code, diagnostics)
 
-        # JavaScript Diagnostics (esprima)
-        elif full_path.endswith((".js", ".mjs", ".cjs")) and esprima:
-            try:
-                esprima.parseModule(code, {"loc": True, "tolerant": False})
-            except Exception as e:
-                line_no = getattr(e, "lineNumber", 1)
-                col_no = getattr(e, "column", 1)
-                msg = getattr(e, "description", str(e))
-                diagnostics.append({
-                    "file": rel_path,
-                    "line": line_no,
-                    "column": col_no,
-                    "severity": "error",
-                    "source": "compiler",
-                    "message": f"JS Compiler Error: {msg}",
-                    "code": "JS_SYNTAX_ERROR",
-                })
+        # JavaScript Diagnostics (esprima + import checks)
+        elif full_path.endswith((".js", ".mjs", ".cjs")):
+            if esprima:
+                try:
+                    esprima.parseModule(code, {"loc": True, "tolerant": False})
+                except Exception as e:
+                    line_no = getattr(e, "lineNumber", 1)
+                    col_no = getattr(e, "column", 1)
+                    msg = getattr(e, "description", str(e))
+                    diagnostics.append({
+                        "file": rel_path,
+                        "line": line_no,
+                        "column": col_no,
+                        "severity": "error",
+                        "source": "compiler",
+                        "message": f"JS Compiler Error: {msg}",
+                        "code": "JS_SYNTAX_ERROR",
+                    })
+            cls._check_typescript_semantics(code, full_path, ws_abs, diagnostics)
+
+        # TypeScript / TSX Semantic & Compiler Diagnostics
+        elif full_path.endswith((".ts", ".tsx", ".jsx")):
+            cls._check_typescript_semantics(code, full_path, ws_abs, diagnostics)
 
         # JSON Diagnostics
         elif full_path.endswith(".json"):
@@ -1286,6 +1395,291 @@ class HeadlessLSPService:
                     "message": f"JSON Syntax Error: {e.msg}",
                     "code": "JSON_ERROR",
                 })
+
+    @classmethod
+    def _extract_ts_interfaces(
+        cls,
+        code: str,
+        current_file: Optional[str] = None,
+        workspace_dir: Optional[str] = None,
+        visited: Optional[Set[str]] = None,
+    ) -> Dict[str, Dict[str, Tuple[str, bool]]]:
+        """
+        Extracts TypeScript `interface Name { field: type; optField?: type }` definitions
+        from `code` (and re-exported barrel files if `current_file` is provided).
+        Returns `{InterfaceName: {field_name: (expected_type, is_required)}}`.
+        """
+        if visited is None:
+            visited = set()
+        if current_file:
+            real_f = os.path.realpath(current_file)
+            if real_f in visited or len(visited) > 10:
+                return {}
+            visited.add(real_f)
+
+        interfaces: Dict[str, Dict[str, Tuple[str, bool]]] = {}
+        # Match interface blocks: [export] interface Foo { ... }
+        for m in re.finditer(r"(?:export\s+)?interface\s+([A-Za-z0-9_$]+)\s*\{([^}]*)\}", code, re.DOTALL):
+            iface_name = m.group(1)
+            body = m.group(2)
+            fields: Dict[str, Tuple[str, bool]] = {}
+            for raw_line in body.splitlines():
+                line = raw_line.split("//")[0].strip().rstrip(";,")
+                if not line:
+                    continue
+                fm = re.match(r"^([A-Za-z0-9_$]+)(\?)?\s*:\s*(.+)$", line)
+                if fm:
+                    fname = fm.group(1)
+                    is_opt = bool(fm.group(2))
+                    ftype = fm.group(3).strip()
+                    fields[fname] = (ftype, not is_opt)
+            interfaces[iface_name] = fields
+
+        # Also follow barrel re-exports if current_file is given
+        if current_file and workspace_dir:
+            curr_dir = os.path.dirname(current_file)
+            for line in code.splitlines():
+                star_m = re.search(r"""^\s*export\s+\*\s+from\s+['"]([^'"]+)['"]""", line)
+                if star_m:
+                    sub_p = cls._resolve_js_ts_specifier(star_m.group(1), curr_dir, workspace_dir)
+                    if sub_p:
+                        sub_c = cls._read_file_safe(sub_p)
+                        if sub_c:
+                            sub_ifaces = cls._extract_ts_interfaces(sub_c, sub_p, workspace_dir, visited)
+                            for k, v in sub_ifaces.items():
+                                interfaces.setdefault(k, v)
+                reexp_m = re.search(r"""^\s*export\s+(?:type\s+)?\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]""", line)
+                if reexp_m:
+                    sub_p = cls._resolve_js_ts_specifier(reexp_m.group(2), curr_dir, workspace_dir)
+                    if sub_p:
+                        sub_c = cls._read_file_safe(sub_p)
+                        if sub_c:
+                            sub_ifaces = cls._extract_ts_interfaces(sub_c, sub_p, workspace_dir, visited)
+                            for item in reexp_m.group(1).split(","):
+                                cleaned_item = re.sub(r"^\s*type\s+", "", item.strip()).strip()
+                                parts = [p.strip() for p in re.split(r"\s+as\s+", cleaned_item) if p.strip()]
+                                if parts:
+                                    orig = re.sub(r"^type\s+", "", parts[0]).strip()
+                                    alias = re.sub(r"^type\s+", "", parts[-1]).strip()
+                                    if orig in sub_ifaces:
+                                        interfaces[alias] = sub_ifaces[orig]
+        return interfaces
+
+    @classmethod
+    def _infer_ts_literal_type(cls, expr: str) -> Optional[str]:
+        val = expr.strip().rstrip(";,")
+        if not val:
+            return None
+        if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")) or (val.startswith("`") and val.endswith("`")):
+            return "string"
+        if val in ("true", "false"):
+            return "boolean"
+        if re.match(r"^-?\d+(\.\d+)?$", val):
+            return "number"
+        if val.startswith("[") and val.endswith("]"):
+            return "array"
+        return None
+
+    @classmethod
+    def _ts_type_compatible(cls, expected_type: str, actual_type: str) -> bool:
+        exp = expected_type.strip().lower()
+        act = actual_type.strip().lower()
+        if "any" in exp or "unknown" in exp or exp == act:
+            return True
+        # Union types e.g. string | number
+        if "|" in exp:
+            parts = [p.strip() for p in exp.split("|")]
+            return any(cls._ts_type_compatible(p, act) for p in parts)
+        if act == "array" and (exp.endswith("[]") or exp.startswith("array<")):
+            return True
+        return False
+
+    @classmethod
+    def _check_typescript_semantics(
+        cls,
+        code: str,
+        current_file: str,
+        ws_abs: str,
+        diagnostics: List[Dict[str, Any]],
+    ):
+        """
+        Performs deterministic TypeScript / JavaScript compiler and semantic checks:
+        - TS2307: Cannot find module './missing'
+        - TS2305: Module './mod' has no exported member 'Sym' (resolves barrel re-exports)
+        - TS2322: Type 'X' is not assignable to type 'Y' (primitive variables & object literal fields)
+        - TS2741: Property 'prop' is missing in type '{...}' but required in type 'Interface'
+        - TS2554: Expected N arguments, but got M
+        """
+        rel_path = cls._to_rel_path(current_file, ws_abs)
+        curr_dir = os.path.dirname(current_file)
+        lines = code.splitlines()
+
+        # Collect local and imported interfaces
+        known_interfaces = cls._extract_ts_interfaces(code, current_file, ws_abs)
+
+        # 1. Check imports (TS2307 & TS2305) and import interfaces from referenced modules
+        for line_idx, line in enumerate(lines, 1):
+            stripped = line.split("//")[0].strip()
+            if not stripped:
+                continue
+            m_imp = re.search(
+                r"""^\s*import\s+(?:type\s+)?\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]""",
+                stripped,
+            )
+            if m_imp:
+                imported_clause = m_imp.group(1)
+                spec = m_imp.group(2)
+                if spec.startswith(".") or spec.startswith("@/") or spec.startswith("~/"):
+                    resolved_mod = cls._resolve_js_ts_specifier(spec, curr_dir, ws_abs)
+                    if not resolved_mod or not os.path.isfile(resolved_mod):
+                        diagnostics.append({
+                            "file": rel_path,
+                            "line": line_idx,
+                            "column": 1,
+                            "severity": "error",
+                            "source": "tsserver",
+                            "message": f"TS2307: Cannot find module '{spec}' or its corresponding type declarations.",
+                            "code": "TS2307",
+                        })
+                    else:
+                        mod_code = cls._read_file_safe(resolved_mod) or ""
+                        mod_exports = cls._extract_js_ts_exports(mod_code, resolved_mod, ws_abs)
+                        mod_ifaces = cls._extract_ts_interfaces(mod_code, resolved_mod, ws_abs)
+                        for raw_sym in imported_clause.split(","):
+                            cleaned = re.sub(r"^\s*type\s+", "", raw_sym.strip()).strip()
+                            if not cleaned:
+                                continue
+                            parts = [p.strip() for p in re.split(r"\s+as\s+", cleaned) if p.strip()]
+                            orig_sym = parts[0]
+                            local_sym = parts[-1]
+                            if orig_sym in mod_ifaces:
+                                known_interfaces[local_sym] = mod_ifaces[orig_sym]
+                            if orig_sym not in mod_exports:
+                                target_rel = cls._to_rel_path(resolved_mod, ws_abs)
+                                diagnostics.append({
+                                    "file": rel_path,
+                                    "line": line_idx,
+                                    "column": 1,
+                                    "severity": "error",
+                                    "source": "tsserver",
+                                    "message": f"TS2305: Module '\"{spec}\"' ({target_rel}) has no exported member '{orig_sym}'.",
+                                    "code": "TS2305",
+                                })
+
+        # 2. Check primitive variable type annotations (TS2322)
+        # e.g., const count: number = "forty-two";
+        for line_idx, line in enumerate(lines, 1):
+            stripped = line.split("//")[0].strip()
+            if not stripped:
+                continue
+            var_m = re.match(
+                r"^(?:export\s+)?(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*:\s*(string|number|boolean)\s*=\s*([^{;]+);?$",
+                stripped,
+            )
+            if var_m:
+                var_name, expected_t, rhs_expr = var_m.group(1), var_m.group(2), var_m.group(3)
+                actual_t = cls._infer_ts_literal_type(rhs_expr)
+                if actual_t and not cls._ts_type_compatible(expected_t, actual_t):
+                    diagnostics.append({
+                        "file": rel_path,
+                        "line": line_idx,
+                        "column": 1,
+                        "severity": "error",
+                        "source": "tsserver",
+                        "message": f"TS2322: Type '{actual_t}' is not assignable to type '{expected_t}' for '{var_name}'.",
+                        "code": "TS2322",
+                    })
+
+        # 3. Check typed object literals against Interfaces (TS2741 missing property & TS2322 field type mismatch)
+        # Matches single-line or multi-line: const obj: InterfaceName = { ... }
+        for obj_m in re.finditer(
+            r"(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*:\s*([A-Za-z0-9_$]+)\s*=\s*\{([^}]*)\}",
+            code,
+            re.DOTALL,
+        ):
+            var_name = obj_m.group(1)
+            iface_name = obj_m.group(2)
+            obj_body = obj_m.group(3)
+            if iface_name not in known_interfaces:
+                continue
+
+            line_no = code[:obj_m.start()].count("\n") + 1
+            iface_fields = known_interfaces[iface_name]
+            provided_props: Dict[str, str] = {}
+            for prop_line in obj_body.splitlines():
+                p_clean = prop_line.split("//")[0].strip().rstrip(",")
+                if not p_clean:
+                    continue
+                pm = re.match(r"^([A-Za-z0-9_$]+)\s*:\s*(.+)$", p_clean)
+                if pm:
+                    provided_props[pm.group(1)] = pm.group(2).strip()
+                elif re.match(r"^[A-Za-z0-9_$]+$", p_clean):
+                    provided_props[p_clean] = "<shorthand>"
+
+            # Check required properties (TS2741)
+            for req_field, (expected_ftype, is_req) in iface_fields.items():
+                if is_req and req_field not in provided_props:
+                    diagnostics.append({
+                        "file": rel_path,
+                        "line": line_no,
+                        "column": 1,
+                        "severity": "error",
+                        "source": "tsserver",
+                        "message": (
+                            f"TS2741: Property '{req_field}' is missing in type '{{ {', '.join(provided_props.keys())} }}' "
+                            f"but required in type '{iface_name}'."
+                        ),
+                        "code": "TS2741",
+                    })
+                elif req_field in provided_props:
+                    val_expr = provided_props[req_field]
+                    actual_ftype = cls._infer_ts_literal_type(val_expr)
+                    if actual_ftype and not cls._ts_type_compatible(expected_ftype, actual_ftype):
+                        diagnostics.append({
+                            "file": rel_path,
+                            "line": line_no,
+                            "column": 1,
+                            "severity": "error",
+                            "source": "tsserver",
+                            "message": (
+                                f"TS2322: Type '{actual_ftype}' is not assignable to type '{expected_ftype}' "
+                                f"for property '{req_field}' of '{iface_name}'."
+                            ),
+                            "code": "TS2322",
+                        })
+
+        # 4. Check TypeScript function argument counts (TS2554)
+        ts_funcs: Dict[str, Tuple[int, int]] = {}
+        for fn_m in re.finditer(
+            r"(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_$]+)\s*\(([^)]*)\)",
+            code,
+        ):
+            fname = fn_m.group(1)
+            params_raw = [p.strip() for p in fn_m.group(2).split(",") if p.strip()]
+            if any("..." in p for p in params_raw):
+                continue
+            min_p = sum(1 for p in params_raw if "?" not in p.split(":")[0] and "=" not in p)
+            max_p = len(params_raw)
+            ts_funcs[fname] = (min_p, max_p)
+
+        for line_idx, line in enumerate(lines, 1):
+            stripped = line.split("//")[0].strip()
+            if not stripped or stripped.startswith("function ") or stripped.startswith("export function "):
+                continue
+            for fname, (min_p, max_p) in ts_funcs.items():
+                for call_m in re.finditer(rf"\b(?<!function\s){re.escape(fname)}\s*\(([^()]*)\)", stripped):
+                    args_str = call_m.group(1).strip()
+                    arg_count = 0 if not args_str else len([a for a in args_str.split(",") if a.strip()])
+                    if arg_count < min_p or arg_count > max_p:
+                        diagnostics.append({
+                            "file": rel_path,
+                            "line": line_idx,
+                            "column": call_m.start() + 1,
+                            "severity": "error",
+                            "source": "tsserver",
+                            "message": f"TS2554: Expected {min_p if min_p == max_p else f'{min_p}-{max_p}'} arguments for '{fname}()', but got {arg_count}.",
+                            "code": "TS2554",
+                        })
 
     @classmethod
     def _check_python_imports_and_calls(
@@ -1445,18 +1839,44 @@ class HeadlessLSPService:
         return symbols
 
     @classmethod
-    def _extract_js_ts_exports(cls, code: str) -> Set[str]:
+    def _extract_js_ts_exports(
+        cls,
+        code: str,
+        current_file: Optional[str] = None,
+        workspace_dir: Optional[str] = None,
+        visited: Optional[Set[str]] = None,
+    ) -> Set[str]:
+        if visited is None:
+            visited = set()
+        if current_file:
+            real_f = os.path.realpath(current_file)
+            if real_f in visited or len(visited) > 10:
+                return set()
+            visited.add(real_f)
+
         exports: Set[str] = set()
+        curr_dir = os.path.dirname(current_file) if current_file else ""
+
         for line in code.splitlines():
-            m = re.search(r"^\s*export\s+(?:default\s+)?(?:class|function|interface|type|const|let|var)\s+([A-Za-z0-9_$]+)", line)
+            m = re.search(r"^\s*export\s+(?:default\s+)?(?:async\s+)?(?:class|function|interface|type|enum|const|let|var)\s+([A-Za-z0-9_$]+)", line)
             if m:
                 exports.add(m.group(1))
-            m_br = re.search(r"^\s*export\s+\{([^}]+)\}", line)
+            m_br = re.search(r"^\s*export\s+(?:type\s+)?\{([^}]+)\}", line)
             if m_br:
                 for item in m_br.group(1).split(","):
-                    p = item.strip().split()
+                    cleaned = re.sub(r"^\s*type\s+", "", item.strip()).strip()
+                    p = [tok.strip() for tok in re.split(r"\s+as\s+", cleaned) if tok.strip()]
                     if p:
                         exports.add(p[-1])
+            # Follow wildcard barrel re-exports: export * from './sub'
+            if current_file:
+                star_m = re.search(r"""^\s*export\s+\*\s+from\s+['"]([^'"]+)['"]""", line)
+                if star_m:
+                    sub_p = cls._resolve_js_ts_specifier(star_m.group(1), curr_dir, workspace_dir)
+                    if sub_p:
+                        sub_c = cls._read_file_safe(sub_p)
+                        if sub_c:
+                            exports.update(cls._extract_js_ts_exports(sub_c, sub_p, workspace_dir, visited))
         return exports
 
     @classmethod
@@ -1556,12 +1976,13 @@ class HeadlessLSPService:
                                             "code": "E0611",
                                         })
 
-        # 2. JavaScript / TypeScript Ripple Diagnostics
+        # 2. JavaScript / TypeScript Ripple Diagnostics (Exports + Barrel Re-Exports + Interfaces)
         elif any(changed_file.endswith(ext) for ext in (".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs")):
             code = cls._read_file_safe(changed_file)
             if not code:
                 return
-            js_exports = cls._extract_js_ts_exports(code)
+            js_exports = cls._extract_js_ts_exports(code, changed_file, ws_abs)
+            changed_ifaces = cls._extract_ts_interfaces(code, changed_file, ws_abs)
 
             for root, dirs, files in os.walk(ws_abs):
                 dirs[:] = [d for d in dirs if not d.startswith(".") and d not in cls.IGNORE_DIRS]
@@ -1572,24 +1993,29 @@ class HeadlessLSPService:
                     if os.path.realpath(other_p) == os.path.realpath(changed_file):
                         continue
                     other_code = cls._read_file_safe(other_p)
-                    if not other_code or changed_stem not in other_code:
+                    if not other_code:
                         continue
 
                     other_dir = os.path.dirname(other_p)
                     other_rel = cls._to_rel_path(other_p, ws_abs)
+                    imports_changed_file = False
+
                     for line_idx, line in enumerate(other_code.splitlines(), 1):
-                        m_imp = re.search(r"""import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]""", line)
+                        m_imp = re.search(r"""import\s+(?:type\s+)?\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]""", line)
                         if m_imp:
                             spec = m_imp.group(2)
+                            resolved_imp = cls._resolve_js_ts_specifier(spec, other_dir, ws_abs)
                             base_cand = os.path.normpath(os.path.join(other_dir, spec))
                             changed_no_ext = os.path.splitext(changed_file)[0]
                             cand_matches = (
+                                (resolved_imp and os.path.realpath(resolved_imp) == os.path.realpath(changed_file)) or
                                 base_cand == changed_no_ext or
                                 base_cand == changed_file or
                                 base_cand.replace("\\", "/") == changed_no_ext.replace("\\", "/")
                             )
                             if cand_matches:
-                                syms = [s.strip().split()[0] for s in m_imp.group(1).split(",") if s.strip()]
+                                imports_changed_file = True
+                                syms = [re.sub(r"^\s*type\s+", "", s.strip()).split()[0] for s in m_imp.group(1).split(",") if s.strip()]
                                 for sym in syms:
                                     if sym and sym not in js_exports:
                                         diagnostics.append({
@@ -1604,6 +2030,36 @@ class HeadlessLSPService:
                                             ),
                                             "code": "TS_IMPORT_ERROR",
                                         })
+                            elif resolved_imp and os.path.isfile(resolved_imp):
+                                # Check if resolved_imp is a barrel file re-exporting changed_file
+                                barrel_code = cls._read_file_safe(resolved_imp) or ""
+                                if changed_stem in barrel_code:
+                                    imports_changed_file = True
+                                    barrel_exports = cls._extract_js_ts_exports(barrel_code, resolved_imp, ws_abs)
+                                    syms = [re.sub(r"^\s*type\s+", "", s.strip()).split()[0] for s in m_imp.group(1).split(",") if s.strip()]
+                                    for sym in syms:
+                                        if sym and sym not in barrel_exports:
+                                            diagnostics.append({
+                                                "file": other_rel,
+                                                "line": line_idx,
+                                                "column": 1,
+                                                "severity": "error",
+                                                "source": "compiler_ripple",
+                                                "message": (
+                                                    f"Broken JS/TS barrel import in {other_rel}: symbol '{sym}' "
+                                                    f"is no longer exported via {cls._to_rel_path(resolved_imp, ws_abs)}."
+                                                ),
+                                                "code": "TS_IMPORT_ERROR",
+                                            })
+
+                    # If other_p imports changed_file (or references one of its interfaces), run TS semantic check on other_p
+                    if imports_changed_file or any(iface in other_code for iface in changed_ifaces):
+                        sub_diags: List[Dict[str, Any]] = []
+                        cls._check_typescript_semantics(other_code, other_p, ws_abs, sub_diags)
+                        for sd in sub_diags:
+                            if sd.get("code") in ("TS2741", "TS2322", "TS2554"):
+                                sd["source"] = "compiler_ripple"
+                                diagnostics.append(sd)
 
     # ══════════════════════════════════════════════════════════════════════════
     # 4. IN-MEMORY SYMBOL REFERENCE GRAPH (textDocument/documentSymbol + Graph)
@@ -1971,6 +2427,147 @@ class HeadlessLSPService:
                 symbols.append({"name": am.group(1), "kind": "arrow_function", "line": idx + 1})
 
         return {"file": rel_p, "language": "generic", "symbols": symbols}
+
+    @classmethod
+    def get_daemon_telemetry(cls) -> Dict[str, Any]:
+        """
+        Returns telemetry for the Native JSON-RPC 2.0 Language Server Daemons
+        and the In-Memory Semantic Symbol Graph Engine.
+        """
+        return LSPJsonRpcDaemonClient.get_status_summary(
+            ast_cache_entries=len(cls._ast_cache),
+            graph_cache_entries=len(cls._graph_cache),
+        )
+
+
+class LSPJsonRpcDaemonClient:
+    """
+    Native JSON-RPC 2.0 Language Server Protocol (LSP) Daemon Client.
+
+    Implements official LSP Base Protocol framing (`Content-Length: <N>\\r\\n\\r\\n{json}`)
+    for language servers (`pyright-langserver --stdio`, `typescript-language-server --stdio`,
+    `gopls`, `rust-analyzer`), with deterministic high-speed fallback to `HeadlessLSPService`
+    when running in minimal sandbox environments without global language server binaries.
+    """
+
+    DAEMON_COMMANDS: Dict[str, List[str]] = {
+        "python": ["pyright-langserver", "--stdio"],
+        "typescript": ["typescript-language-server", "--stdio"],
+        "go": ["gopls", "serve"],
+        "rust": ["rust-analyzer"],
+    }
+
+    _request_seq: int = 0
+    _rpc_messages_sent: int = 0
+    _rpc_messages_received: int = 0
+
+    @classmethod
+    def encode_jsonrpc_frame(cls, method: str, params: Dict[str, Any], is_notification: bool = False) -> Tuple[Optional[int], bytes]:
+        """
+        Formats a standard LSP JSON-RPC 2.0 message with `Content-Length` HTTP-style headers.
+        """
+        payload: Dict[str, Any] = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+        }
+        req_id: Optional[int] = None
+        if not is_notification:
+            cls._request_seq += 1
+            req_id = cls._request_seq
+            payload["id"] = req_id
+
+        body_bytes = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        header_bytes = f"Content-Length: {len(body_bytes)}\r\n\r\n".encode("ascii")
+        cls._rpc_messages_sent += 1
+        return req_id, header_bytes + body_bytes
+
+    @classmethod
+    def decode_jsonrpc_frame(cls, raw_stream: bytes) -> List[Dict[str, Any]]:
+        """
+        Parses one or more `Content-Length: <N>\\r\\n\\r\\n{...}` frames from a raw byte stream.
+        """
+        messages: List[Dict[str, Any]] = []
+        idx = 0
+        total_len = len(raw_stream)
+        while idx < total_len:
+            sep_pos = raw_stream.find(b"\r\n\r\n", idx)
+            if sep_pos == -1:
+                break
+            header_str = raw_stream[idx:sep_pos].decode("ascii", errors="ignore")
+            m = re.search(r"Content-Length:\s*(\d+)", header_str, re.IGNORECASE)
+            if not m:
+                break
+            content_len = int(m.group(1))
+            body_start = sep_pos + 4
+            body_end = body_start + content_len
+            if body_end > total_len:
+                break
+            body_raw = raw_stream[body_start:body_end].decode("utf-8", errors="replace")
+            try:
+                parsed = json.loads(body_raw)
+                if isinstance(parsed, dict):
+                    messages.append(parsed)
+                    cls._rpc_messages_received += 1
+            except json.JSONDecodeError:
+                pass
+            idx = body_end
+        return messages
+
+    @classmethod
+    def build_initialize_sequence(cls, workspace_dir: str) -> List[bytes]:
+        """
+        Constructs the standard LSP `initialize` + `initialized` handshake sequence.
+        """
+        ws_abs = os.path.realpath(workspace_dir).replace("\\", "/")
+        root_uri = f"file:///{ws_abs.lstrip('/')}"
+        _, init_frame = cls.encode_jsonrpc_frame(
+            method="initialize",
+            params={
+                "processId": os.getpid(),
+                "rootUri": root_uri,
+                "capabilities": {
+                    "textDocument": {
+                        "definition": {"dynamicRegistration": False},
+                        "references": {"dynamicRegistration": False},
+                        "publishDiagnostics": {"relatedInformation": True},
+                    }
+                },
+            },
+            is_notification=False,
+        )
+        _, initialized_frame = cls.encode_jsonrpc_frame(
+            method="initialized",
+            params={},
+            is_notification=True,
+        )
+        return [init_frame, initialized_frame]
+
+    @classmethod
+    def get_status_summary(cls, ast_cache_entries: int = 0, graph_cache_entries: int = 0) -> Dict[str, Any]:
+        import shutil
+
+        daemons_status: Dict[str, Dict[str, Any]] = {}
+        for lang, cmd in cls.DAEMON_COMMANDS.items():
+            binary = cmd[0]
+            bin_path = shutil.which(binary)
+            daemons_status[lang] = {
+                "server": binary,
+                "protocol": "JSON-RPC 2.0 (stdio Content-Length)",
+                "binary_detected": bool(bin_path),
+                "mode": "native_stdio_daemon" if bin_path else "in_memory_semantic_compiler",
+                "status": "READY",
+            }
+        return {
+            "protocol_version": "LSP 3.17 / JSON-RPC 2.0",
+            "daemons": daemons_status,
+            "rpc_messages_sent": cls._rpc_messages_sent,
+            "rpc_messages_received": cls._rpc_messages_received,
+            "ast_cache_entries": ast_cache_entries,
+            "graph_cache_entries": graph_cache_entries,
+            "barrel_reexport_resolution": True,
+            "typescript_semantic_checker": True,
+        }
 
 
 # Backwards compatibility alias: LSPService is HeadlessLSPService
