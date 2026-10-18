@@ -155,6 +155,69 @@ def test_marketing_satellite_pages_navigation_and_footer_parity():
         assert "KOBITS AUTONOMOUS SE" in content, f"{page} is missing KOBITS AUTONOMOUS SE branding"
 
 
+def test_all_marketing_pages_navbar_structure_and_exact_spec():
+    pages = [
+        "index.html",
+        "landing.html",
+        "comparison.html",
+        "engineering.html",
+        "how-it-works.html",
+        "pricing.html",
+        "product.html",
+        "security.html",
+    ]
+    for page in pages:
+        path = Path(page)
+        assert path.exists(), f"{page} missing"
+        content = path.read_text(encoding="utf-8")
+
+        # 1. Nav tag must exist
+        nav_match = re.search(r"<nav\b[^>]*>(.*?)</nav>", content, re.DOTALL)
+        assert nav_match is not None, f"<nav> element missing in {page}"
+        nav_html = nav_match.group(1)
+
+        # 2. Clean logo: Must contain KOBITS, must NOT contain the green pill badge
+        assert "KOBITS" in nav_html, f"Missing KOBITS logo in {page} navbar"
+        assert "AUTONOMOUS SOFTWARE ENGINEER" not in nav_html, f"Navbar in {page} still has green badge text"
+        assert "border-emerald" not in nav_html, f"Navbar in {page} still has green pill badge border"
+        assert "bg-emerald" not in nav_html, f"Navbar in {page} still has green pill badge background"
+
+        # 3. Center links: Exact targets, exact labels, exact order
+        expected_routes = [
+            "/product.html",
+            "/engineering.html",
+            "/how-it-works.html",
+            "/comparison.html",
+            "/security.html",
+            "/pricing.html",
+        ]
+        positions = []
+        for route in expected_routes:
+            assert route in nav_html, f"{page} navbar missing route {route}"
+            positions.append(nav_html.find(route))
+
+        # Assert exact left-to-right order
+        assert positions == sorted(positions), f"{page} navbar links are not in expected order: {positions}"
+
+        # Disallowed legacy labels in navbar
+        assert "Architecture" not in nav_html, f"{page} navbar still has legacy 'Architecture' instead of 'Engineering'"
+        assert "Security & SOC2" not in nav_html, f"{page} navbar still has legacy 'Security & SOC2' instead of 'Security'"
+
+        # 4. Right action button: Must be single clean 'Apply for Early Access', no Connect GitHub or Launch Mission
+        assert "Apply for Early Access" in nav_html, f"{page} navbar missing 'Apply for Early Access' button"
+        assert "Connect GitHub" not in nav_html, f"{page} navbar still contains 'Connect GitHub'"
+        assert "Launch Mission" not in nav_html, f"{page} navbar still contains 'Launch Mission'"
+
+        # 5. Mobile drawer parity
+        mobile_match = re.search(r'id="kb-[a-z-]+menu"[^>]*>(.*?)</div>', content, re.DOTALL)
+        if mobile_match:
+            mobile_html = mobile_match.group(1)
+            assert "Architecture" not in mobile_html, f"{page} mobile menu has legacy 'Architecture'"
+            assert "Security & SOC2" not in mobile_html, f"{page} mobile menu has legacy 'Security & SOC2'"
+            assert "/engineering.html" in mobile_html, f"{page} mobile menu missing /engineering.html"
+            assert "/security.html" in mobile_html, f"{page} mobile menu missing /security.html"
+
+
 def test_no_kyros_or_devin_or_cloud_headlines_in_marketing_pages():
     pages = [
         "index.html",
