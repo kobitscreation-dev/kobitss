@@ -63,11 +63,16 @@
             <span class="ky-brand-word">KOBITS</span>
           </a>
           <span style="color:var(--border-strong);font-size:16px;user-select:none;font-weight:300">/</span>
-          <div class="ky-project-pill" title="Active Workspace Project">
+          <div class="ky-project-pill" id="ky-project-pill" title="Active Workspace Project">
             <span class="ky-dot-live"></span>
             <select id="ky-project-select" aria-label="Select Project">
               <option value="default">Kobits Core Workspace</option>
             </select>
+          </div>
+          <!-- Dedicated Clean Project / Organization Name for Clients -->
+          <div id="ky-client-brand-label" style="display:none;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text-1);padding:3px 8px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px">
+            <span style="width:6px;height:6px;border-radius:50%;background:#10b981"></span>
+            <span id="ky-client-brand-name">Enterprise Delivery Portal</span>
           </div>
           <!-- Dedicated Executive Delivery Portal Badge for Clients/Visitors -->
           <div id="ky-client-exec-pill" style="display:none;align-items:center;gap:6px">

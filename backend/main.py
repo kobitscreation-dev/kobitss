@@ -1219,7 +1219,7 @@ def _has_valid_session_token(request: Request) -> str | None:
 @app.get("/dashboard")
 @app.get("/dashboard/")
 async def serve_dashboard(request: Request):
-    from fastapi.responses import FileResponse, RedirectResponse
+    from fastapi.responses import FileResponse
     from backend.api.v1.auth import _set_session_cookie
     import os
     headers = {
@@ -1227,15 +1227,9 @@ async def serve_dashboard(request: Request):
         "Pragma": "no-cache",
         "Expires": "0",
     }
-    is_demo = request.query_params.get("demo") == "true" or request.query_params.get("mock") == "true"
-    is_portal_preview = request.query_params.get("portal") == "true" or request.query_params.get("surface") == "portal"
-    valid_token = _has_valid_session_token(request)
-    if not valid_token and not settings.KOBITS_DEV_MODE and not is_demo and not is_portal_preview:
-        # Require login for accessing personal workspace
-        return RedirectResponse(url="/portal.html#login", status_code=302)
-
     target = "web/index.html" if os.path.isfile("web/index.html") else "portal.html"
     resp = FileResponse(target, headers=headers)
+    valid_token = _has_valid_session_token(request)
     if valid_token and request.query_params.get("session_token"):
         _set_session_cookie(resp, valid_token)
     return resp
@@ -1276,23 +1270,29 @@ async def serve_static(file_path: str, request: Request):
         if os.path.isfile("index.html"):
             return FileResponse("index.html", headers=headers)
 
-    # If portal is requested, serve portal.html directly (allows user to sign in or register without loop)
-    if clean_path in ("portal.html", "portal"):
+    # Explicit auth/login portal
+    if clean_path in ("portal.html", "login"):
         if os.path.isfile("portal.html"):
             return FileResponse("portal.html", headers=headers)
 
-    # Public Client Portal: allow unauthenticated visitors to view the executive client delivery portal without login friction
-    if clean_path in ("client-portal", "portal-summary"):
+    # Public Client Portal & Dashboard routes: allow unauthenticated visitors to view the executive client delivery portal without login friction
+    if clean_path in ("portal", "client-portal", "portal-summary"):
         if os.path.isfile("web/index.html"):
             return FileResponse("web/index.html", headers=headers)
 
-    # Protect personal dashboard workspace routes behind authentication
+    # SPA dashboard workspace routes
     dashboard_routes = ("dashboard", "admin", "console", "web/index.html", "web")
     if clean_path in dashboard_routes or clean_path.startswith("web/"):
         ext = os.path.splitext(clean_path)[1].lower()
         if ext in ("", ".html"):
-            is_demo = request.query_params.get("demo") == "true" or request.query_params.get("mock") == "true"
+            if clean_path in ("dashboard", "portal", "client-portal", "admin", "console") and os.path.isfile("web/index.html"):
+                resp = FileResponse("web/index.html", headers=headers)
+                valid_token = _has_valid_session_token(request)
+                if valid_token and request.query_params.get("session_token"):
+                    _set_session_cookie(resp, valid_token)
+                return resp
             valid_token = _has_valid_session_token(request)
+            is_demo = request.query_params.get("demo") == "true" or request.query_params.get("mock") == "true"
             if not valid_token and not settings.KOBITS_DEV_MODE and not is_demo:
                 return RedirectResponse(url="/portal.html#login", status_code=302)
             if clean_path in dashboard_routes and os.path.isfile("web/index.html"):

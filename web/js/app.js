@@ -153,9 +153,9 @@ function getEffectiveTriadRoute() {
   const rawHash = (location.hash || '').replace(/^#\/?/, '').split('?')[0];
   if (rawHash) return rawHash;
   const path = (location.pathname || '').replace(/^\/+|\/+$/g, '');
-  if (path === 'client-portal') return 'portal';
-  if (path === 'admin') return 'admin';
-  if (path === 'console') return 'console';
+  if (path === 'portal' || path === 'client-portal' || path === 'portal-summary') return 'portal';
+  if (path === 'admin' || path === 'agency-admin') return 'admin';
+  if (path === 'console' || path.startsWith('console/')) return 'console';
   return '';
 }
 
@@ -164,6 +164,7 @@ function isTriadSurfaceRoute(routeStr) {
   return (
     h === 'portal' ||
     h === 'client-portal' ||
+    h === 'portal-summary' ||
     h === 'admin' ||
     h === 'agency-admin' ||
     h === 'console' ||
@@ -171,21 +172,23 @@ function isTriadSurfaceRoute(routeStr) {
   );
 }
 
-function syncTriadNavBar(activeSurface, explicitRole) {
+function syncTriadNavBar(activeSurface, explicitRole, orgData) {
   let role = explicitRole || window.__kobitsActiveOrgRole || '';
   if (!role) {
     try {
       const savedUser = JSON.parse(localStorage.getItem('kobits_user') || '{}');
-      role = savedUser.role || savedUser.user?.role || '';
+      role = savedUser.role || (savedUser.user && savedUser.user.role) || '';
     } catch (_) {}
   }
   const normRole = String(role || '').toUpperCase();
   const token = localStorage.getItem('kobits_token');
-  const hasAuth = !!token;
+  const isGuestPreview = Boolean(window.__kobitsIsGuestPreview);
+  const hasAuth = Boolean(token) && !isGuestPreview;
   const isOperator = hasAuth && (normRole === 'OWNER' || normRole === 'ADMIN' || normRole === 'LEAD_ENGINEER' || normRole === 'AGENCY_ADMIN');
   const isClientPortal = activeSurface === 'portal';
 
   // Surface switcher & developer control buttons
+  const operatorControls = document.getElementById('ky-operator-controls');
   const surfaceSwitcher = document.getElementById('ky-surface-switcher');
   const navPortal = document.getElementById('ky-nav-portal');
   const navAdmin = document.getElementById('ky-nav-admin');
@@ -197,20 +200,36 @@ function syncTriadNavBar(activeSurface, explicitRole) {
   const btnSettings = document.getElementById('ky-topbar-settings');
 
   // Dedicated Client Topbar elements
+  const projectPill = document.getElementById('ky-project-pill');
+  const clientBrandLabel = document.getElementById('ky-client-brand-label');
+  const clientBrandName = document.getElementById('ky-client-brand-name');
   const clientExecPill = document.getElementById('ky-client-exec-pill');
   const clientTopbarActions = document.getElementById('ky-client-topbar-actions');
   const clientLoginBtn = document.getElementById('ky-client-operator-login');
   const brandLink = document.querySelector('.ky-brand');
 
+  const clientDisplayName = (orgData && orgData.project && orgData.project.name)
+    || (orgData && orgData.organization && orgData.organization.name)
+    || window.__kobitsActiveClientBrand
+    || 'Enterprise Core Platform';
+
   if (isClientPortal && !isOperator) {
     // ── DEDICATED EXECUTIVE CLIENT TOPBAR ──
     // Decoupled from internal developer tools: hide switcher tabs and dev buttons completely!
+    if (operatorControls) operatorControls.style.display = 'none';
     if (surfaceSwitcher) surfaceSwitcher.style.display = 'none';
     if (btnNewProject) btnNewProject.style.display = 'none';
     if (btnTour) btnTour.style.display = 'none';
     if (btnNewMission) btnNewMission.style.display = 'none';
     if (btnGitHub) btnGitHub.style.display = 'none';
     if (btnSettings) btnSettings.style.display = 'none';
+
+    // Replace project selector dropdown with clean read-only client branding
+    if (projectPill) projectPill.style.display = 'none';
+    if (clientBrandLabel) {
+      clientBrandLabel.style.display = 'inline-flex';
+      if (clientBrandName) clientBrandName.textContent = clientDisplayName;
+    }
 
     // Surface clean executive branding and login/sign-out action
     if (clientExecPill) clientExecPill.style.display = 'inline-flex';
@@ -231,6 +250,9 @@ function syncTriadNavBar(activeSurface, explicitRole) {
     // ── OPERATOR / INTERNAL DEVELOPER CONTROL PLANE ──
     if (clientExecPill) clientExecPill.style.display = 'none';
     if (clientTopbarActions) clientTopbarActions.style.display = 'none';
+    if (clientBrandLabel) clientBrandLabel.style.display = 'none';
+    if (projectPill) projectPill.style.display = 'inline-flex';
+    if (operatorControls) operatorControls.style.display = 'inline-flex';
     if (btnNewProject) btnNewProject.style.display = '';
     if (btnTour) btnTour.style.display = '';
     if (btnNewMission) btnNewMission.style.display = '';
@@ -272,7 +294,7 @@ async function dispatchTriadSurfaceRoute(routeStr) {
     const sp = new URLSearchParams(queryPart);
     if (sp.get('org')) params.org = sp.get('org');
   }
-  if (baseRoute === 'portal' || baseRoute === 'client-portal') {
+  if (baseRoute === 'portal' || baseRoute === 'client-portal' || baseRoute === 'portal-summary') {
     syncTriadNavBar('portal');
     const mod = await import('./views/client_portal.js');
     await mod.renderClientPortalView(view, params);
@@ -280,7 +302,13 @@ async function dispatchTriadSurfaceRoute(routeStr) {
   }
   if (baseRoute === 'admin' || baseRoute === 'agency-admin') {
     const tok = localStorage.getItem('kobits_token');
-    if (!tok) {
+    let role = '';
+    try {
+      const u = JSON.parse(localStorage.getItem('kobits_user') || '{}');
+      role = String(u.role || (u.user && u.user.role) || window.__kobitsActiveOrgRole || '').toUpperCase();
+    } catch (_) {}
+    const isOp = tok && (role === 'OWNER' || role === 'ADMIN' || role === 'LEAD_ENGINEER' || role === 'AGENCY_ADMIN');
+    if (!tok || (role && !isOp)) {
       window.location.href = '/portal.html?auth_notice=admin_required#login';
       return true;
     }
@@ -291,7 +319,13 @@ async function dispatchTriadSurfaceRoute(routeStr) {
   }
   if (baseRoute === 'console' || baseRoute.startsWith('console/')) {
     const tok = localStorage.getItem('kobits_token');
-    if (!tok) {
+    let role = '';
+    try {
+      const u = JSON.parse(localStorage.getItem('kobits_user') || '{}');
+      role = String(u.role || (u.user && u.user.role) || window.__kobitsActiveOrgRole || '').toUpperCase();
+    } catch (_) {}
+    const isOp = tok && (role === 'OWNER' || role === 'ADMIN' || role === 'LEAD_ENGINEER' || role === 'AGENCY_ADMIN');
+    if (!tok || (role && !isOp)) {
       window.location.href = '/portal.html?auth_notice=console_required#login';
       return true;
     }
@@ -3175,7 +3209,7 @@ fetchDashboard();
 initLiveWebSocket();
 
 if (isTriadSurfaceRoute(initialHash)) {
-  dispatchTriadSurfaceRoute(initialHash);
+  // Dispatched cleanly via fetchDashboard()
 } else if (initialHash === 'settings') {
   renderSettingsPage();
 } else if (initialHash === 'new-project') {

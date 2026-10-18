@@ -109,13 +109,23 @@ export async function renderClientPortalView(container, params = {}) {
         const query = requestedOrgId ? `?organization_id=${encodeURIComponent(requestedOrgId)}` : '';
         data = await apiFetch(`/client-portal/portal-summary${query}`);
     } catch (err) {
-        // If unauthenticated or credentials error, gracefully fall back to showcase delivery summary
+        // If unauthenticated, stale org id, or credentials error, gracefully fall back to showcase delivery summary
         const errMsg = String((err && err.message) || '').toLowerCase();
-        const isAuthError = errMsg.includes('credential') || errMsg.includes('not authenticated') || errMsg.includes('unauthorized') || Boolean(err && err.status === 401);
-        if (isAuthError) {
+        const isAuthOrOrgErr = errMsg.includes('credential') || errMsg.includes('not authenticated') || errMsg.includes('unauthorized') || errMsg.includes('not found') || Boolean(err && (err.status === 401 || err.status === 404));
+        if (isAuthOrOrgErr) {
+            localStorage.removeItem('kobits_active_org_id');
             try {
                 data = await apiFetch('/client-portal/portal-summary');
             } catch (_) {}
+        }
+        if (!data) {
+            const hasAuthToken = Boolean(localStorage.getItem('kobits_token'));
+            if (!hasAuthToken) {
+                // Guaranteed fallback for unauthenticated guest visitors
+                try {
+                    data = await apiFetch('/client-portal/portal-summary');
+                } catch (_) {}
+            }
         }
         if (!data) {
             container.innerHTML = `
@@ -124,7 +134,7 @@ export async function renderClientPortalView(container, params = {}) {
                         <h2 class="text-lg font-semibold mb-2">Tenant Access Restricted</h2>
                         <p class="text-sm text-red-300/90 mb-4">${escapeHtml(err.message || 'Unable to load Executive Client Portal for this organization.')}</p>
                         <button id="portal-retry-btn" class="px-4 py-2 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg border border-zinc-700">
-                            Return to Default Organization
+                            Return to Default Showcase Portal
                         </button>
                     </div>
                 </div>
@@ -141,13 +151,15 @@ export async function renderClientPortalView(container, params = {}) {
     }
 
     const org = data.organization || {};
+    const project = data.project || {};
     if (org.role) {
         window.__kobitsActiveOrgRole = org.role;
     }
+    window.__kobitsIsGuestPreview = Boolean(data.is_public_preview);
+    window.__kobitsActiveClientBrand = (project && project.name) || (org && org.name) || 'Executive Delivery Portal';
     if (typeof window.syncTriadNavBar === 'function') {
-        window.syncTriadNavBar('portal', org.role || '');
+        window.syncTriadNavBar('portal', org.role || '', data);
     }
-    const project = data.project || {};
     const hero = data.sprint_hero || {};
     const compute = hero.compute_transparency || {};
     const milestones = data.milestone_roadmap || [];

@@ -178,6 +178,11 @@ async def get_current_active_user(request: Request, db: AsyncSession = Depends(g
 
 async def get_optional_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User | None:
     """Resolves the current active user if valid session or token is present; returns None otherwise without raising 401."""
+    auth_header = request.headers.get("Authorization", "").strip()
+    api_key_header = request.headers.get("X-API-Key") or request.headers.get("x-api-key")
+    cookie_token = request.cookies.get(settings.SESSION_COOKIE_NAME)
+    if not auth_header and not api_key_header and not cookie_token:
+        return None
     try:
         user = await get_current_user_from_request(request=request, db=db)
         if user and getattr(user, "is_active", True):

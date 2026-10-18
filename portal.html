@@ -1072,7 +1072,13 @@
           const sessionParam = data?.access_token ? `session_token=${encodeURIComponent(data.access_token)}` : '';
           const userRole = String(data?.role || data?.user?.role || '').toUpperCase();
           const isClientRole = userRole === 'READ_ONLY_REVIEWER' || userRole === 'VIEWER' || userRole === 'CLIENT';
-          const defaultDestHash = isClientRole ? '#portal' : '#overview';
+          let defaultDestHash = isClientRole ? '#portal' : '#overview';
+          const curNotice = new URLSearchParams(window.location.search).get('auth_notice');
+          if (curNotice === 'console_required' && !isClientRole) {
+            defaultDestHash = '#console';
+          } else if (curNotice === 'admin_required' && !isClientRole) {
+            defaultDestHash = '#admin';
+          }
           if (isSignUp) {
             // Trigger first-time onboarding walkthrough for real newly registered users
             localStorage.removeItem('kobits.onboarded');

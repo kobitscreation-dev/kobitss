@@ -160,17 +160,28 @@ export async function renderSystemsConsoleView(container, params = {}) {
     } catch (err) {
         const tok = localStorage.getItem('kobits_token');
         const errMsg = String((err && err.message) || '').toLowerCase();
-        const isUnauth = !tok || errMsg.includes('credential') || errMsg.includes('not authenticated') || errMsg.includes('unauthorized') || Boolean(err && err.status === 401);
-        if (isUnauth) {
+        const isAuthOrRoleError = !tok ||
+            Boolean(err && (err.status === 401 || err.status === 403)) ||
+            errMsg.includes('credential') ||
+            errMsg.includes('not authenticated') ||
+            errMsg.includes('unauthorized') ||
+            errMsg.includes('forbidden') ||
+            errMsg.includes('operator') ||
+            errMsg.includes('lead_engineer');
+        if (isAuthOrRoleError) {
+            if (!tok || errMsg.includes('credential') || errMsg.includes('not authenticated')) {
+                localStorage.removeItem('kobits_token');
+                localStorage.removeItem('kobits_user');
+            }
             window.location.href = '/portal.html?auth_notice=console_required#login';
             return;
         }
         container.innerHTML = `
             <div class="p-8 max-w-3xl mx-auto">
                 <div class="bg-red-950/30 border border-red-500/40 rounded-2xl p-6 text-red-200 space-y-3">
-                    <div class="text-xs font-mono uppercase text-red-400">RBAC Security Boundary (403 Forbidden)</div>
-                    <h2 class="text-lg font-semibold text-white">Systems Operator Role Required</h2>
-                    <p class="text-sm text-red-300/90">${escapeHtml(err.message || 'Only Lead Engineers and Agency Admins can access Deep Systems & MicroVM Mission Control.')}</p>
+                    <div class="text-xs font-mono uppercase text-red-400">Systems Console Error</div>
+                    <h2 class="text-lg font-semibold text-white">Telemetry Unavailable</h2>
+                    <p class="text-sm text-red-300/90">${escapeHtml(err.message || 'Unable to connect to deep systems telemetry.')}</p>
                     <a href="#portal" class="inline-block px-4 py-2 text-xs font-semibold rounded-xl bg-white text-zinc-950 hover:bg-zinc-200 transition">
                         Return to Executive Client Portal (#portal)
                     </a>

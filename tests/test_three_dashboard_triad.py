@@ -699,3 +699,36 @@ async def test_three_dashboard_security_audit_and_state_transitions():
         assert chain_result["valid"] is True
         assert chain_result["verified_entries"] >= 2
 
+
+@pytest.mark.asyncio
+async def test_public_client_portal_decoupling_and_static_routes():
+    """
+    Verifies that:
+    1. Unauthenticated visitors to GET `/api/v1/client-portal/portal-summary` receive 200 OK
+       with showcase preview payload (is_public_preview == True) without 401/403 errors.
+    2. Static SPA routes `/portal`, `/client-portal`, `/portal-summary`, and `/dashboard`
+       serve `web/index.html` without premature server-side 302 redirects, allowing client-side
+       routing to render the showcase or display operator auth notice.
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # 1. Unauthenticated portal summary returns showcase
+        res_summary = await ac.get("/api/v1/client-portal/portal-summary")
+        assert res_summary.status_code == 200, res_summary.text
+        data = res_summary.json()
+        assert data.get("is_public_preview") is True
+        assert "organization" in data
+        assert "project" in data
+        assert "sprint_hero" in data
+        assert "milestone_roadmap" in data
+        assert "architecture_map" in data
+
+        # 2. Static routes serve web/index.html directly
+        for path in ("/portal", "/client-portal", "/portal-summary", "/dashboard"):
+            res_page = await ac.get(path)
+            assert res_page.status_code == 200, f"Route {path} returned {res_page.status_code}"
+            assert "text/html" in res_page.headers.get("content-type", "")
+            # Ensure index.html includes the client brand label element
+            assert "ky-client-brand-label" in res_page.text or "Kobits" in res_page.text
+
+
