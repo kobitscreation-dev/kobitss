@@ -45,14 +45,14 @@ async def test_three_dashboard_triad_full_lifecycle():
             id=f"org-alpha-{suffix}",
             name=f"Alpha FinTech {suffix}",
             slug=f"alpha-fintech-{suffix}",
-            description='{"monthly_retainer_usd": 6500.0, "billing_tier": "Autonomous Pod Retainer", "sla_status": "99.9% On-Time SLA"}',
+            description='{"monthly_retainer_usd": 6500.0, "billing_tier": "Executive Retainer", "sla_status": "99.9% On-Time SLA"}',
             is_active=True,
         )
         org_b = Organization(
             id=f"org-beta-{suffix}",
             name=f"Beta BioLabs {suffix}",
             slug=f"beta-biolabs-{suffix}",
-            description='{"monthly_retainer_usd": 8000.0, "billing_tier": "Autonomous Pod Retainer", "sla_status": "99.9% On-Time SLA"}',
+            description='{"monthly_retainer_usd": 8000.0, "billing_tier": "Executive Retainer", "sla_status": "99.9% On-Time SLA"}',
             is_active=True,
         )
         db.add_all([org_a, org_b])

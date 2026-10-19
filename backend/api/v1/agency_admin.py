@@ -1167,7 +1167,7 @@ async def onboard_new_agency_client(
         "monthly_retainer_usd": round(float(payload.monthly_retainer_usd), 2),
         "github_repo_url": payload.github_repo_url.strip(),
         "client_admin_email": payload.client_admin_email.strip().lower(),
-        "billing_tier": "Autonomous Pod Retainer",
+        "billing_tier": "Executive Retainer",
         "sla_status": "99.9% On-Time SLA",
         "onboarded_by": current_user.email,
         "onboarded_at": datetime.now(timezone.utc).isoformat(),

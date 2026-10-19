@@ -607,6 +607,20 @@ function renderGeometryScene(ctx, model, geomType, config, elapsed, rotX, rotY, 
     // Sort projected particles back to front (painter's algorithm)
     projected.sort((a, b) => a.pz - b.pz);
 
+    // Ambient luminous aura in signature agent neon color so it never looks black or empty
+    const coreRadius = Math.min(cx, cy) * 0.95;
+    if (coreRadius > 2) {
+        const glowGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius);
+        const primColor = config.primaryColor || '#ccff00';
+        glowGrad.addColorStop(0, config.glowColor || (primColor + '40'));
+        glowGrad.addColorStop(0.55, primColor + '18');
+        glowGrad.addColorStop(1, 'rgba(10, 11, 14, 0)');
+        ctx.fillStyle = glowGrad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, coreRadius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
     // Draw particles with minimal context state switching
     let currentShadow = false;
     ctx.shadowBlur = 0;
@@ -616,8 +630,11 @@ function renderGeometryScene(ctx, model, geomType, config, elapsed, rotX, rotY, 
         const item = projected[i];
         const p = item.p;
         const normZ = Math.max(0, Math.min(1, (item.pz + R) / (2 * R)));
-        let alpha = 0.20 + 0.80 * normZ;
+        let alpha = 0.50 + 0.50 * normZ; // High base alpha (0.50 to 1.0) for punchy visibility
         let radius = (p.size || 1.4) * item.persp;
+        if (scale > 0.4) {
+            radius *= 1.35; // Avatar scale boost
+        }
         let fill = p.color || config.primaryColor || '#ccff00';
 
         if (item.isScanned) {
@@ -626,11 +643,11 @@ function renderGeometryScene(ctx, model, geomType, config, elapsed, rotX, rotY, 
             fill = item.scanIntensity > 0.4 ? '#ffffff' : config.primaryColor;
         }
 
-        ctx.globalAlpha = Math.max(0.12, Math.min(1.0, alpha));
+        ctx.globalAlpha = Math.max(0.40, Math.min(1.0, alpha));
         ctx.fillStyle = fill;
 
-        // Subtle glow for foreground dots
-        if (normZ > 0.65 || item.isScanned) {
+        // Vivid glow for foreground dots
+        if (normZ > 0.45 || item.isScanned) {
             ctx.shadowColor = fill;
             ctx.shadowBlur = Math.round(5 * item.persp);
             currentShadow = true;
@@ -641,7 +658,7 @@ function renderGeometryScene(ctx, model, geomType, config, elapsed, rotX, rotY, 
         }
 
         ctx.beginPath();
-        ctx.arc(item.px, item.py, Math.max(0.6, radius), 0, Math.PI * 2);
+        ctx.arc(item.px, item.py, Math.max(1.6, radius), 0, Math.PI * 2);
         ctx.fill();
     }
     if (currentShadow) {
@@ -679,15 +696,20 @@ export function createAgentParticleOrb(canvas, agentKey, options) {
     function resize() {
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const rect = canvas.getBoundingClientRect();
-        const w = rect.width || canvas.width || 64;
-        const h = rect.height || canvas.height || 64;
+        const w = (rect.width > 10 ? rect.width : (canvas.clientWidth > 10 ? canvas.clientWidth : 48));
+        const h = (rect.height > 10 ? rect.height : (canvas.clientHeight > 10 ? canvas.clientHeight : 48));
         canvas.width = Math.round(w * dpr);
         canvas.height = Math.round(h * dpr);
+        canvas.style.width = w + 'px';
+        canvas.style.height = h + 'px';
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.scale(dpr, dpr);
         lastW = w;
         lastH = h;
-        return { w: w, h: h, cx: w / 2, cy: h / 2, scale: (Math.min(w, h) * 0.42) / R };
+        // For avatar mode (w <= 80), use 0.70 scale factor so the 3D rotating sphere fills the circle prominently
+        const isSmall = Math.min(w, h) <= 80;
+        const scaleFactor = isSmall ? 0.70 : 0.42;
+        return { w: w, h: h, cx: w / 2, cy: h / 2, scale: (Math.min(w, h) * scaleFactor) / R, isSmall: isSmall };
     }
 
     let dim = resize();

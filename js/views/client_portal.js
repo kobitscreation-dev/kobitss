@@ -384,10 +384,10 @@ export async function renderClientPortalView(container, params = {}) {
                         <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
                             <div class="space-y-1">
                                 <div class="flex items-center gap-2.5">
-                                    <span class="px-2.5 py-0.5 text-[10px] font-mono uppercase tracking-widest rounded-full bg-[#ccff00]/10 text-[#ccff00] border border-[#ccff00]/30">
+                                    <span class="px-3 py-1 text-xs font-semibold rounded-full bg-[#ccff00]/10 text-[#ccff00] border border-[#ccff00]/30 tracking-normal">
                                         ${escapeHtml(org.billing_tier || 'Executive Retainer')}
                                     </span>
-                                    <span class="px-2 py-0.5 text-[10px] font-mono text-zinc-400 border border-zinc-800 rounded-full">
+                                    <span class="px-2.5 py-1 text-xs font-medium text-zinc-300 border border-zinc-800 rounded-full bg-zinc-900/60">
                                         ${escapeHtml(org.sla_status || '99.9% On-Time SLA')}
                                     </span>
                                 </div>
@@ -688,10 +688,21 @@ export async function renderClientPortalView(container, params = {}) {
                                                     </div>
 
                                                     <div class="flex items-center justify-between pt-1">
-                                                        <div class="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400">
-                                                            <span>🛡️ Aegis</span>
-                                                            <span>🧪 Sentinel</span>
-                                                            <span>📐 Nexus</span>
+                                                        <div class="flex items-center gap-2 text-[10px] font-mono text-zinc-400">
+                                                            <span class="inline-flex items-center gap-1 text-zinc-300">
+                                                                <svg class="w-3 h-3 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                                                <span>Aegis</span>
+                                                            </span>
+                                                            <span class="text-zinc-700">•</span>
+                                                            <span class="inline-flex items-center gap-1 text-zinc-300">
+                                                                <svg class="w-3 h-3 text-purple-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2v7.31L4.36 17a2 2 0 0 0 1.64 3h12a2 2 0 0 0 1.64-3L14 9.31V2"/></svg>
+                                                                <span>Sentinel</span>
+                                                            </span>
+                                                            <span class="text-zinc-700">•</span>
+                                                            <span class="inline-flex items-center gap-1 text-zinc-300">
+                                                                <svg class="w-3 h-3 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                                                                <span>Nexus</span>
+                                                            </span>
                                                         </div>
                                                         ${deliv.preview_url ? `
                                                             <button class="launch-live-preview-btn px-2.5 py-1 text-xs font-mono rounded bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 border border-sky-500/30 transition" data-preview-url="${escapeHtml(deliv.preview_url)}" data-pr-title="${escapeHtml(deliv.title)}">
@@ -731,13 +742,12 @@ export async function renderClientPortalView(container, params = {}) {
                                                 <div class="flex items-center justify-between">
                                                     <div class="flex items-center gap-3">
                                                         <!-- 3D Particle Orb Avatar Canvas Container in front of each agent -->
-                                                        <div class="agent-orb-container relative w-12 h-12 rounded-full bg-[#0a0b0e] border border-white/10 shadow-lg overflow-hidden flex items-center justify-center shrink-0 group-hover:border-[#ccff00]/60 transition-all duration-300" title="${escapeHtml(agent.name)} 3D Particle Orb">
-                                                            <canvas class="agent-orb-canvas w-full h-full cursor-pointer" data-agent="${escapeHtml(agentKey)}" width="96" height="96"></canvas>
+                                                        <div class="agent-orb-container relative rounded-full bg-[#0a0b0e] border border-white/10 shadow-lg overflow-hidden flex items-center justify-center shrink-0 group-hover:border-[#ccff00]/60 transition-all duration-300" style="width: 48px; height: 48px; min-width: 48px; min-height: 48px;" title="${escapeHtml(agent.name)} 3D Particle Orb">
+                                                            <canvas class="agent-orb-canvas block cursor-pointer" data-agent="${escapeHtml(agentKey)}" width="96" height="96" style="width: 48px; height: 48px; display: block; border-radius: 9999px;"></canvas>
                                                         </div>
                                                         <div>
                                                             <div class="flex items-center gap-1.5">
                                                                 <span class="text-sm font-semibold text-white tracking-tight">${escapeHtml(agent.name)}</span>
-                                                                <span class="text-xs">${agent.icon || ''}</span>
                                                             </div>
                                                             <div class="text-xs text-zinc-400 font-medium">${escapeHtml(agent.title)}</div>
                                                         </div>
@@ -844,15 +854,15 @@ export async function renderClientPortalView(container, params = {}) {
                                     </div>
                                     <div class="space-y-1 text-xs text-zinc-300">
                                         <div class="flex items-center justify-between py-1 border-b border-zinc-800">
-                                            <span>🛡️ Aegis (Security):</span>
+                                            <span class="inline-flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Aegis (Security):</span>
                                             <span class="font-mono text-emerald-400">0 CVEs / 0 Leaks</span>
                                         </div>
                                         <div class="flex items-center justify-between py-1 border-b border-zinc-800">
-                                            <span>🧪 Sentinel (QA):</span>
+                                            <span class="inline-flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-purple-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2v7.31L4.36 17a2 2 0 0 0 1.64 3h12a2 2 0 0 0 1.64-3L14 9.31V2"/></svg> Sentinel (QA):</span>
                                             <span class="font-mono text-sky-400">100% Pass Rate</span>
                                         </div>
                                         <div class="flex items-center justify-between py-1">
-                                            <span>📐 Nexus (Architecture):</span>
+                                            <span class="inline-flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg> Nexus (Architecture):</span>
                                             <span class="font-mono text-amber-300">Clean Boundaries</span>
                                         </div>
                                     </div>
@@ -1140,14 +1150,27 @@ export async function renderClientPortalView(container, params = {}) {
         // Initialize 3D Particle Orbs in Team tab (one orb per agent avatar)
         if (currentTab === 'team') {
             container.__kbTeamAgentOrbs = new Map();
-            container.querySelectorAll('.agent-orb-canvas').forEach(canvas => {
-                const agentKey = canvas.getAttribute('data-agent') || 'axiom';
-                const orb = createAgentParticleOrb(canvas, agentKey, { speed: isBoost ? 2.0 : 1.15 });
-                if (orb) {
-                    container.__kbOrbAnimators.push(orb);
-                    container.__kbTeamAgentOrbs.set(agentKey, orb);
-                }
-            });
+            const initAgentOrbs = () => {
+                container.querySelectorAll('.agent-orb-canvas').forEach(canvas => {
+                    const agentKey = canvas.getAttribute('data-agent') || 'axiom';
+                    if (!container.__kbTeamAgentOrbs.has(agentKey)) {
+                        const orb = createAgentParticleOrb(canvas, agentKey, {
+                            speed: isBoost ? 2.0 : 1.15,
+                            isAvatar: true
+                        });
+                        if (orb) {
+                            container.__kbOrbAnimators.push(orb);
+                            container.__kbTeamAgentOrbs.set(agentKey, orb);
+                        }
+                    }
+                });
+            };
+            initAgentOrbs();
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(() => {
+                    if (currentTab === 'team') initAgentOrbs();
+                });
+            }
 
             container.querySelectorAll('.agent-card-wrapper').forEach(card => {
                 card.addEventListener('click', (e) => {

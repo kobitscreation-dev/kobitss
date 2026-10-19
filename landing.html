@@ -465,60 +465,65 @@
                             <path d="M28.4 6.8C22.4 11.4 16.2 16.4 10.8 20.2" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
                             <path d="M13.8 17.8C17.8 21.9 22.6 27.1 29.2 30.8" stroke="currentColor" stroke-width="3.7" stroke-linecap="round"/>
                         </svg>
-                        <span class="font-semibold text-white tracking-wider text-[11px]">KOBITS REMOTE MISSION CONTROL</span>
+                        <span class="font-semibold text-white tracking-wider text-[11px]">KOBITS EXECUTIVE DELIVERY DASHBOARD</span>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-4 text-[11px]">
                     <div class="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-300">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        <span>MicroVM e2b-firecracker-8f42 (Linux 6.6)</span>
+                        <span class="w-1.5 h-1.5 rounded-full bg-[#ccff00] animate-pulse"></span>
+                        <span>Acme Corp • E-Commerce Platform</span>
                     </div>
-                    <button type="button" data-open-early-access="1" class="text-white hover:text-zinc-200 font-medium transition-colors flex items-center gap-1 border border-zinc-700 px-3 py-1 rounded-md bg-zinc-900/80 cursor-pointer">
-                        <span>Launch Mission</span>
-                        <i data-lucide="arrow-right" class="w-3 h-3"></i>
-                    </button>
+                    <a href="/portal.html#portal" class="text-zinc-950 bg-[#ccff00] hover:bg-[#b8e600] font-semibold transition-colors flex items-center gap-1.5 px-3 py-1 rounded-md cursor-pointer">
+                        <span>Open Live Portal</span>
+                        <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i>
+                    </a>
                 </div>
             </div>
 
             <!-- Master Project Header & Completion Bar -->
-            <div class="p-6 md:p-8 border-b border-zinc-800/80 bg-zinc-950/40">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-                    <div>
-                        <div class="flex items-center gap-3">
-                            <h2 class="text-xl md:text-2xl font-semibold text-white tracking-tight">Negative-to-Positive TDD Reproducer &amp; MicroVM Pipeline</h2>
-                            <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60">PR #143 Open</span>
+            <div class="p-6 md:p-8 border-b border-zinc-800/80 bg-[#14151a]">
+                <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-4">
+                    <div class="space-y-1.5">
+                        <div class="flex items-center gap-2.5">
+                            <span class="px-3 py-1 text-xs font-semibold rounded-full bg-[#ccff00]/10 text-[#ccff00] border border-[#ccff00]/30 tracking-normal">
+                                Executive Retainer
+                            </span>
+                            <span class="px-2.5 py-1 text-xs font-medium text-zinc-300 border border-zinc-800 rounded-full bg-zinc-900/60 font-mono">
+                                99.9% On-Time SLA
+                            </span>
                         </div>
-                        <p class="text-xs text-zinc-400 font-normal mt-1">Autonomous remote Linux MicroVM execution • Negative synthesized reproduction test verified green before GitHub PR</p>
+                        <h2 class="text-2xl md:text-3xl font-extrabold text-white tracking-tight">Acme Corp</h2>
+                        <p class="text-xs font-mono text-zinc-400">// E-Commerce Platform • Sprint 4 in progress</p>
                     </div>
                     <div class="text-right flex sm:flex-col items-center sm:items-end justify-between sm:justify-center">
-                        <div class="text-2xl font-mono font-semibold text-white">96%</div>
-                        <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Master Quality Gate Passed</div>
+                        <div class="text-3xl font-mono font-extrabold text-[#ccff00] leading-none">78%</div>
+                        <div class="text-[10px] font-mono text-zinc-400 uppercase tracking-widest mt-1">Overall Completion</div>
                     </div>
                 </div>
 
-                <!-- Master Progress Bar -->
-                <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                    <div class="h-full bg-white transition-all duration-1000 ease-out" style="width: 96%;"></div>
+                <!-- Electric Neon-Lime Progress Bar -->
+                <div class="w-full h-2 bg-[#1c1d24] rounded-full overflow-hidden">
+                    <div class="h-full bg-[#ccff00] rounded-full transition-all duration-1000 ease-out" style="width: 78%; box-shadow: 0 0 14px rgba(204, 255, 0, 0.45);"></div>
                 </div>
             </div>
 
-            <!-- 5 Interactive Showcase Tabs -->
+            <!-- 5 Interactive Showcase Tabs matching Executive Client Dashboard -->
             <div class="border-b border-zinc-800 bg-zinc-950/80 px-6 flex items-center gap-2 overflow-x-auto text-xs font-mono">
                 <button class="kb-demo-tab active py-3 px-4 text-white border-b-2 border-white font-medium transition-colors cursor-pointer" data-tab="overview">
-                    1. TDD Reproducer (Red → Green)
+                    1. Overview
                 </button>
-                <button class="kb-demo-tab py-3 px-4 text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent transition-colors cursor-pointer" data-tab="preview">
-                    2. Ephemeral Web Preview &amp; HMR
+                <button class="kb-demo-tab py-3 px-4 text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent transition-colors cursor-pointer" data-tab="milestones">
+                    2. Milestones
                 </button>
-                <button class="kb-demo-tab py-3 px-4 text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent transition-colors cursor-pointer" data-tab="ci">
-                    3. Self-Healing CI &amp; PR Bot
+                <button class="kb-demo-tab py-3 px-4 text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent transition-colors cursor-pointer" data-tab="deliverables">
+                    3. Deliverables
                 </button>
-                <button class="kb-demo-tab py-3 px-4 text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent transition-colors cursor-pointer" data-tab="memory">
-                    4. Persistent Team Memory
+                <button class="kb-demo-tab py-3 px-4 text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent transition-colors cursor-pointer" data-tab="team">
+                    4. Team &amp; Orbs
                 </button>
                 <button class="kb-demo-tab py-3 px-4 text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent transition-colors cursor-pointer" data-tab="governance">
-                    5. 5% Operator Gate (SOC2)
+                    5. Reports &amp; Governance
                 </button>
             </div>
 
@@ -553,27 +558,27 @@
                     <!-- 4 Metric Stat Cards -->
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         <div class="p-4 rounded-lg border border-zinc-800/80 bg-zinc-950/60">
-                            <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">MicroVM Boot Latency</div>
-                            <div class="text-2xl font-mono font-medium text-white mt-1 flex items-center gap-1.5">
-                                <span>140 ms</span>
-                                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                            <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Complete</div>
+                            <div class="text-2xl font-mono font-medium text-[#ccff00] mt-1 flex items-center gap-1.5">
+                                <span>78%</span>
+                                <span class="w-2 h-2 rounded-full bg-[#ccff00]"></span>
                             </div>
-                            <div class="text-[10px] font-mono text-emerald-400 mt-1">Zero local footprint</div>
+                            <div class="text-[10px] font-mono text-[#ccff00] mt-1">Zero regressions</div>
                         </div>
                         <div class="p-4 rounded-lg border border-zinc-800/80 bg-zinc-950/60">
-                            <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">TDD Reproducer</div>
-                            <div class="text-2xl font-mono font-medium text-emerald-400 mt-1">RED → GREEN</div>
-                            <div class="text-[10px] font-mono text-zinc-400 mt-1">Proved defect before edit</div>
+                            <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Deliverables</div>
+                            <div class="text-2xl font-mono font-medium text-white mt-1">12 / 16</div>
+                            <div class="text-[10px] font-mono text-zinc-400 mt-1">TDD Reproducer: RED → GREEN</div>
                         </div>
                         <div class="p-4 rounded-lg border border-zinc-800/80 bg-zinc-950/60">
-                            <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">3 Consensus Seals</div>
-                            <div class="text-2xl font-mono font-medium text-white mt-1">3 / 3 GRANTED</div>
-                            <div class="text-[10px] font-mono text-zinc-400 mt-1">Aegis, Sentinel, Nexus</div>
+                            <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Budget Spent</div>
+                            <div class="text-2xl font-mono font-medium text-white mt-1">$4.2K</div>
+                            <div class="text-[10px] font-mono text-zinc-400 mt-1">3 Consensus Seals Granted</div>
                         </div>
                         <div class="p-4 rounded-lg border border-zinc-800/80 bg-zinc-950/60">
-                            <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Pytest Invariants</div>
-                            <div class="text-2xl font-mono font-medium text-white mt-1">183 / 183</div>
-                            <div class="text-[10px] font-mono text-zinc-400 mt-1">Zero regressions</div>
+                            <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Remaining</div>
+                            <div class="text-2xl font-mono font-medium text-white mt-1">3 wk</div>
+                            <div class="text-[10px] font-mono text-zinc-400 mt-1">183 / 183 Pytest Invariants</div>
                         </div>
                     </div>
 
@@ -678,7 +683,7 @@
                                     <div class="text-zinc-400">[0.62s] Defect confirmed. Applying surgical edit to <span class="text-white">storage/pool.py</span> (+14 lines)</div>
                                     <div class="text-emerald-400">[0.82s] Re-running reproduction: <span class="font-bold">PASSED</span> (Green verified in 0.27s)</div>
                                     <div class="text-zinc-400">[1.15s] Regression suite: <span class="text-white font-semibold">183/183 pytests passed (100%)</span></div>
-                                    <div class="text-zinc-500">[1.40s] 3 Seals granted (🛡️ Aegis, 🧪 Sentinel, 📐 Nexus)</div>
+                                    <div class="text-zinc-500">[1.40s] 3 Seals granted (Aegis Security, Sentinel QA, Nexus Architecture)</div>
                                 </div>
                             </div>
 
@@ -695,139 +700,455 @@
                     </div>
                 </div>
 
-                <!-- Panel 2: Live Ephemeral Web Preview & Port Tunneling -->
-                <div id="tab-preview" class="kb-demo-panel hidden space-y-4">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-zinc-800 text-xs font-mono text-zinc-400 gap-3">
+                <!-- Panel 2: Milestones & Project Timeline with Checkpoints -->
+                <div id="tab-milestones" class="kb-demo-panel hidden space-y-6 font-mono text-xs">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-800 text-zinc-400 gap-3">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-[#ccff00] animate-pulse"></span>
+                            <span class="text-white font-medium">PROJECT TIMELINE // CHECKPOINT GATES</span>
+                            <span class="text-zinc-600">|</span>
+                            <span>Acme Corp E-Commerce Platform</span>
+                        </div>
+                        <div class="text-[11px] text-zinc-400">
+                            Current Stage: <span class="text-[#ccff00] font-semibold">Sprint 4 Active</span>
+                        </div>
+                    </div>
+
+                    <!-- Vertical Connected Timeline with Checkpoint Nodes -->
+                    <div class="relative pl-6 sm:pl-8 space-y-6 before:absolute before:left-3 sm:before:left-4 before:top-3 before:bottom-3 before:w-0.5 before:bg-zinc-800">
+                        <!-- Checkpoint 1: Complete -->
+                        <div class="relative flex items-start gap-4">
+                            <div class="absolute -left-6 sm:-left-8 mt-0.5 w-6 h-6 rounded-full bg-emerald-950 border border-emerald-500 flex items-center justify-center text-emerald-400 z-10">
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            </div>
+                            <div class="flex-1 p-4 rounded-xl border border-zinc-800/80 bg-[#0e0e12] space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <div class="text-xs font-mono text-zinc-500 uppercase tracking-wider">Week 1-2</div>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 font-semibold">Complete</span>
+                                </div>
+                                <h4 class="text-sm font-semibold text-white">Foundation, Multi-Tenant Architecture &amp; Database Schema</h4>
+                                <p class="text-xs text-zinc-400 font-sans">PostgreSQL 16 schemas, Alembic migrations, tenant row isolation, and async SQLAlchemy connection pools.</p>
+                                <div class="flex flex-wrap gap-1.5 pt-1">
+                                    <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-zinc-900 border border-zinc-800 text-zinc-300">Database Schema</span>
+                                    <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-zinc-900 border border-zinc-800 text-zinc-300">Tenant Isolation</span>
+                                    <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-zinc-900 border border-zinc-800 text-zinc-300">SQLAlchemy 2.0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Checkpoint 2: Complete -->
+                        <div class="relative flex items-start gap-4">
+                            <div class="absolute -left-6 sm:-left-8 mt-0.5 w-6 h-6 rounded-full bg-emerald-950 border border-emerald-500 flex items-center justify-center text-emerald-400 z-10">
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            </div>
+                            <div class="flex-1 p-4 rounded-xl border border-zinc-800/80 bg-[#0e0e12] space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <div class="text-xs font-mono text-zinc-500 uppercase tracking-wider">Week 3-4</div>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 font-semibold">Complete</span>
+                                </div>
+                                <h4 class="text-sm font-semibold text-white">Authentication, Enterprise RBAC &amp; SOC2 Audit Trail</h4>
+                                <p class="text-xs text-zinc-400 font-sans">JWT HttpOnly session tokens, role-based access control, and HMAC-SHA256 tamper-evident SOC2 audit logs.</p>
+                                <div class="flex flex-wrap gap-1.5 pt-1">
+                                    <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-zinc-900 border border-zinc-800 text-zinc-300">JWT RBAC</span>
+                                    <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-zinc-900 border border-zinc-800 text-zinc-300">SOC2 Audit Chain</span>
+                                    <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-zinc-900 border border-zinc-800 text-zinc-300">HttpOnly Cookies</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Checkpoint 3: Active with Neon-Lime Ring & Progress Bar -->
+                        <div class="relative flex items-start gap-4">
+                            <div class="absolute -left-6 sm:-left-8 mt-0.5 w-6 h-6 rounded-full bg-[#14151a] border-2 border-[#ccff00] flex items-center justify-center text-[#ccff00] z-10 shadow-[0_0_10px_rgba(204,255,0,0.5)]">
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            </div>
+                            <div class="flex-1 p-4 rounded-xl border border-[#ccff00]/30 bg-[#121318] space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <div class="text-xs font-mono text-zinc-400 uppercase tracking-wider">Week 5-6</div>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-[#ccff00]/15 text-[#ccff00] border border-[#ccff00]/40 font-semibold">Active • 60%</span>
+                                </div>
+                                <h4 class="text-sm font-semibold text-white">Payment Gateway, Billing Portal &amp; Webhook Idempotency</h4>
+                                <p class="text-xs text-zinc-300 font-sans">Stripe Elements customer portal, automated receipt generation, redis lock against replay bursts, and negative TDD harness.</p>
+                                <!-- Milestone Progress -->
+                                <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                    <div class="h-full bg-[#ccff00] rounded-full" style="width: 60%; box-shadow: 0 0 8px rgba(204,255,0,0.5);"></div>
+                                </div>
+                                <div class="flex flex-wrap gap-1.5 pt-1">
+                                    <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-zinc-900 border border-zinc-800 text-zinc-300">Stripe Integration</span>
+                                    <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-zinc-900 border border-zinc-800 text-zinc-300">Webhook Idempotency</span>
+                                    <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-zinc-900 border border-zinc-800 text-zinc-300">Replay Harness</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Checkpoint 4: Upcoming -->
+                        <div class="relative flex items-start gap-4">
+                            <div class="absolute -left-6 sm:-left-8 mt-0.5 w-6 h-6 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center text-zinc-500 z-10">
+                                <span class="w-2 h-2 rounded-full bg-zinc-700"></span>
+                            </div>
+                            <div class="flex-1 p-4 rounded-xl border border-zinc-800/60 bg-[#0a0a0d] space-y-2 opacity-75">
+                                <div class="flex items-center justify-between">
+                                    <div class="text-xs font-mono text-zinc-500 uppercase tracking-wider">Week 7-8</div>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-zinc-400 border border-zinc-700">Upcoming</span>
+                                </div>
+                                <h4 class="text-sm font-semibold text-zinc-300">Advanced Analytics, Outbound Webhooks &amp; Event Stream</h4>
+                                <p class="text-xs text-zinc-500 font-sans">Real-time metrics pipeline, Kafka/Redis Streams consumer groups, and automated dispute alerts.</p>
+                            </div>
+                        </div>
+
+                        <!-- Checkpoint 5: Upcoming -->
+                        <div class="relative flex items-start gap-4">
+                            <div class="absolute -left-6 sm:-left-8 mt-0.5 w-6 h-6 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center text-zinc-500 z-10">
+                                <span class="w-2 h-2 rounded-full bg-zinc-700"></span>
+                            </div>
+                            <div class="flex-1 p-4 rounded-xl border border-zinc-800/60 bg-[#0a0a0d] space-y-2 opacity-75">
+                                <div class="flex items-center justify-between">
+                                    <div class="text-xs font-mono text-zinc-500 uppercase tracking-wider">Week 9-10</div>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-zinc-400 border border-zinc-700">Upcoming</span>
+                                </div>
+                                <h4 class="text-sm font-semibold text-zinc-300">Production Launch, Stress Testing &amp; Canary Rollout</h4>
+                                <p class="text-xs text-zinc-500 font-sans">Autonomous load generation (10,000 req/s), zero-downtime blue/green deployment, and multi-region failover.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel 3: Deliverables Catalog & Live Ephemeral Preview -->
+                <div id="tab-deliverables" class="kb-demo-panel hidden space-y-4 font-mono text-xs">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-zinc-800 text-zinc-400 gap-3">
                         <div class="flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                            <span class="text-white font-medium">Instant Remote MicroVM Port Tunnel</span>
+                            <span class="text-white font-medium">DELIVERABLES CATALOG</span>
                             <span class="text-zinc-600">|</span>
-                            <span>WebSocket HMR Active</span>
+                            <span>4 Verified Code Deliverables</span>
                         </div>
                         <div class="flex items-center gap-2">
-                            <button type="button" class="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] cursor-pointer" onclick="document.getElementById('sim-viewport').style.maxWidth='100%'">Desktop</button>
-                            <button type="button" class="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] cursor-pointer" onclick="document.getElementById('sim-viewport').style.maxWidth='640px'">Tablet</button>
-                            <button type="button" class="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] cursor-pointer" onclick="document.getElementById('sim-viewport').style.maxWidth='375px'">Mobile</button>
+                            <span class="px-2.5 py-1 rounded bg-[#ccff00] text-zinc-950 font-bold text-[11px]">All (4)</span>
+                            <span class="px-2.5 py-1 rounded bg-zinc-800 text-zinc-300 text-[11px]">Delivered (2)</span>
+                            <span class="px-2.5 py-1 rounded bg-zinc-800 text-zinc-300 text-[11px]">In Progress (1)</span>
                         </div>
                     </div>
 
-                    <!-- Simulated In-Browser Preview Window -->
-                    <div id="sim-viewport" class="mx-auto rounded-xl border border-zinc-800 bg-[#0d0d11] overflow-hidden transition-all duration-300 shadow-2xl">
-                        <!-- Browser Header bar -->
-                        <div class="h-9 bg-zinc-900/90 border-b border-zinc-800 px-4 flex items-center justify-between text-xs font-mono">
-                            <div class="flex items-center gap-2">
-                                <span class="w-2.5 h-2.5 rounded-full bg-zinc-700"></span>
-                                <span class="w-2.5 h-2.5 rounded-full bg-zinc-700"></span>
-                                <span class="w-2.5 h-2.5 rounded-full bg-zinc-700"></span>
+                    <!-- 2-Column Grid of Deliverables Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Card 1 -->
+                        <div class="bg-[#14151a] border border-white/[0.08] hover:border-[#ccff00]/40 rounded-xl p-5 space-y-3 transition flex flex-col justify-between">
+                            <div class="space-y-2">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+                                        <h3 class="text-sm font-semibold text-white">Stripe Checkout &amp; Customer Billing Portal</h3>
+                                    </div>
+                                    <span class="px-2 py-0.5 text-[10px] font-mono uppercase rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 shrink-0">
+                                        Delivered
+                                    </span>
+                                </div>
+                                <p class="text-xs text-zinc-300 leading-relaxed font-sans">Full Stripe Elements embed, portal redirection, webhook idempotency handler, and automated receipt dispatches.</p>
                             </div>
-                            <div class="px-4 py-1 rounded-md bg-zinc-950 border border-zinc-800 text-zinc-400 text-[11px] flex items-center gap-2 w-full max-w-sm justify-center">
-                                <i data-lucide="lock" class="w-3 h-3 text-emerald-400"></i>
-                                <span class="text-zinc-300">https://preview-8f42.kobits.dev/</span>
+                            <div class="space-y-3 pt-2 border-t border-zinc-800/80">
+                                <div class="flex items-center justify-between text-[11px] text-zinc-400">
+                                    <span class="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">Sprint 4</span>
+                                    <span>3 PRs • 1,420 LOC • 99% tests</span>
+                                </div>
+                                <div class="flex items-center justify-between pt-1">
+                                    <div class="flex items-center gap-2 text-[10px] text-zinc-400">
+                                        <span class="inline-flex items-center gap-1 text-zinc-300">
+                                            <svg class="w-3 h-3 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                            <span>Aegis</span>
+                                        </span>
+                                        <span class="text-zinc-700">•</span>
+                                        <span class="inline-flex items-center gap-1 text-zinc-300">
+                                            <svg class="w-3 h-3 text-purple-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31L4.36 17a2 2 0 0 0 1.64 3h12a2 2 0 0 0 1.64-3L14 9.31V2"/></svg>
+                                            <span>Sentinel</span>
+                                        </span>
+                                        <span class="text-zinc-700">•</span>
+                                        <span class="inline-flex items-center gap-1 text-zinc-300">
+                                            <svg class="w-3 h-3 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                                            <span>Nexus</span>
+                                        </span>
+                                    </div>
+                                    <button type="button" class="px-2.5 py-1 text-xs rounded bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 border border-sky-500/30 transition cursor-pointer" onclick="document.querySelector('.kb-demo-tab[data-tab=\'overview\']')?.click()">
+                                        Live Preview ↗
+                                    </button>
+                                </div>
                             </div>
-                            <div class="text-[10px] text-emerald-400 font-mono">200 OK (18ms)</div>
                         </div>
 
-                        <!-- Rendered Web Application Mockup -->
-                        <div class="p-6 md:p-8 bg-zinc-950/60 font-sans min-h-[300px]">
-                            <div class="max-w-2xl mx-auto space-y-6">
-                                <div class="flex items-center justify-between border-b border-zinc-800/80 pb-4">
+                        <!-- Card 2 -->
+                        <div class="bg-[#14151a] border border-white/[0.08] hover:border-[#ccff00]/40 rounded-xl p-5 space-y-3 transition flex flex-col justify-between">
+                            <div class="space-y-2">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                                        <h3 class="text-sm font-semibold text-white">Webhook Idempotency &amp; Replay Protection</h3>
+                                    </div>
+                                    <span class="px-2 py-0.5 text-[10px] font-mono uppercase rounded-full bg-amber-950/60 text-amber-300 border border-amber-800/60 shrink-0">
+                                        In Review
+                                    </span>
+                                </div>
+                                <p class="text-xs text-zinc-300 leading-relaxed font-sans">Cryptographic signature validation and distributed redis lock against duplicate charge processing.</p>
+                            </div>
+                            <div class="space-y-3 pt-2 border-t border-zinc-800/80">
+                                <div class="flex items-center justify-between text-[11px] text-zinc-400">
+                                    <span class="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">Sprint 4</span>
+                                    <span>2 PRs • 680 LOC • 100% tests</span>
+                                </div>
+                                <div class="flex items-center justify-between pt-1">
+                                    <div class="flex items-center gap-2 text-[10px] text-zinc-400">
+                                        <span class="inline-flex items-center gap-1 text-zinc-300">
+                                            <svg class="w-3 h-3 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                            <span>Aegis</span>
+                                        </span>
+                                        <span class="text-zinc-700">•</span>
+                                        <span class="inline-flex items-center gap-1 text-zinc-300">
+                                            <svg class="w-3 h-3 text-purple-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31L4.36 17a2 2 0 0 0 1.64 3h12a2 2 0 0 0 1.64-3L14 9.31V2"/></svg>
+                                            <span>Sentinel</span>
+                                        </span>
+                                        <span class="text-zinc-700">•</span>
+                                        <span class="inline-flex items-center gap-1 text-zinc-300">
+                                            <svg class="w-3 h-3 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                                            <span>Nexus</span>
+                                        </span>
+                                    </div>
+                                    <button type="button" class="px-2.5 py-1 text-xs rounded bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 border border-sky-500/30 transition cursor-pointer" onclick="document.querySelector('.kb-demo-tab[data-tab=\'overview\']')?.click()">
+                                        Live Preview ↗
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 3 -->
+                        <div class="bg-[#14151a] border border-white/[0.08] hover:border-[#ccff00]/40 rounded-xl p-5 space-y-3 transition flex flex-col justify-between">
+                            <div class="space-y-2">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-purple-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
+                                        <h3 class="text-sm font-semibold text-white">MicroVM Webhook Replay Test Harness</h3>
+                                    </div>
+                                    <span class="px-2 py-0.5 text-[10px] font-mono uppercase rounded-full bg-sky-950/60 text-sky-300 border border-sky-800/60 shrink-0">
+                                        Building
+                                    </span>
+                                </div>
+                                <p class="text-xs text-zinc-300 leading-relaxed font-sans">Isolated docker sandbox simulating external stripe network dropouts and rapid replay bursts.</p>
+                            </div>
+                            <div class="space-y-3 pt-2 border-t border-zinc-800/80">
+                                <div class="flex items-center justify-between text-[11px] text-zinc-400">
+                                    <span class="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">Sprint 4</span>
+                                    <span>1 PRs • 520 LOC • 94% tests</span>
+                                </div>
+                                <div class="flex items-center justify-between pt-1">
+                                    <div class="flex items-center gap-2 text-[10px] text-zinc-400">
+                                        <span class="inline-flex items-center gap-1 text-zinc-300">
+                                            <svg class="w-3 h-3 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                            <span>Aegis</span>
+                                        </span>
+                                        <span class="text-zinc-700">•</span>
+                                        <span class="inline-flex items-center gap-1 text-zinc-300">
+                                            <svg class="w-3 h-3 text-purple-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31L4.36 17a2 2 0 0 0 1.64 3h12a2 2 0 0 0 1.64-3L14 9.31V2"/></svg>
+                                            <span>Sentinel</span>
+                                        </span>
+                                        <span class="text-zinc-700">•</span>
+                                        <span class="inline-flex items-center gap-1 text-zinc-300">
+                                            <svg class="w-3 h-3 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                                            <span>Nexus</span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 4 -->
+                        <div class="bg-[#14151a] border border-white/[0.08] hover:border-[#ccff00]/40 rounded-xl p-5 space-y-3 transition flex flex-col justify-between">
+                            <div class="space-y-2">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+                                        <h3 class="text-sm font-semibold text-white">Automated Chargeback Alert Pipeline</h3>
+                                    </div>
+                                    <span class="px-2 py-0.5 text-[10px] font-mono uppercase rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700 shrink-0">
+                                        Upcoming
+                                    </span>
+                                </div>
+                                <p class="text-xs text-zinc-300 leading-relaxed font-sans">Proactive dispute webhook processing and automated evidence attachment generation.</p>
+                            </div>
+                            <div class="space-y-3 pt-2 border-t border-zinc-800/80">
+                                <div class="flex items-center justify-between text-[11px] text-zinc-400">
+                                    <span class="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">Sprint 4</span>
+                                    <span>1 PRs • 500 LOC • 100% tests</span>
+                                </div>
+                                <div class="flex items-center justify-between pt-1">
+                                    <div class="flex items-center gap-2 text-[10px] text-zinc-400">
+                                        <span class="inline-flex items-center gap-1 text-zinc-300">
+                                            <svg class="w-3 h-3 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                            <span>Aegis</span>
+                                        </span>
+                                        <span class="text-zinc-700">•</span>
+                                        <span class="inline-flex items-center gap-1 text-zinc-300">
+                                            <svg class="w-3 h-3 text-purple-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31L4.36 17a2 2 0 0 0 1.64 3h12a2 2 0 0 0 1.64-3L14 9.31V2"/></svg>
+                                            <span>Sentinel</span>
+                                        </span>
+                                        <span class="text-zinc-700">•</span>
+                                        <span class="inline-flex items-center gap-1 text-zinc-300">
+                                            <svg class="w-3 h-3 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                                            <span>Nexus</span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel 4: Autonomous Engineering Team & Glowing 3D Particle Orbs -->
+                <div id="tab-team" class="kb-demo-panel hidden space-y-6">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-800 text-xs font-mono text-zinc-400 gap-3">
+                        <div>
+                            <div class="text-[10px] text-[#ccff00] uppercase tracking-widest font-bold">Engineering Pod</div>
+                            <h3 class="text-lg font-bold text-white mt-0.5">Autonomous Engineering Team</h3>
+                            <p class="text-xs text-zinc-400 font-sans mt-0.5">Dedicated senior engineers and specialists assigned to your platform codebase.</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="px-2.5 py-1 rounded bg-[#ccff00]/10 text-[#ccff00] border border-[#ccff00]/30 font-semibold text-[11px]">7 Dedicated Specialists</span>
+                        </div>
+                    </div>
+
+                    <!-- 3-Column Grid of Agent Cards with Glowing 3D Particle Orbs -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <!-- Agent 1: Axiom -->
+                        <div class="p-5 rounded-xl border border-zinc-800 bg-[#121318] hover:border-[#ccff00]/40 transition space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-12 h-12 rounded-full overflow-hidden shrink-0 relative bg-[#0a0b0e] border border-white/10 flex items-center justify-center shadow-[0_0_12px_rgba(204,255,0,0.25)]">
+                                        <canvas class="showcase-agent-orb" data-agent="axiom" width="48" height="48" style="width: 48px; height: 48px; display: block; border-radius: 9999px;"></canvas>
+                                    </div>
                                     <div>
-                                        <h3 class="text-lg font-semibold text-white">Payment Gateway Microservice</h3>
-                                        <p class="text-xs text-zinc-400 mt-1">Live Ephemeral Preview running in remote Linux MicroVM</p>
-                                    </div>
-                                    <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 text-xs font-mono border border-emerald-500/20">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                        <span>Tunneling Port 8000</span>
+                                        <div class="text-sm font-bold text-white flex items-center gap-1.5">
+                                            <span>Axiom</span>
+                                        </div>
+                                        <div class="text-xs text-zinc-400 font-mono">Lead Orchestrator</div>
                                     </div>
                                 </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div class="p-4 rounded-lg border border-zinc-800 bg-zinc-900/80">
-                                        <div class="text-xs font-mono text-zinc-500">API RPS</div>
-                                        <div class="text-xl font-mono text-white mt-1">4,280 req/s</div>
-                                    </div>
-                                    <div class="p-4 rounded-lg border border-zinc-800 bg-zinc-900/80">
-                                        <div class="text-xs font-mono text-zinc-500">P99 LATENCY</div>
-                                        <div class="text-xl font-mono text-emerald-400 mt-1">4.2 ms</div>
-                                    </div>
-                                    <div class="p-4 rounded-lg border border-zinc-800 bg-zinc-900/80">
-                                        <div class="text-xs font-mono text-zinc-500">ACTIVE CLIENTS</div>
-                                        <div class="text-xl font-mono text-white mt-1">821</div>
-                                    </div>
-                                </div>
-                                <div class="p-3 rounded-lg border border-zinc-800/60 bg-zinc-900/40 text-xs font-mono text-zinc-400 flex items-center justify-between">
-                                    <span>Hot Module Reloading: Edit in microVM reflects in browser under 80ms</span>
-                                    <span class="text-white font-semibold">Zero Host Install Needed</span>
-                                </div>
+                                <span class="px-2 py-0.5 text-[10px] font-mono rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 uppercase">Active</span>
+                            </div>
+                            <p class="text-xs text-zinc-400 leading-relaxed font-sans">Sprint planning, dependency DAGs, delivery roadmap, and autonomous task decomposition.</p>
+                            <div class="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[11px] font-mono text-zinc-400">
+                                <span>Completed: <strong class="text-white">14 deliverables</strong></span>
+                                <span class="text-[#ccff00]">Gyro Orb</span>
                             </div>
                         </div>
-                    </div>
-                </div>
 
-                <!-- Panel 3: Self-Healing CI & PR Reviews -->
-                <div id="tab-ci" class="kb-demo-panel hidden space-y-4 font-mono text-xs">
-                    <div class="flex items-center justify-between pb-3 border-b border-zinc-800 text-zinc-400">
-                        <span>Bi-Directional GitHub Actions CI &amp; PR Review Bot</span>
-                        <span class="text-emerald-400">Webhook Listener: Active</span>
-                    </div>
-
-                    <div class="p-4 rounded-xl border border-zinc-800 bg-[#0e0e12] space-y-3">
-                        <div class="flex items-center justify-between text-zinc-400 border-b border-zinc-800/80 pb-2">
-                            <span class="text-white font-medium">Event 1: CI Failure Received via GitHub Webhook</span>
-                            <span class="text-red-400">check_run: failed</span>
-                        </div>
-                        <div class="text-zinc-400 font-sans text-xs">
-                            GitHub Actions workflow <code class="text-zinc-200 font-mono">test-matrix / ubuntu-latest</code> failed on PR #142 with TypeError: expected dictionary on null session token.
-                        </div>
-                        <div class="p-3 rounded bg-black/60 border border-zinc-800 text-zinc-400 font-mono text-[11px]">
-                            <span class="text-red-400">Traceback (most recent call last):</span><br>
-                            &nbsp;&nbsp;File "backend/api/v1/auth.py", line 84, in verify_session<br>
-                            &nbsp;&nbsp;&nbsp;&nbsp;sub = payload["sub"]<br>
-                            &nbsp;&nbsp;TypeError: 'NoneType' object is not subscriptable
-                        </div>
-                    </div>
-
-                    <div class="p-4 rounded-xl border border-emerald-500/30 bg-emerald-950/20 space-y-3">
-                        <div class="flex items-center justify-between text-zinc-400 border-b border-emerald-500/20 pb-2">
-                            <span class="text-emerald-300 font-medium">Event 2: Kobits Self-Heal &amp; Verified Fix Push</span>
-                            <span class="text-emerald-400">check_run: passed</span>
-                        </div>
-                        <div class="text-zinc-300 font-sans text-xs">
-                            Kobits parsed stack trace, reproduced issue in isolated MicroVM, applied surgical null-safe check, verified test turns green, and pushed commit <code class="text-emerald-400 font-mono">b82e14f</code> directly to the PR branch.
-                        </div>
-                        <div class="p-3 rounded bg-black/60 border border-emerald-500/30 text-emerald-300 font-mono text-[11px]">
-                            + if not payload or not isinstance(payload, dict):<br>
-                            + &nbsp;&nbsp;&nbsp;&nbsp;return None<br>
-                            ✓ GitHub Actions CI reran: All 183 checks passed. PR ready to merge.
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Panel 4: Team Memory & Knowledge Graph -->
-                <div id="tab-memory" class="kb-demo-panel hidden space-y-4 font-mono text-xs">
-                    <div class="flex items-center justify-between pb-3 border-b border-zinc-800 text-zinc-400">
-                        <span>Cross-Session Architectural Decision Records (ADRs) &amp; Codebase Rules</span>
-                        <span class="text-white">Persistent Memory</span>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div class="p-4 rounded-lg border border-zinc-800 bg-[#0d0d11]">
-                            <div class="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">ADR-001 // DATABASE</div>
-                            <div class="text-white font-semibold text-sm">Async SQLAlchemy 2.0 Pool</div>
-                            <p class="text-zinc-400 text-[11px] mt-2 font-sans font-normal">Strict connection checkout timeout of 10s with NullPool for migrations and bounded connections for FastAPI handlers.</p>
-                            <div class="mt-4 pt-3 border-t border-zinc-800 text-zinc-500 text-[10px]">Applied in 8 Missions</div>
+                        <!-- Agent 2: Nexus -->
+                        <div class="p-5 rounded-xl border border-zinc-800 bg-[#121318] hover:border-sky-500/40 transition space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-12 h-12 rounded-full overflow-hidden shrink-0 relative bg-[#0a0b0e] border border-white/10 flex items-center justify-center shadow-[0_0_12px_rgba(56,189,248,0.25)]">
+                                        <canvas class="showcase-agent-orb" data-agent="nexus" width="48" height="48" style="width: 48px; height: 48px; display: block; border-radius: 9999px;"></canvas>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm font-bold text-white flex items-center gap-1.5">
+                                            <span>Nexus</span>
+                                        </div>
+                                        <div class="text-xs text-zinc-400 font-mono">Systems Architect</div>
+                                    </div>
+                                </div>
+                                <span class="px-2 py-0.5 text-[10px] font-mono rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 uppercase">Active</span>
+                            </div>
+                            <p class="text-xs text-zinc-400 leading-relaxed font-sans">Modular boundaries, API schemas, ADR documentation, and system topology.</p>
+                            <div class="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[11px] font-mono text-zinc-400">
+                                <span>Completed: <strong class="text-white">12 deliverables</strong></span>
+                                <span class="text-sky-400">Lattice Orb</span>
+                            </div>
                         </div>
 
-                        <div class="p-4 rounded-lg border border-zinc-800 bg-[#0d0d11]">
-                            <div class="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">ADR-002 // MICROVM</div>
-                            <div class="text-white font-semibold text-sm">Hardware MicroVM Egress</div>
-                            <p class="text-zinc-400 text-[11px] mt-2 font-sans font-normal">All outbound traffic strictly filtered through tenant proxy; zero direct internet calls to unvetted registries.</p>
-                            <div class="mt-4 pt-3 border-t border-zinc-800 text-zinc-500 text-[10px]">Enforced by Aegis Agent</div>
+                        <!-- Agent 3: Sentinel -->
+                        <div class="p-5 rounded-xl border border-zinc-800 bg-[#121318] hover:border-purple-500/40 transition space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-12 h-12 rounded-full overflow-hidden shrink-0 relative bg-[#0a0b0e] border border-white/10 flex items-center justify-center shadow-[0_0_12px_rgba(52,211,153,0.25)]">
+                                        <canvas class="showcase-agent-orb" data-agent="sentinel" width="48" height="48" style="width: 48px; height: 48px; display: block; border-radius: 9999px;"></canvas>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm font-bold text-white flex items-center gap-1.5">
+                                            <span>Sentinel</span>
+                                        </div>
+                                        <div class="text-xs text-zinc-400 font-mono">QA &amp; Verification Lead</div>
+                                    </div>
+                                </div>
+                                <span class="px-2 py-0.5 text-[10px] font-mono rounded-full bg-amber-950/60 text-amber-300 border border-amber-800/60 uppercase">Reviewing</span>
+                            </div>
+                            <p class="text-xs text-zinc-400 leading-relaxed font-sans">TDD reproducers, automated test suites, regression prevention, and SWE-bench rigor.</p>
+                            <div class="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[11px] font-mono text-zinc-400">
+                                <span>Completed: <strong class="text-white">16 deliverables</strong></span>
+                                <span class="text-emerald-400">Radar Orb</span>
+                            </div>
                         </div>
 
-                        <div class="p-4 rounded-lg border border-zinc-800 bg-[#0d0d11]">
-                            <div class="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">ADR-003 // COMPLIANCE</div>
-                            <div class="text-white font-semibold text-sm">HMAC-SHA256 Audit Stream</div>
-                            <p class="text-zinc-400 text-[11px] mt-2 font-sans font-normal">Every autonomous file edit, test run, and PR creation is signed into an append-only tamper-evident SOC2 audit trail.</p>
-                            <div class="mt-4 pt-3 border-t border-zinc-800 text-zinc-500 text-[10px]">SOC2 Type II Compliant</div>
+                        <!-- Agent 4: Aegis -->
+                        <div class="p-5 rounded-xl border border-zinc-800 bg-[#121318] hover:border-amber-500/40 transition space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-12 h-12 rounded-full overflow-hidden shrink-0 relative bg-[#0a0b0e] border border-white/10 flex items-center justify-center shadow-[0_0_12px_rgba(251,191,36,0.25)]">
+                                        <canvas class="showcase-agent-orb" data-agent="aegis" width="48" height="48" style="width: 48px; height: 48px; display: block; border-radius: 9999px;"></canvas>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm font-bold text-white flex items-center gap-1.5">
+                                            <span>Aegis</span>
+                                        </div>
+                                        <div class="text-xs text-zinc-400 font-mono">Security Engineer</div>
+                                    </div>
+                                </div>
+                                <span class="px-2 py-0.5 text-[10px] font-mono rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700 uppercase">Standby</span>
+                            </div>
+                            <p class="text-xs text-zinc-400 leading-relaxed font-sans">Vulnerability audits, secret leak prevention, SOC-2 compliance, and egress firewall rules.</p>
+                            <div class="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[11px] font-mono text-zinc-400">
+                                <span>Completed: <strong class="text-white">18 deliverables</strong></span>
+                                <span class="text-amber-400">Meridian Orb</span>
+                            </div>
+                        </div>
+
+                        <!-- Agent 5: Forge -->
+                        <div class="p-5 rounded-xl border border-zinc-800 bg-[#121318] hover:border-indigo-500/40 transition space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-12 h-12 rounded-full overflow-hidden shrink-0 relative bg-[#0a0b0e] border border-white/10 flex items-center justify-center shadow-[0_0_12px_rgba(129,140,248,0.25)]">
+                                        <canvas class="showcase-agent-orb" data-agent="forge" width="48" height="48" style="width: 48px; height: 48px; display: block; border-radius: 9999px;"></canvas>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm font-bold text-white flex items-center gap-1.5">
+                                            <span>Forge</span>
+                                        </div>
+                                        <div class="text-xs text-zinc-400 font-mono">Full-Stack Engineer</div>
+                                    </div>
+                                </div>
+                                <span class="px-2 py-0.5 text-[10px] font-mono rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 uppercase">Active</span>
+                            </div>
+                            <p class="text-xs text-zinc-400 leading-relaxed font-sans">API endpoints, backend logic, database migrations, and performant query optimization.</p>
+                            <div class="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[11px] font-mono text-zinc-400">
+                                <span>Completed: <strong class="text-white">24 deliverables</strong></span>
+                                <span class="text-indigo-400">Torus Orb</span>
+                            </div>
+                        </div>
+
+                        <!-- Agent 6: Pixel -->
+                        <div class="p-5 rounded-xl border border-zinc-800 bg-[#121318] hover:border-pink-500/40 transition space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-12 h-12 rounded-full overflow-hidden shrink-0 relative bg-[#0a0b0e] border border-white/10 flex items-center justify-center shadow-[0_0_12px_rgba(244,114,182,0.25)]">
+                                        <canvas class="showcase-agent-orb" data-agent="pixel" width="48" height="48" style="width: 48px; height: 48px; display: block; border-radius: 9999px;"></canvas>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm font-bold text-white flex items-center gap-1.5">
+                                            <span>Pixel</span>
+                                        </div>
+                                        <div class="text-xs text-zinc-400 font-mono">Design Systems Engineer</div>
+                                    </div>
+                                </div>
+                                <span class="px-2 py-0.5 text-[10px] font-mono rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 uppercase">Active</span>
+                            </div>
+                            <p class="text-xs text-zinc-400 leading-relaxed font-sans">Component architecture, responsive styling, accessibility, and high-fidelity layouts.</p>
+                            <div class="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[11px] font-mono text-zinc-400">
+                                <span>Completed: <strong class="text-white">8 deliverables</strong></span>
+                                <span class="text-pink-400">Liquid Orb</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -842,7 +1163,7 @@
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div class="p-4 rounded-lg border border-emerald-500/30 bg-emerald-950/20">
                             <div class="flex items-center gap-2 text-emerald-400 font-bold mb-2">
-                                <span>🛡️</span>
+                                <svg class="w-4 h-4 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                                 <span>Aegis Security Seal</span>
                             </div>
                             <p class="text-zinc-300 font-sans text-xs">0 OWASP Top 10 vulnerabilities, 0 hardcoded secrets, and 0 vulnerable transitive dependencies.</p>
@@ -851,7 +1172,7 @@
 
                         <div class="p-4 rounded-lg border border-sky-500/30 bg-sky-950/20">
                             <div class="flex items-center gap-2 text-sky-400 font-bold mb-2">
-                                <span>🧪</span>
+                                <svg class="w-4 h-4 text-purple-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31L4.36 17a2 2 0 0 0 1.64 3h12a2 2 0 0 0 1.64-3L14 9.31V2"/></svg>
                                 <span>Sentinel QA Seal</span>
                             </div>
                             <p class="text-zinc-300 font-sans text-xs">Negative-to-positive TDD test proved defect; 183 / 183 regression assertions passed with zero flaky tests.</p>
@@ -860,7 +1181,7 @@
 
                         <div class="p-4 rounded-lg border border-amber-500/30 bg-amber-950/20">
                             <div class="flex items-center gap-2 text-amber-400 font-bold mb-2">
-                                <span>📐</span>
+                                <svg class="w-4 h-4 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
                                 <span>Nexus Architecture Seal</span>
                             </div>
                             <p class="text-zinc-300 font-sans text-xs">Follows repository design patterns, clean separation of concerns, and minimal line-change blast radius.</p>
@@ -875,7 +1196,7 @@
                             <div class="text-zinc-400 text-xs font-sans mt-0.5">Automated work is 95% complete. The operator reviews the verified diff and signs off.</div>
                         </div>
                         <button type="button" class="bg-emerald-500 text-black px-4 py-2 rounded-lg text-xs font-bold hover:bg-emerald-400 transition-colors cursor-pointer" onclick="alert('Consensus verified: 3 seals active. Ready for production merge.')">
-                            ✓ Approve & Merge PR
+                            ✓ Approve &amp; Merge PR
                         </button>
                     </div>
                 </div>
@@ -1737,7 +2058,85 @@
             });
         });
 
-        // 5. Interactive Showcase Tabs
+        // 5. Interactive Showcase Tabs & Agent Particle Orbs
+        function initShowcaseAgentOrbs() {
+            const canvases = document.querySelectorAll('.showcase-agent-orb');
+            canvases.forEach(canvas => {
+                if (canvas._orbActive) return;
+                canvas._orbActive = true;
+                const agent = canvas.getAttribute('data-agent');
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+                
+                const w = canvas.width || 48;
+                const h = canvas.height || 48;
+                const cx = w / 2;
+                const cy = h / 2;
+                const R = w * 0.36;
+                
+                const colorMap = {
+                    axiom: { r: 204, g: 255, b: 0 },
+                    nexus: { r: 56, g: 189, b: 248 },
+                    sentinel: { r: 52, g: 211, b: 153 },
+                    aegis: { r: 251, g: 191, b: 36 },
+                    forge: { r: 129, g: 140, b: 248 },
+                    pixel: { r: 244, g: 114, b: 182 }
+                };
+                const c = colorMap[agent] || { r: 204, g: 255, b: 0 };
+                
+                const count = 36;
+                const particles = [];
+                for (let i = 0; i < count; i++) {
+                    const phi = Math.acos(-1 + (2 * i) / count);
+                    const theta = Math.sqrt(count * Math.PI) * phi;
+                    particles.push({
+                        x: R * Math.cos(theta) * Math.sin(phi),
+                        y: R * Math.sin(theta) * Math.sin(phi),
+                        z: R * Math.cos(phi)
+                    });
+                }
+                
+                let angleY = Math.random() * Math.PI * 2;
+                let angleX = 0.35;
+                
+                function draw() {
+                    ctx.clearRect(0, 0, w, h);
+                    
+                    const grad = ctx.createRadialGradient(cx, cy, 1, cx, cy, R * 1.3);
+                    grad.addColorStop(0, `rgba(${c.r}, ${c.g}, ${c.b}, 0.32)`);
+                    grad.addColorStop(0.6, `rgba(${c.r}, ${c.g}, ${c.b}, 0.09)`);
+                    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, R * 1.25, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    angleY += 0.024;
+                    const cosY = Math.cos(angleY), sinY = Math.sin(angleY);
+                    const cosX = Math.cos(angleX), sinX = Math.sin(angleX);
+                    
+                    for (let i = 0; i < count; i++) {
+                        const pt = particles[i];
+                        const x1 = pt.x * cosY - pt.z * sinY;
+                        const z1 = pt.z * cosY + pt.x * sinY;
+                        const y2 = pt.y * cosX - z1 * sinX;
+                        const z2 = z1 * cosX + pt.y * sinX;
+                        
+                        const alpha = Math.max(0.35, Math.min(1.0, (z2 + R) / (2 * R)));
+                        const px = cx + x1;
+                        const py = cy + y2;
+                        
+                        ctx.fillStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha})`;
+                        ctx.beginPath();
+                        ctx.arc(px, py, 1.8, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    requestAnimationFrame(draw);
+                }
+                requestAnimationFrame(draw);
+            });
+        }
+
         document.querySelectorAll('.kb-demo-tab').forEach(tab => {
             tab.addEventListener('click', function() {
                 const targetTab = this.getAttribute('data-tab');
@@ -1753,6 +2152,7 @@
                 if (activePanel) {
                     activePanel.classList.remove('hidden');
                     if (window.lucide) lucide.createIcons();
+                    if (targetTab === 'team') initShowcaseAgentOrbs();
                 }
             });
         });

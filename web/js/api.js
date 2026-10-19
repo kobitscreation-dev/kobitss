@@ -455,7 +455,7 @@ index 0000000..9b62a4f
     // 10. 3-Tier Agency Dashboard Demo Mode Fallbacks
     if (path.startsWith('/client-portal/portal-summary') || path.startsWith('/client-portal/summary')) {
       return {
-        organization: { id: "demo-org-acme", name: "Acme FinTech Corp", slug: "acme-fintech", role: "READ_ONLY_REVIEWER", monthly_retainer_usd: 6500, billing_tier: "Autonomous Pod Retainer", sla_status: "99.9% On-Time SLA" },
+        organization: { id: "demo-org-acme", name: "Acme FinTech Corp", slug: "acme-fintech", role: "READ_ONLY_REVIEWER", monthly_retainer_usd: 6500, billing_tier: "Executive Retainer", sla_status: "99.9% On-Time SLA" },
         project: { id: "demo-proj-core", name: "Acme Core Banking Platform", description: "Autonomous software engineering workspace", default_branch: "main", tech_stack: ["Python", "FastAPI", "PostgreSQL", "TypeScript", "Docker"] },
         sprint_hero: {
           active_sprint_name: "Sprint 2: Zero-Trust Webhook Verification & Ledger Isolation",
