@@ -318,26 +318,25 @@ def test_frontend_js_and_portal_html_integrity():
         # Check electric neon-lime palette token
         assert "#ccff00" in code
 
-        # Check 3D Particle Orb & Thinking Orb exports and DOM structures
+        # Check 3D Particle Orb exports and Team tab agent particle orbs
         assert "AGENT_ORB_CONFIGS" in code
         assert "createAgentParticleOrb" in code
         assert "createThinkingOrb" in code
-        assert "portal-thinking-orb-container" in code
-        assert "portal-thinking-orb-canvas" in code
         assert "agent-orb-container" in code
         assert "agent-orb-canvas" in code
-        assert "thinking-pill" in code
-        assert "Thinking..." in code
-        assert "Searching codebase..." in code
-        assert "Synthesizing TDD test..." in code
-        assert "Solving issue..." in code
-        assert "Running regression gate..." in code
         assert "cancelAnimationFrame" in code
 
-        # Check stateful reactivity and synchronization
-        assert "effectiveAgentKey" in code
-        assert "activeThinkingState" in code
-        assert "BOOST MODE // 3D QUANTUM ACCELERATION" in code
+        # Overview tab must NOT contain thinking orb card, canvas, or status pills ("i dont need hear anithink")
+        assert "portal-thinking-orb-container" not in code
+        assert "portal-thinking-orb-canvas" not in code
+        assert "thinking-pill" not in code
+        assert "AUTONOMOUS THINKING ORB" not in code
+
+        # Verify Overview tab structure restored to original 4 KPI cards, sprint, deliverables, feed
+        assert "CURRENT SPRINT" in code
+        assert "// RECENT_DELIVERABLES" in code
+        assert "// RECENT_ACTIVITY" in code
+        assert "portal-activity-feed" in code
 
         # Run LSP syntax validation
         diag = HeadlessLSPService.get_diagnostics(file_path=p, repo_path=repo_root)
@@ -400,7 +399,7 @@ def test_frontend_js_and_portal_html_integrity():
     assert "getPortalInitialTab" in html
     assert "isClientPortalRoute" in html
     assert "agent-orb-canvas" in html
-    assert "portal-thinking-orb-canvas" in html
+    assert "portal-thinking-orb-canvas" not in html
 
 
 @pytest.mark.asyncio
