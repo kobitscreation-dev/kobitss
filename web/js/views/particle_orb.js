@@ -607,7 +607,11 @@ function renderGeometryScene(ctx, model, geomType, config, elapsed, rotX, rotY, 
     // Sort projected particles back to front (painter's algorithm)
     projected.sort((a, b) => a.pz - b.pz);
 
-    // Draw particles
+    // Draw particles with minimal context state switching
+    let currentShadow = false;
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
+
     for (let i = 0; i < projected.length; i++) {
         const item = projected[i];
         const p = item.p;
@@ -622,7 +626,6 @@ function renderGeometryScene(ctx, model, geomType, config, elapsed, rotX, rotY, 
             fill = item.scanIntensity > 0.4 ? '#ffffff' : config.primaryColor;
         }
 
-        ctx.save();
         ctx.globalAlpha = Math.max(0.12, Math.min(1.0, alpha));
         ctx.fillStyle = fill;
 
@@ -630,13 +633,22 @@ function renderGeometryScene(ctx, model, geomType, config, elapsed, rotX, rotY, 
         if (normZ > 0.65 || item.isScanned) {
             ctx.shadowColor = fill;
             ctx.shadowBlur = Math.round(5 * item.persp);
+            currentShadow = true;
+        } else if (currentShadow) {
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            currentShadow = false;
         }
 
         ctx.beginPath();
         ctx.arc(item.px, item.py, Math.max(0.6, radius), 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
     }
+    if (currentShadow) {
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+    }
+    ctx.globalAlpha = 1.0;
 }
 
 export function createAgentParticleOrb(canvas, agentKey, options) {
@@ -658,10 +670,12 @@ export function createAgentParticleOrb(canvas, agentKey, options) {
     let rotVelY = 0.018;
     let speedMultiplier = typeof opts.speed === 'number' ? opts.speed : 1.0;
     let isHovered = false;
+    let rippleTime = 999;
 
     const model = generateOrbParticles(geomType, opts.particleMultiplier || 0.85);
     const R = model.R || 70;
 
+    let lastW = 0, lastH = 0;
     function resize() {
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const rect = canvas.getBoundingClientRect();
@@ -671,6 +685,8 @@ export function createAgentParticleOrb(canvas, agentKey, options) {
         canvas.height = Math.round(h * dpr);
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.scale(dpr, dpr);
+        lastW = w;
+        lastH = h;
         return { w: w, h: h, cx: w / 2, cy: h / 2, scale: (Math.min(w, h) * 0.42) / R };
     }
 
@@ -678,8 +694,19 @@ export function createAgentParticleOrb(canvas, agentKey, options) {
 
     const onEnter = () => { isHovered = true; speedMultiplier = 1.8; };
     const onLeave = () => { isHovered = false; speedMultiplier = typeof opts.speed === 'number' ? opts.speed : 1.0; };
+    const onClick = () => {
+        rippleTime = 0;
+        speedMultiplier = 2.4;
+        setTimeout(() => { speedMultiplier = typeof opts.speed === 'number' ? opts.speed : 1.0; }, 1200);
+    };
+    const onTouchStart = () => { isHovered = true; speedMultiplier = 1.8; rippleTime = 0; };
+    const onTouchEnd = () => { isHovered = false; speedMultiplier = typeof opts.speed === 'number' ? opts.speed : 1.0; };
+
     canvas.addEventListener('mouseenter', onEnter);
     canvas.addEventListener('mouseleave', onLeave);
+    canvas.addEventListener('click', onClick);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: true });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: true });
 
     const startTime = performance.now();
     let lastTime = startTime;
@@ -689,6 +716,13 @@ export function createAgentParticleOrb(canvas, agentKey, options) {
         const dt = Math.min((now - lastTime) / 1000, 0.1);
         lastTime = now;
         const elapsed = (now - startTime) / 1000 * speedMultiplier;
+        rippleTime += dt;
+
+        const curW = canvas.clientWidth || 0;
+        const curH = canvas.clientHeight || 0;
+        if (curW > 0 && curH > 0 && (Math.abs(curW - lastW) > 2 || Math.abs(curH - lastH) > 2)) {
+            dim = resize();
+        }
 
         rotY += rotVelY * speedMultiplier * (dt * 60);
         rotX += rotVelX * (dt * 60);
@@ -697,7 +731,7 @@ export function createAgentParticleOrb(canvas, agentKey, options) {
         const w = dim.w, h = dim.h, cx = dim.cx, cy = dim.cy, scale = dim.scale;
         ctx.clearRect(0, 0, w, h);
 
-        renderGeometryScene(ctx, model, geomType, config, elapsed, rotX, rotY, rotZ, cx, cy, scale, isHovered, 999);
+        renderGeometryScene(ctx, model, geomType, config, elapsed, rotX, rotY, rotZ, cx, cy, scale, isHovered, rippleTime);
 
         animId = requestAnimationFrame(renderFrame);
     }
@@ -710,6 +744,9 @@ export function createAgentParticleOrb(canvas, agentKey, options) {
             if (animId) cancelAnimationFrame(animId);
             canvas.removeEventListener('mouseenter', onEnter);
             canvas.removeEventListener('mouseleave', onLeave);
+            canvas.removeEventListener('click', onClick);
+            canvas.removeEventListener('touchstart', onTouchStart);
+            canvas.removeEventListener('touchend', onTouchEnd);
         },
         setSpeed: (s) => { speedMultiplier = s; }
     };
@@ -742,6 +779,7 @@ export function createThinkingOrb(canvas, options) {
     let mouseNormY = 0;
     let isHovered = false;
 
+    let lastW = 0, lastH = 0;
     function resize() {
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const rect = canvas.getBoundingClientRect();
@@ -751,6 +789,8 @@ export function createThinkingOrb(canvas, options) {
         canvas.height = Math.round(h * dpr);
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.scale(dpr, dpr);
+        lastW = w;
+        lastH = h;
         return { w: w, h: h, cx: w / 2, cy: h / 2, scale: (Math.min(w, h) * 0.44) / model.R };
     }
 
@@ -762,6 +802,11 @@ export function createThinkingOrb(canvas, options) {
         lastMouseY = e.clientY;
     };
     const onMouseMove = (e) => {
+        if (!isHovered && !isDragging) {
+            mouseNormX = 0;
+            mouseNormY = 0;
+            return;
+        }
         const rect = canvas.getBoundingClientRect();
         mouseNormX = ((e.clientX - rect.left) - dim.cx) / dim.cx;
         mouseNormY = ((e.clientY - rect.top) - dim.cy) / dim.cy;
@@ -785,12 +830,50 @@ export function createThinkingOrb(canvas, options) {
     const onMouseEnter = () => { isHovered = true; };
     const onMouseLeave = () => { isHovered = false; isDragging = false; mouseNormX = 0; mouseNormY = 0; };
 
+    const onTouchStart = (e) => {
+        if (!e.touches || !e.touches[0]) return;
+        isDragging = true;
+        isHovered = true;
+        lastMouseX = e.touches[0].clientX;
+        lastMouseY = e.touches[0].clientY;
+        const rect = canvas.getBoundingClientRect();
+        mouseNormX = ((lastMouseX - rect.left) - dim.cx) / dim.cx;
+        mouseNormY = ((lastMouseY - rect.top) - dim.cy) / dim.cy;
+    };
+    const onTouchMove = (e) => {
+        if (!isDragging || !e.touches || !e.touches[0]) return;
+        const t = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        mouseNormX = ((t.clientX - rect.left) - dim.cx) / dim.cx;
+        mouseNormY = ((t.clientY - rect.top) - dim.cy) / dim.cy;
+        const dx = t.clientX - lastMouseX;
+        const dy = t.clientY - lastMouseY;
+        rotVelY = dx * 0.008;
+        rotVelX = dy * 0.008;
+        rotY += rotVelY;
+        rotX += rotVelX;
+        lastMouseX = t.clientX;
+        lastMouseY = t.clientY;
+        if (e.cancelable) e.preventDefault();
+    };
+    const onTouchEnd = () => {
+        isDragging = false;
+        isHovered = false;
+        mouseNormX = 0;
+        mouseNormY = 0;
+    };
+
     canvas.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
     canvas.addEventListener('click', onClick);
     canvas.addEventListener('mouseenter', onMouseEnter);
     canvas.addEventListener('mouseleave', onMouseLeave);
+
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
 
     const startTime = performance.now();
     let lastTime = startTime;
@@ -801,6 +884,12 @@ export function createThinkingOrb(canvas, options) {
         lastTime = now;
         const elapsed = (now - startTime) / 1000 * speedMultiplier;
         rippleTime += dt;
+
+        const curW = canvas.clientWidth || 0;
+        const curH = canvas.clientHeight || 0;
+        if (curW > 0 && curH > 0 && (Math.abs(curW - lastW) > 2 || Math.abs(curH - lastH) > 2)) {
+            dim = resize();
+        }
 
         if (!isDragging) {
             rotY += (rotVelY * speedMultiplier + mouseNormX * 0.006) * (dt * 60);
@@ -836,6 +925,10 @@ export function createThinkingOrb(canvas, options) {
             canvas.removeEventListener('click', onClick);
             canvas.removeEventListener('mouseenter', onMouseEnter);
             canvas.removeEventListener('mouseleave', onMouseLeave);
+            canvas.removeEventListener('touchstart', onTouchStart);
+            window.removeEventListener('touchmove', onTouchMove);
+            window.removeEventListener('touchend', onTouchEnd);
+            window.removeEventListener('touchcancel', onTouchEnd);
         },
         setAgent: (agentKey, speedBoost) => {
             const key = String(agentKey || 'axiom').toLowerCase().replace(/^agent-/, '');

@@ -317,9 +317,10 @@ async function dispatchTriadSurfaceRoute(routeStr) {
   ) {
     if (baseRoute.startsWith('portal/')) {
       params.tab = baseRoute.split('/')[1];
-    } else if (baseRoute === 'teamwork-preview' || baseRoute === 'teamwork' || baseRoute === 'team') {
-      params.tab = 'team';
-    } else if (baseRoute === 'boost' || baseRoute === 'reports') {
+    } else if (baseRoute === 'boost') {
+      params.tab = 'overview';
+      params.boost = true;
+    } else if (baseRoute === 'reports') {
       params.tab = 'reports';
     } else if (baseRoute === 'milestones' || baseRoute === 'deliverables') {
       params.tab = baseRoute;

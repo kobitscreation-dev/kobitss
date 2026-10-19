@@ -334,9 +334,26 @@ def test_frontend_js_and_portal_html_integrity():
         assert "Running regression gate..." in code
         assert "cancelAnimationFrame" in code
 
+        # Check stateful reactivity and synchronization
+        assert "effectiveAgentKey" in code
+        assert "activeThinkingState" in code
+        assert "BOOST MODE // 3D QUANTUM ACCELERATION" in code
+
         # Run LSP syntax validation
         diag = HeadlessLSPService.get_diagnostics(file_path=p, repo_path=repo_root)
         assert diag["error_count"] == 0, f"LSP Diagnostics errors in {p}: {diag['diagnostics']}"
+
+    # Verify app.js and web/js/app.js triad surface routing for #boost
+    app_js_paths = [
+        os.path.join(repo_root, "js", "app.js"),
+        os.path.join(repo_root, "web", "js", "app.js"),
+    ]
+    for ap in app_js_paths:
+        assert os.path.exists(ap), f"Missing app.js: {ap}"
+        with open(ap, "r", encoding="utf-8") as f:
+            app_code = f.read()
+        assert "baseRoute === 'boost'" in app_code
+        assert "params.tab = 'overview'" in app_code
 
     # Also verify particle_orb.js helper modules in js/ and web/js/
     orb_js_paths = [
@@ -358,6 +375,10 @@ def test_frontend_js_and_portal_html_integrity():
         assert "forge" in orb_code and "torus" in orb_code
         assert "pixel" in orb_code and "liquid" in orb_code
         assert "vanguard" in orb_code and "swarm" in orb_code
+        # Verify touch events and mobile interaction support
+        assert "touchstart" in orb_code
+        assert "touchmove" in orb_code
+        assert "touchend" in orb_code
         orb_diag = HeadlessLSPService.get_diagnostics(file_path=op, repo_path=repo_root)
         assert orb_diag["error_count"] == 0, f"LSP Diagnostics errors in {op}: {orb_diag['diagnostics']}"
 
