@@ -154,11 +154,7 @@ export function renderMilestonesTab(timeline = []) {
 
                     let checkpointClasses = 'bg-[#14151a] border-2 border-[#27272a] text-zinc-600';
                     let statusPill = 'bg-zinc-800 text-zinc-400 border-zinc-700';
-                    let iconSvg = `
-                        <svg class="w-3 h-3 text-zinc-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <circle cx="12" cy="12" r="5"/>
-                        </svg>
-                    `;
+                    let iconSvg = '';
 
                     if (isComplete) {
                         checkpointClasses = 'bg-emerald-950/80 border border-emerald-500 text-emerald-400';
@@ -193,7 +189,7 @@ export function renderMilestonesTab(timeline = []) {
                         <div class="relative pl-12 group">
                             ${idx < (timeline || []).length - 1 ? `
                                 <!-- Continuous Vertical Connecting Line (through center axis x=24px) -->
-                                <div class="absolute left-[23px] top-4 -bottom-14 w-0.5 bg-zinc-800 pointer-events-none" style="bottom: -56px;" aria-hidden="true"></div>
+                                <div class="absolute left-[23px] w-0.5 bg-zinc-800 pointer-events-none" style="top: ${idx === 0 ? '32px' : '16px'}; bottom: -56px;" aria-hidden="true"></div>
                             ` : ''}
 
                             <!-- Circular Checkpoint Node (32px diameter, center at x=24px, y=32px) -->

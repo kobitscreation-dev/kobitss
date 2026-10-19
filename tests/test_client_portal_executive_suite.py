@@ -318,6 +318,7 @@ def test_frontend_js_and_portal_html_integrity():
         assert "ring-[#ccff00]/25" in code or "ring-[#ccff00]" in code
         assert "border-[#27272a]" in code
         assert "left-[23px]" in code and "bg-zinc-800" in code
+        assert "top: ${idx === 0 ? '32px' : '16px'}; bottom: -56px;" in code
 
         # Check deliverable icons, item count, and active milestone progress bar text
         assert "getDeliverableIconSvg(deliv.icon)" in code
@@ -351,6 +352,10 @@ def test_frontend_js_and_portal_html_integrity():
         # Run LSP syntax validation
         diag = HeadlessLSPService.get_diagnostics(file_path=p, repo_path=repo_root)
         assert diag["error_count"] == 0, f"LSP Diagnostics errors in {p}: {diag['diagnostics']}"
+
+    # Verify 100% bit-for-bit parity between root js/ and web/js/ client_portal.js
+    with open(js_paths[0], "r", encoding="utf-8") as f0, open(js_paths[1], "r", encoding="utf-8") as f1:
+        assert f0.read() == f1.read(), "js/views/client_portal.js and web/js/views/client_portal.js must maintain 100% bit-for-bit parity"
 
     # Verify app.js and web/js/app.js triad surface routing for #boost and #team
     app_js_paths = [
