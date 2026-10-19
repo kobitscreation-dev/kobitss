@@ -301,6 +301,7 @@ def test_frontend_js_and_portal_html_integrity():
         # Check export signatures
         assert "export function buildArchitectureSvg" in code
         assert "export function getDeliverableIconSvg" in code
+        assert "export function renderMilestonesTab" in code
         assert "export async function renderClientPortalView" in code
 
         # Check 5 tab navigation tabs and handlers
@@ -309,6 +310,14 @@ def test_frontend_js_and_portal_html_integrity():
         assert 'data-tab="deliverables"' in code
         assert 'data-tab="team"' in code
         assert 'data-tab="reports"' in code
+
+        # Check Milestones checkpoint nodes (Checkmark, Clock, Hollow Ring) and center connecting rail line
+        assert "polyline points=\"20 6 9 17 4 12\"" in code
+        assert "bg-emerald-950/80" in code and "border-emerald-500" in code
+        assert "polyline points=\"12 7 12 12 15 14\"" in code
+        assert "ring-[#ccff00]/25" in code or "ring-[#ccff00]" in code
+        assert "border-[#27272a]" in code
+        assert "left-[23px]" in code and "bg-zinc-800" in code
 
         # Check deliverable icons, item count, and active milestone progress bar text
         assert "getDeliverableIconSvg(deliv.icon)" in code

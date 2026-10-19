@@ -132,6 +132,120 @@ export function getDeliverableIconSvg(iconName) {
     }
 }
 
+export function renderMilestonesTab(timeline = []) {
+    return `
+        <div class="bg-[#14151a] border border-white/[0.08] rounded-xl p-6 space-y-6">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-4">
+                <div>
+                    <span class="text-[10px] font-mono uppercase tracking-widest text-[#ccff00]">ROADMAP</span>
+                    <h2 class="text-lg font-bold text-white mt-0.5">PROJECT TIMELINE</h2>
+                    <p class="text-xs text-zinc-400 mt-1">End-to-end milestone schedule tracking verified deliverables across 10 engineering weeks.</p>
+                </div>
+                <span class="text-xs font-mono text-zinc-400">${(timeline || []).length} Scheduled Phases</span>
+            </div>
+
+            <!-- Vertical Connected Timeline Nodes -->
+            <div class="space-y-6">
+                ${(timeline || []).map((item, idx) => {
+                    const statusLower = (item.status || '').toLowerCase();
+                    const isComplete = statusLower === 'complete' || statusLower === 'completed';
+                    const isActive = statusLower === 'active' || statusLower === 'in_progress' || statusLower === 'in progress';
+                    const isFailed = statusLower === 'failed' || statusLower === 'blocked';
+
+                    let checkpointClasses = 'bg-[#14151a] border-2 border-[#27272a] text-zinc-600';
+                    let statusPill = 'bg-zinc-800 text-zinc-400 border-zinc-700';
+                    let iconSvg = `
+                        <svg class="w-3 h-3 text-zinc-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="5"/>
+                        </svg>
+                    `;
+
+                    if (isComplete) {
+                        checkpointClasses = 'bg-emerald-950/80 border border-emerald-500 text-emerald-400';
+                        statusPill = 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60';
+                        iconSvg = `
+                            <svg class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                        `;
+                    } else if (isActive) {
+                        checkpointClasses = 'bg-[#14151a] border-2 border-[#ccff00] text-[#ccff00] ring-4 ring-[#ccff00]/25 shadow-[0_0_12px_rgba(204,255,0,0.35)]';
+                        statusPill = 'bg-sky-950/60 text-sky-300 border-sky-800/60';
+                        iconSvg = `
+                            <svg class="w-4 h-4 text-[#ccff00]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="12" cy="12" r="9"/>
+                                <polyline points="12 7 12 12 15 14"/>
+                            </svg>
+                        `;
+                    } else if (isFailed) {
+                        checkpointClasses = 'bg-rose-950/80 border border-rose-500 text-rose-400';
+                        statusPill = 'bg-rose-950/60 text-rose-300 border-rose-800/60';
+                        iconSvg = `
+                            <svg class="w-4 h-4 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="12" cy="12" r="9"/>
+                                <line x1="15" y1="9" x2="9" y2="15"/>
+                                <line x1="9" y1="9" x2="15" y2="15"/>
+                            </svg>
+                        `;
+                    }
+
+                    return `
+                        <div class="relative pl-12 group">
+                            ${idx < (timeline || []).length - 1 ? `
+                                <!-- Continuous Vertical Connecting Line (through center axis x=24px) -->
+                                <div class="absolute left-[23px] top-4 -bottom-14 w-0.5 bg-zinc-800 pointer-events-none" style="bottom: -56px;" aria-hidden="true"></div>
+                            ` : ''}
+
+                            <!-- Circular Checkpoint Node (32px diameter, center at x=24px, y=32px) -->
+                            <div class="absolute left-2 top-4 w-8 h-8 rounded-full flex items-center justify-center z-10 select-none ${checkpointClasses}">
+                                ${iconSvg}
+                            </div>
+
+                            <!-- Node Card -->
+                            <div class="bg-[#1a1b22] border ${isActive ? 'border-[#ccff00]/40 ring-1 ring-[#ccff00]/20' : 'border-white/[0.05]'} rounded-xl p-5 space-y-3">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div class="flex items-center gap-2.5">
+                                        <span class="text-xs font-mono font-bold text-zinc-400">${escapeHtml(item.weeks || `Week ${idx + 1}`)}</span>
+                                        <span class="text-zinc-600">•</span>
+                                        <h3 class="text-sm font-semibold text-white">${escapeHtml(item.title || item.phase)}</h3>
+                                    </div>
+                                    <span class="px-2.5 py-0.5 text-[10px] font-mono uppercase rounded-full border ${statusPill} self-start sm:self-auto">
+                                        ${escapeHtml(item.status)}
+                                    </span>
+                                </div>
+
+                                <p class="text-xs text-zinc-300 leading-relaxed">${escapeHtml(item.description || '')}</p>
+
+                                ${isActive ? `
+                                    <!-- In-line Neon Lime Progress Bar for Active Phase -->
+                                    <div class="space-y-1.5 pt-1">
+                                        <div class="flex items-center justify-between text-xs font-mono">
+                                            <span class="text-[#ccff00] font-semibold">Progress ${item.progress || 60}%</span>
+                                            <span class="text-white font-bold">${item.progress || 60}%</span>
+                                        </div>
+                                        <div class="w-full h-1.5 bg-[#0d0e11] rounded-full overflow-hidden">
+                                            <div class="h-full bg-[#ccff00] rounded-full" style="width: ${item.progress || 60}%;"></div>
+                                        </div>
+                                    </div>
+                                ` : ''}
+
+                                <!-- Deliverable Tags -->
+                                <div class="flex flex-wrap gap-1.5 pt-1">
+                                    ${(item.deliverables || []).map(tag => `
+                                        <span class="px-2 py-0.5 text-[11px] font-mono rounded bg-[#0d0e11] text-zinc-300 border border-zinc-800">
+                                             ${escapeHtml(tag)}
+                                        </span>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+}
+
 export async function renderClientPortalView(container, params = {}) {
     if (!container) return;
     if (typeof container === 'string') {
@@ -513,79 +627,7 @@ export async function renderClientPortalView(container, params = {}) {
 
                     <!-- TAB 2: MILESTONES (PROJECT TIMELINE) -->
                     <section id="tab-content-milestones" class="${currentTab === 'milestones' ? 'block' : 'hidden'} space-y-6">
-                        <div class="bg-[#14151a] border border-white/[0.08] rounded-xl p-6 space-y-6">
-                            <div class="flex items-center justify-between border-b border-zinc-800 pb-4">
-                                <div>
-                                    <span class="text-[10px] font-mono uppercase tracking-widest text-[#ccff00]">ROADMAP</span>
-                                    <h2 class="text-lg font-bold text-white mt-0.5">PROJECT TIMELINE</h2>
-                                    <p class="text-xs text-zinc-400 mt-1">End-to-end milestone schedule tracking verified deliverables across 10 engineering weeks.</p>
-                                </div>
-                                <span class="text-xs font-mono text-zinc-400">${timeline.length} Scheduled Phases</span>
-                            </div>
-
-                            <!-- Vertical Connected Timeline Nodes -->
-                            <div class="relative pl-6 space-y-8 before:absolute before:left-3 before:top-3 before:bottom-3 before:w-0.5 before:bg-zinc-800">
-                                ${timeline.map((item, idx) => {
-                                    const isComplete = (item.status || '').toLowerCase() === 'complete';
-                                    const isActive = (item.status || '').toLowerCase() === 'active';
-                                    let nodeDot = `bg-zinc-700 border-zinc-900`;
-                                    let statusPill = `bg-zinc-800 text-zinc-400 border-zinc-700`;
-
-                                    if (isComplete) {
-                                        nodeDot = `bg-[#ccff00] border-[#0d0e11] ring-4 ring-[#ccff00]/10`;
-                                        statusPill = `bg-emerald-950/60 text-emerald-400 border-emerald-800/60`;
-                                    } else if (isActive) {
-                                        nodeDot = `bg-sky-400 border-[#0d0e11] ring-4 ring-sky-400/20 animate-pulse`;
-                                        statusPill = `bg-sky-950/60 text-sky-300 border-sky-800/60`;
-                                    }
-
-                                    return `
-                                        <div class="relative group">
-                                            <!-- Node Dot -->
-                                            <div class="absolute -left-[1.85rem] top-1.5 w-3.5 h-3.5 rounded-full border-2 ${nodeDot}"></div>
-
-                                            <!-- Node Card -->
-                                            <div class="bg-[#1a1b22] border ${isActive ? 'border-[#ccff00]/40' : 'border-white/[0.05]'} rounded-xl p-5 space-y-3">
-                                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                                    <div class="flex items-center gap-2.5">
-                                                        <span class="text-xs font-mono font-bold text-zinc-400">${escapeHtml(item.weeks || `Week ${idx + 1}`)}</span>
-                                                        <span class="text-zinc-600">•</span>
-                                                        <h3 class="text-sm font-semibold text-white">${escapeHtml(item.title || item.phase)}</h3>
-                                                    </div>
-                                                    <span class="px-2.5 py-0.5 text-[10px] font-mono uppercase rounded-full border ${statusPill} self-start sm:self-auto">
-                                                        ${escapeHtml(item.status)}
-                                                    </span>
-                                                </div>
-
-                                                <p class="text-xs text-zinc-300 leading-relaxed">${escapeHtml(item.description || '')}</p>
-
-                                                ${isActive ? `
-                                                    <!-- In-line Neon Lime Progress Bar for Active Phase -->
-                                                    <div class="space-y-1.5 pt-1">
-                                                        <div class="flex items-center justify-between text-xs font-mono">
-                                                            <span class="text-[#ccff00] font-semibold">Progress ${item.progress || 60}%</span>
-                                                            <span class="text-white font-bold">${item.progress || 60}%</span>
-                                                        </div>
-                                                        <div class="w-full h-1.5 bg-[#0d0e11] rounded-full overflow-hidden">
-                                                            <div class="h-full bg-[#ccff00] rounded-full" style="width: ${item.progress || 60}%;"></div>
-                                                        </div>
-                                                    </div>
-                                                ` : ''}
-
-                                                <!-- Deliverable Tags -->
-                                                <div class="flex flex-wrap gap-1.5 pt-1">
-                                                    ${(item.deliverables || []).map(tag => `
-                                                        <span class="px-2 py-0.5 text-[11px] font-mono rounded bg-[#0d0e11] text-zinc-300 border border-zinc-800">
-                                                             ${escapeHtml(tag)}
-                                                        </span>
-                                                    `).join('')}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    `;
-                                }).join('')}
-                            </div>
-                        </div>
+                        ${renderMilestonesTab(timeline)}
                     </section>
 
                     <!-- TAB 3: DELIVERABLES -->
