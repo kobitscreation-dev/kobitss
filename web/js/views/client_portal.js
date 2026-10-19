@@ -399,20 +399,12 @@ export async function renderClientPortalView(container, params = {}) {
                                 </p>
                             </div>
 
-                            <div class="flex items-center gap-6">
-                                <div class="text-right">
-                                    <div class="text-3xl font-extrabold font-mono text-[#ccff00] tracking-tight leading-none" id="portal-overall-pct">
-                                        ${overallPct}%
-                                    </div>
-                                    <div class="text-[10px] font-mono text-zinc-400 uppercase tracking-widest mt-1">
-                                        Overall Completion
-                                    </div>
+                            <div class="text-right">
+                                <div class="text-3xl font-extrabold font-mono text-[#ccff00] tracking-tight leading-none" id="portal-overall-pct">
+                                    ${overallPct}%
                                 </div>
-                                <div class="flex items-center gap-2">
-                                    <button id="open-client-intake-btn" class="px-3.5 py-2 text-xs font-semibold rounded-xl bg-[#ccff00] hover:bg-[#b8e600] text-zinc-950 transition shadow-lg shadow-[#ccff00]/20 flex items-center gap-1.5 font-mono">
-                                        <span>+</span>
-                                        <span>Request Feature</span>
-                                    </button>
+                                <div class="text-[10px] font-mono text-zinc-400 uppercase tracking-widest mt-1">
+                                    Overall Completion
                                 </div>
                             </div>
                         </div>
@@ -719,15 +711,14 @@ export async function renderClientPortalView(container, params = {}) {
                     <section id="tab-content-team" class="${currentTab === 'team' ? 'block' : 'hidden'} space-y-6">
                         <div class="bg-[#14151a] border border-white/[0.08] rounded-xl p-6 space-y-6">
                             <div class="border-b border-zinc-800 pb-4">
-                                <span class="text-[10px] font-mono uppercase tracking-widest text-[#ccff00]">ALLOCATED POD</span>
-                                <h2 class="text-lg font-bold text-white mt-0.5">AUTONOMOUS ENGINEERING AGENT TEAM</h2>
-                                <p class="text-xs text-zinc-400 mt-1">Specialized autonomous AI agents assigned to your platform codebase.</p>
+                                <span class="text-[10px] font-mono uppercase tracking-widest text-[#ccff00]">ENGINEERING POD</span>
+                                <h2 class="text-lg font-bold text-white tracking-tight mt-0.5">Engineering Team</h2>
+                                <p class="text-xs text-zinc-400 mt-1">Dedicated senior engineers and specialists assigned to your platform codebase.</p>
                             </div>
 
                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 ${teamAgents.map(agent => {
                                     const agentKey = String(agent.name || 'axiom').toLowerCase();
-                                    const orbCfg = AGENT_ORB_CONFIGS[agentKey] || AGENT_ORB_CONFIGS.axiom;
                                     const isAct = (agent.status || '').toLowerCase() === 'active';
                                     const isRev = (agent.status || '').toLowerCase() === 'reviewing';
                                     let statusPill = 'bg-zinc-800 text-zinc-400 border-zinc-700';
@@ -740,15 +731,15 @@ export async function renderClientPortalView(container, params = {}) {
                                                 <div class="flex items-center justify-between">
                                                     <div class="flex items-center gap-3">
                                                         <!-- 3D Particle Orb Avatar Canvas Container in front of each agent -->
-                                                        <div class="agent-orb-container relative w-12 h-12 rounded-xl bg-[#090a0d] border border-white/[0.08] shadow-inner overflow-hidden flex items-center justify-center shrink-0 group-hover:border-[#ccff00]/50 transition" title="${escapeHtml(agent.name)} 3D Particle Orb">
+                                                        <div class="agent-orb-container relative w-12 h-12 rounded-full bg-[#0a0b0e] border border-white/10 shadow-lg overflow-hidden flex items-center justify-center shrink-0 group-hover:border-[#ccff00]/60 transition-all duration-300" title="${escapeHtml(agent.name)} 3D Particle Orb">
                                                             <canvas class="agent-orb-canvas w-full h-full cursor-pointer" data-agent="${escapeHtml(agentKey)}" width="96" height="96"></canvas>
                                                         </div>
                                                         <div>
                                                             <div class="flex items-center gap-1.5">
-                                                                <span class="text-sm font-bold text-white">${escapeHtml(agent.name)}</span>
+                                                                <span class="text-sm font-semibold text-white tracking-tight">${escapeHtml(agent.name)}</span>
                                                                 <span class="text-xs">${agent.icon || ''}</span>
                                                             </div>
-                                                            <div class="text-[11px] font-mono text-zinc-400">${escapeHtml(agent.title)}</div>
+                                                            <div class="text-xs text-zinc-400 font-medium">${escapeHtml(agent.title)}</div>
                                                         </div>
                                                     </div>
                                                     <span class="px-2.5 py-0.5 text-[10px] font-mono uppercase rounded-full border ${statusPill}">
@@ -756,23 +747,16 @@ export async function renderClientPortalView(container, params = {}) {
                                                     </span>
                                                 </div>
 
-                                                <div class="flex items-center gap-2">
-                                                    <span class="text-[10px] font-mono text-[#ccff00] bg-[#ccff00]/10 px-2 py-0.5 rounded border border-[#ccff00]/20 flex items-center gap-1">
-                                                        <span class="w-1 h-1 rounded-full bg-[#ccff00] animate-ping"></span>
-                                                        <span>${orbCfg.geometryName}</span>
-                                                    </span>
-                                                </div>
-
-                                                <p class="text-xs text-zinc-300 leading-relaxed">${escapeHtml(agent.specialization)}</p>
+                                                <p class="text-xs text-zinc-300 leading-relaxed font-normal">${escapeHtml(agent.specialization)}</p>
                                             </div>
 
-                                            <div class="pt-3 border-t border-zinc-800/80 space-y-1.5 text-[11px] font-mono">
+                                            <div class="pt-3 border-t border-zinc-800/80 space-y-1.5 text-xs">
                                                 <div class="flex items-center justify-between text-zinc-400">
                                                     <span>Completed:</span>
-                                                    <span class="text-white font-semibold">${agent.deliverables_completed} deliverables</span>
+                                                    <span class="text-white font-medium">${agent.deliverables_completed} deliverables</span>
                                                 </div>
-                                                <div class="text-zinc-500 truncate" title="${escapeHtml(agent.current_focus || '')}">
-                                                    Focus: ${escapeHtml(agent.current_focus || 'System verification')}
+                                                <div class="text-zinc-500 truncate text-[11px]" title="${escapeHtml(agent.current_focus || '')}">
+                                                    <span class="text-zinc-400 font-medium">Focus:</span> ${escapeHtml(agent.current_focus || 'System verification')}
                                                 </div>
                                             </div>
                                         </div>
@@ -1088,12 +1072,10 @@ export async function renderClientPortalView(container, params = {}) {
         if (openAuditBtn && auditModal) openAuditBtn.addEventListener('click', () => auditModal.classList.remove('hidden'));
         if (closeAuditBtn && auditModal) closeAuditBtn.addEventListener('click', () => auditModal.classList.add('hidden'));
 
-        // Feature / Bug Intake Modal
+        // Feature / Bug Intake Modal (if triggered programmatically)
         const intakeModal = container.querySelector('#client-intake-modal');
-        const openIntakeBtn = container.querySelector('#open-client-intake-btn');
         const closeIntakeBtn = container.querySelector('#close-intake-modal-btn');
         const cancelIntakeBtn = container.querySelector('#cancel-intake-modal-btn');
-        if (openIntakeBtn && intakeModal) openIntakeBtn.addEventListener('click', () => intakeModal.classList.remove('hidden'));
         if (closeIntakeBtn && intakeModal) closeIntakeBtn.addEventListener('click', () => intakeModal.classList.add('hidden'));
         if (cancelIntakeBtn && intakeModal) cancelIntakeBtn.addEventListener('click', () => intakeModal.classList.add('hidden'));
 

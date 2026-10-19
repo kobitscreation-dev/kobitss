@@ -343,6 +343,18 @@ def test_frontend_js_and_portal_html_integrity():
         assert "thinking-pill" not in code
         assert "AUTONOMOUS THINKING ORB" not in code
 
+        # Client portal header must NOT contain the "+ Request Feature" button ("kyro dont have this")
+        assert "open-client-intake-btn" not in code
+        assert "+ Request Feature" not in code
+        assert "Request Feature</button>" not in code
+
+        # Team tab must NOT contain gimmicky AI headers or geometry name tags
+        assert "ALLOCATED POD" not in code
+        assert "AUTONOMOUS ENGINEERING AGENT TEAM" not in code
+        assert "orbCfg.geometryName" not in code
+        assert "ENGINEERING POD" in code
+        assert "Engineering Team" in code
+
         # Verify Overview tab structure restored to original 4 KPI cards, sprint, deliverables, feed
         assert "CURRENT SPRINT" in code
         assert "// RECENT_DELIVERABLES" in code
