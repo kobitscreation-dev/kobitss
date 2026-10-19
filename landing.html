@@ -471,10 +471,10 @@
     </section>
 
     <!-- SECTION: SEE IT IN ACTION & SHOWCASE (Screenshot 2) -->
-    <section id="demo" class="py-24 px-6 max-w-[1400px] mx-auto hairline-t">
-        <div class="mb-16 text-left max-w-5xl mx-auto scroll-reveal">
-            <div class="text-xs font-mono text-[#ccff00] uppercase tracking-widest mb-2">// SEE_IT_IN_ACTION</div>
-            <h2 class="text-3xl md:text-5xl font-extrabold tracking-tight text-white mb-6">
+    <section id="demo" class="scroll-mt-24 pt-32 pb-24 px-6 max-w-[1400px] mx-auto hairline-t">
+        <div class="mb-16 text-left max-w-5xl mx-auto scroll-reveal pt-4">
+            <div class="text-xs font-mono text-[#ccff00] uppercase tracking-widest mb-3 pt-2">// SEE_IT_IN_ACTION</div>
+            <h2 class="text-3xl md:text-5xl font-extrabold tracking-tight text-white mb-6 leading-tight pt-1">
                 One command. A full engineering sprint.
             </h2>
 
@@ -534,7 +534,7 @@
         </div>
 
         <!-- EMBEDDED WORKING MISSION CONTROL & SHOWCASE (Shown on 'See My Dashboard' click) -->
-        <div id="workspace-showcase" class="hidden relative w-full rounded-2xl border border-zinc-800 bg-[#08080a] shadow-[0_30px_70px_rgba(0,0,0,0.85)] overflow-hidden animate-fade-up transition-all duration-300">
+        <div id="workspace-showcase" style="display: none;" class="relative w-full rounded-2xl border border-zinc-800 bg-[#08080a] shadow-[0_30px_70px_rgba(0,0,0,0.85)] overflow-hidden scroll-mt-24 transition-all duration-300">
             <!-- Window Top Chrome -->
             <div class="h-11 bg-zinc-950/90 border-b border-zinc-800/80 px-4 flex items-center justify-between text-xs font-mono">
                 <div class="flex items-center gap-3">
@@ -1369,6 +1369,14 @@
                         </button>
                     </div>
                 </div>
+            </div>
+
+            <!-- Showcase Bottom Collapse Bar -->
+            <div class="p-4 bg-zinc-950/80 border-t border-zinc-800/80 flex items-center justify-between text-xs font-mono">
+                <span class="text-zinc-500">// End of interactive executive dashboard showcase</span>
+                <button type="button" onclick="closeWorkspaceDashboard()" class="text-zinc-400 hover:text-white px-3 py-1.5 rounded-md bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors flex items-center gap-1.5 cursor-pointer">
+                    <span>↑ Collapse Dashboard</span>
+                </button>
             </div>
         </div>
 
@@ -2829,10 +2837,14 @@
     function openWorkspaceDashboard() {
       const el = document.getElementById('workspace-showcase');
       if (el) {
+        el.style.display = 'block';
         el.classList.remove('hidden');
+        // Smoothly scroll directly to the dashboard with clearance for the fixed navbar
         setTimeout(() => {
-          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 50);
+          const navHeight = 84;
+          const targetY = el.getBoundingClientRect().top + window.pageYOffset - navHeight;
+          window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+        }, 60);
       }
     }
     window.openWorkspaceDashboard = openWorkspaceDashboard;
@@ -2840,16 +2852,18 @@
     function closeWorkspaceDashboard() {
       const el = document.getElementById('workspace-showcase');
       if (el) {
+        el.style.display = 'none';
         el.classList.add('hidden');
         const trigger = document.getElementById('show-dashboard-trigger-bar') || document.getElementById('demo');
-        if (trigger) trigger.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (trigger) {
+          const navHeight = 96;
+          const targetY = trigger.getBoundingClientRect().top + window.pageYOffset - navHeight;
+          window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+        }
       }
     }
     window.closeWorkspaceDashboard = closeWorkspaceDashboard;
 
-    if (window.location.hash === '#workspace-showcase') {
-      setTimeout(openWorkspaceDashboard, 150);
-    }
     window.addEventListener('hashchange', () => {
       if (window.location.hash === '#workspace-showcase') {
         openWorkspaceDashboard();
