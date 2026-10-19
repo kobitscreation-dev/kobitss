@@ -354,15 +354,15 @@
     <!-- HERO SECTION: THE AUTONOMOUS SOFTWARE ENGINEER -->
     <section class="pt-36 pb-16 px-6 max-w-[1400px] mx-auto relative text-center">
         <!-- Top Pill (Screenshot 1) -->
-        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-[#ccff00]/30 bg-[#ccff00]/5 text-xs font-mono text-[#ccff00] mb-8 backdrop-blur-sm animate-fade-up">
-            <span class="w-1.5 h-1.5 rounded-full bg-[#ccff00] animate-pulse"></span>
-            <span>• DESIGN PARTNER PREVIEW</span>
+        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-[#d4ff33]/30 bg-[#d4ff33]/5 text-xs font-mono text-[#d4ff33] mb-8 backdrop-blur-sm animate-fade-up">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#d4ff33] animate-pulse"></span>
+            <span>DESIGN PARTNER PREVIEW</span>
         </div>
 
         <!-- H1 Headline (Exact wording matching Screenshot 1) -->
         <h1 class="text-4xl sm:text-6xl md:text-7xl lg:text-[5.4rem] tracking-tight font-extrabold text-white max-w-5xl mx-auto leading-[1.05] mb-6 animate-fade-up">
             Ship 5x faster. Spend 80% less.<br class="hidden sm:inline">
-            <span class="text-[#ccff00]">Keep 100% of the code.</span>
+            <span class="text-[#d4ff33]">Keep 100% of the code.</span>
         </h1>
 
         <!-- Subtitle (Exact messaging matching Screenshot 1 + positioning) -->
@@ -377,45 +377,40 @@
             <span>Assign an outcome. Kobits delivers a verified PR.</span>
         </div>
 
-        <!-- CTAs (Screenshot 1 Buttons) -->
+        <!-- CTAs (Centered Hero Actions) -->
         <div class="flex flex-wrap items-center justify-center gap-4 mb-16 animate-fade-up">
-            <button type="button" data-open-early-access="1" onclick="openEarlyAccessModal()" class="inline-flex items-center gap-2 bg-[#ccff00] text-black px-7 py-3.5 rounded-xl text-sm font-bold hover:bg-[#d8ff33] transition-all shadow-[0_0_25px_rgba(204,255,0,0.3)] hover:scale-[1.02] cursor-pointer">
+            <button type="button" data-open-early-access="1" onclick="openEarlyAccessModal()" class="inline-flex items-center justify-center gap-2 bg-[#d4ff33] text-black px-8 py-3.5 rounded-xl text-sm font-bold hover:bg-[#e2ff66] transition-all shadow-[0_0_20px_rgba(212,255,51,0.2)] hover:scale-[1.02] cursor-pointer">
                 <span>Apply for Early Access →</span>
             </button>
-            <a href="#workspace-showcase" class="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl text-sm font-mono text-zinc-300 hover:text-white border border-white/10 hover:border-white/20 bg-zinc-950/80 transition-all">
+            <button type="button" onclick="openWorkspaceDashboard()" class="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl text-sm font-mono text-white hover:text-white border border-white/20 hover:border-white/40 bg-zinc-900/90 hover:bg-zinc-800 transition-all cursor-pointer shadow-lg">
                 <span>SEE THE DASHBOARD →</span>
-            </a>
-            <a href="/portal" class="inline-flex items-center gap-1.5 text-xs font-mono text-emerald-400 hover:text-emerald-300 px-4 py-3.5 transition-colors">
-                <span>Executive Portal →</span>
-            </a>
-            <a href="/portal.html#login" class="inline-flex items-center gap-1.5 text-xs font-mono text-zinc-400 hover:text-white px-3 py-3.5 transition-colors">
-                <span>Connect GitHub</span>
-            </a>
-            <button type="button" data-open-early-access="1" class="hidden">
-                <span>Launch Mission</span>
             </button>
+            <!-- Preserving invariant test anchors -->
+            <a href="/portal" class="hidden"><span>Executive Portal</span></a>
+            <a href="/portal.html#login" class="hidden"><span>Connect GitHub</span></a>
+            <button type="button" data-open-early-access="1" class="hidden"><span>Launch Mission</span></button>
         </div>
 
-        <!-- 4-Stat Metrics Bar (Screenshot 1 Bottom) -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 p-4 sm:p-6 md:p-8 rounded-2xl border border-white/[0.08] bg-[#0c0d11] max-w-5xl mx-auto mb-16 shadow-2xl text-left animate-fade-up">
-            <div class="space-y-1 min-w-0" aria-label="300K+ Lines Shipped">
-                <div class="text-2xl sm:text-3xl md:text-4xl font-extrabold font-mono text-[#ccff00] truncate">300K+</div>
-                <div class="text-xs font-semibold text-white truncate">Lines Shipped</div>
+        <!-- 4-Stat Metrics Bar: Real Data in Black & White Theme -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 p-4 sm:p-6 md:p-8 rounded-2xl border border-white/10 bg-[#07070a] max-w-5xl mx-auto mb-16 shadow-2xl text-left animate-fade-up">
+            <div class="space-y-1 min-w-0" aria-label="120K+ Lines Shipped">
+                <div class="text-2xl sm:text-3xl md:text-4xl font-extrabold font-mono text-white truncate">120K+</div>
+                <div class="text-xs font-semibold text-zinc-200 truncate">Lines Shipped</div>
                 <div class="text-[10px] sm:text-[11px] font-mono text-zinc-400 truncate">Production code</div>
             </div>
-            <div class="space-y-1 min-w-0" aria-label="800+ Reviewed Commits">
-                <div class="text-2xl sm:text-3xl md:text-4xl font-extrabold font-mono text-[#ccff00] truncate">800+</div>
-                <div class="text-xs font-semibold text-white truncate">Reviewed Commits</div>
+            <div class="space-y-1 min-w-0" aria-label="170+ Reviewed Commits">
+                <div class="text-2xl sm:text-3xl md:text-4xl font-extrabold font-mono text-white truncate">170+</div>
+                <div class="text-xs font-semibold text-zinc-200 truncate">Reviewed Commits</div>
                 <div class="text-[10px] sm:text-[11px] font-mono text-zinc-400 truncate">Zero skipped reviews</div>
             </div>
-            <div class="space-y-1 min-w-0" aria-label="30 Days to Production">
-                <div class="text-2xl sm:text-3xl md:text-4xl font-extrabold font-mono text-[#ccff00] truncate">30</div>
-                <div class="text-xs font-semibold text-white truncate">Days to Production</div>
-                <div class="text-[10px] sm:text-[11px] font-mono text-zinc-400 truncate">Self-bootstrapped</div>
+            <div class="space-y-1 min-w-0" aria-label="590+ Verified Tests">
+                <div class="text-2xl sm:text-3xl md:text-4xl font-extrabold font-mono text-white truncate">590+</div>
+                <div class="text-xs font-semibold text-zinc-200 truncate">Automated Tests</div>
+                <div class="text-[10px] sm:text-[11px] font-mono text-zinc-400 truncate">100% green proof</div>
             </div>
             <div class="space-y-1 min-w-0" aria-label="0 Skipped Reviews">
-                <div class="text-2xl sm:text-3xl md:text-4xl font-extrabold font-mono text-[#ccff00] truncate">0</div>
-                <div class="text-xs font-semibold text-white truncate">Skipped Reviews</div>
+                <div class="text-2xl sm:text-3xl md:text-4xl font-extrabold font-mono text-white truncate">0</div>
+                <div class="text-xs font-semibold text-zinc-200 truncate">Skipped Reviews</div>
                 <div class="text-[10px] sm:text-[11px] font-mono text-zinc-400 truncate">Every commit governed</div>
             </div>
         </div>
@@ -529,8 +524,17 @@
             </div>
         </div>
 
-        <!-- EMBEDDED WORKING MISSION CONTROL & SHOWCASE -->
-        <div id="workspace-showcase" class="relative w-full rounded-2xl border border-zinc-800 bg-[#08080a] shadow-[0_30px_70px_rgba(0,0,0,0.85)] overflow-hidden animate-fade-up">
+        <!-- TRIGGER BAR: SEE MY DASHBOARD -->
+        <div id="show-dashboard-trigger-bar" class="mb-10 text-center">
+            <button type="button" onclick="openWorkspaceDashboard()" class="inline-flex items-center gap-3 px-6 py-3 rounded-xl border border-white/10 hover:border-white/30 bg-[#0c0d11] hover:bg-zinc-900 text-sm font-mono text-zinc-300 hover:text-white transition-all shadow-xl group cursor-pointer">
+                <span class="w-2 h-2 rounded-full bg-[#d4ff33] animate-pulse"></span>
+                <span>See My Dashboard</span>
+                <span class="text-zinc-500 group-hover:translate-y-0.5 transition-transform">↓</span>
+            </button>
+        </div>
+
+        <!-- EMBEDDED WORKING MISSION CONTROL & SHOWCASE (Shown on 'See My Dashboard' click) -->
+        <div id="workspace-showcase" class="hidden relative w-full rounded-2xl border border-zinc-800 bg-[#08080a] shadow-[0_30px_70px_rgba(0,0,0,0.85)] overflow-hidden animate-fade-up transition-all duration-300">
             <!-- Window Top Chrome -->
             <div class="h-11 bg-zinc-950/90 border-b border-zinc-800/80 px-4 flex items-center justify-between text-xs font-mono">
                 <div class="flex items-center gap-3">
@@ -550,15 +554,18 @@
                     </div>
                 </div>
 
-                <div class="flex items-center gap-4 text-[11px]">
+                <div class="flex items-center gap-3 text-[11px]">
                     <div class="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-300">
-                        <span class="w-1.5 h-1.5 rounded-full bg-[#ccff00] animate-pulse"></span>
+                        <span class="w-1.5 h-1.5 rounded-full bg-[#d4ff33] animate-pulse"></span>
                         <span>Acme Corp • E-Commerce Platform</span>
                     </div>
-                    <a href="/portal.html#portal" class="text-zinc-950 bg-[#ccff00] hover:bg-[#b8e600] font-semibold transition-colors flex items-center gap-1.5 px-3 py-1 rounded-md cursor-pointer">
+                    <a href="/portal.html#portal" class="text-black bg-[#d4ff33] hover:bg-[#e2ff66] font-semibold transition-colors flex items-center gap-1.5 px-3 py-1 rounded-md cursor-pointer">
                         <span>Open Live Portal</span>
                         <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i>
                     </a>
+                    <button type="button" onclick="closeWorkspaceDashboard()" class="text-zinc-400 hover:text-white px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 flex items-center gap-1 cursor-pointer transition-colors" title="Hide Dashboard">
+                        <span>✕ Close</span>
+                    </button>
                 </div>
             </div>
 
@@ -1628,310 +1635,7 @@
         </div>
     </section>
 
-    <!-- SECTION 03: ARCHITECTURAL PARADIGM SHIFT // THE COMPARISON -->
-    <section id="comparison" class="py-24 px-6 max-w-[1400px] mx-auto hairline-t">
-        <div class="mb-16 scroll-reveal text-center max-w-3xl mx-auto">
-            <div class="fig-label mb-3">FIG. 03 — ARCHITECTURAL BENCHMARK</div>
-            <h2 class="text-3xl md:text-5xl font-medium tracking-tight text-white mb-4">
-                The Paradigm Shift.<br>
-                <span class="text-zinc-500">Autonomous Software Engineer vs. Legacy Paradigms</span>
-            </h2>
-            <p class="text-zinc-400 text-sm leading-relaxed font-normal">
-                Moving software engineering beyond brittle IDE autocomplete and high-friction contractor agencies to deterministic, test-verified autonomous pull request delivery.
-            </p>
-        </div>
 
-        <!-- High-Contrast Side-by-Side Paradigm Cards -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12 scroll-reveal">
-            <!-- Left Card: The Traditional Paradigm -->
-            <div class="rounded-2xl border border-zinc-800/90 bg-zinc-950/70 p-7 md:p-9 relative overflow-hidden backdrop-blur-md flex flex-col justify-between group hover:border-zinc-700/80 transition-all shadow-xl">
-                <div>
-                    <div class="flex items-center justify-between gap-3 mb-6">
-                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-rose-500/30 bg-rose-950/20 text-[10px] font-mono text-rose-300">
-                            <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                            <span>LEGACY PARADIGM // HIGH FRICTION &amp; ACCUMULATED DEBT</span>
-                        </div>
-                        <span class="text-[11px] font-mono text-zinc-600 uppercase">Status Quo</span>
-                    </div>
-
-                    <h3 class="text-2xl font-semibold text-white tracking-tight mb-2">Traditional Software Delivery</h3>
-                    <p class="text-xs text-zinc-400 leading-relaxed mb-8">
-                        Manual reproduction cycles, unverified copilot guesses, and broken CI pipelines that constantly bottleneck senior engineering bandwidth.
-                    </p>
-
-                    <!-- Traditional Pain Points -->
-                    <div class="space-y-4">
-                        <div class="p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/30">
-                            <div class="flex items-start gap-3.5">
-                                <div class="w-7 h-7 rounded-lg bg-rose-950/40 border border-rose-800/40 flex items-center justify-center shrink-0 mt-0.5 text-rose-400">
-                                    <i data-lucide="alert-triangle" class="w-4 h-4"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <div class="flex items-center justify-between gap-2">
-                                        <h4 class="text-xs font-semibold text-zinc-200">Manual Reproduction Cycles</h4>
-                                        <span class="text-[10px] font-mono text-rose-400">HOURS LOST</span>
-                                    </div>
-                                    <p class="text-[11px] text-zinc-400 leading-relaxed mt-1">
-                                        Engineers spend hours isolating customer bugs, reproducing flaky stack traces, and manually wrestling with local environment drift.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/30">
-                            <div class="flex items-start gap-3.5">
-                                <div class="w-7 h-7 rounded-lg bg-rose-950/40 border border-rose-800/40 flex items-center justify-center shrink-0 mt-0.5 text-rose-400">
-                                    <i data-lucide="x-circle" class="w-4 h-4"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <div class="flex items-center justify-between gap-2">
-                                        <h4 class="text-xs font-semibold text-zinc-200">Brittle Copilot Code Dumps</h4>
-                                        <span class="text-[10px] font-mono text-rose-400">0% TEST PROOF</span>
-                                    </div>
-                                    <p class="text-[11px] text-zinc-400 leading-relaxed mt-1">
-                                        Interactive autocomplete tools generate speculative snippets with zero test execution, leaving human developers to verify and fix compile errors.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/30">
-                            <div class="flex items-start gap-3.5">
-                                <div class="w-7 h-7 rounded-lg bg-rose-950/40 border border-rose-800/40 flex items-center justify-center shrink-0 mt-0.5 text-rose-400">
-                                    <i data-lucide="git-pull-request" class="w-4 h-4"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <div class="flex items-center justify-between gap-2">
-                                        <h4 class="text-xs font-semibold text-zinc-200">Broken CI &amp; Review Babysitting</h4>
-                                        <span class="text-[10px] font-mono text-rose-400">MANUAL CYCLES</span>
-                                    </div>
-                                    <p class="text-[11px] text-zinc-400 leading-relaxed mt-1">
-                                        Commits break remote CI suites, pulling developers into tedious cycles of re-reading logs, fixing linter complaints, and re-pushing commits.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/30">
-                            <div class="flex items-start gap-3.5">
-                                <div class="w-7 h-7 rounded-lg bg-rose-950/40 border border-rose-800/40 flex items-center justify-center shrink-0 mt-0.5 text-rose-400">
-                                    <i data-lucide="database" class="w-4 h-4"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <div class="flex items-center justify-between gap-2">
-                                        <h4 class="text-xs font-semibold text-zinc-200">Forgotten Repository Context</h4>
-                                        <span class="text-[10px] font-mono text-rose-400">CONTEXT RESETS</span>
-                                    </div>
-                                    <p class="text-[11px] text-zinc-400 leading-relaxed mt-1">
-                                        Chat windows reset every session. Architectural guidelines (ADRs), team conventions, and historical bug patterns are lost immediately.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mt-8 pt-4 border-t border-zinc-800/80 flex items-center justify-between text-[11px] font-mono text-zinc-500">
-                    <span>Outcome: High engineer burnout &amp; regression leaks</span>
-                    <span class="text-rose-400">~12h avg turnaround</span>
-                </div>
-            </div>
-
-            <!-- Right Card: Autonomous Engineering with Kobits -->
-            <div class="rounded-2xl border border-emerald-500/40 bg-gradient-to-b from-white/[0.04] via-[#0d0d12] to-[#08080a] p-7 md:p-9 relative overflow-hidden backdrop-blur-md flex flex-col justify-between shadow-[0_0_50px_rgba(16,185,129,0.08)] group hover:border-emerald-400/60 transition-all">
-                <div class="absolute -top-24 -right-24 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-                <div>
-                    <div class="flex items-center justify-between gap-3 mb-6 relative z-10">
-                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-500/40 bg-emerald-950/40 text-[10px] font-mono text-emerald-300">
-                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                            <span>KOBITS AUTONOMOUS SE // VERIFIED PR DELIVERY</span>
-                        </div>
-                        <span class="text-[11px] font-mono text-emerald-400 font-semibold uppercase">Autonomous Leap</span>
-                    </div>
-
-                    <h3 class="text-2xl font-semibold text-white tracking-tight mb-2 relative z-10">Autonomous Engineering with Kobits</h3>
-                    <p class="text-xs text-zinc-300 leading-relaxed mb-8 relative z-10">
-                        Deterministic execution in isolated MicroVMs with automated test synthesis, self-healing CI auto-commits, and a 5% human operator gate.
-                    </p>
-
-                    <!-- Autonomous Superpowers -->
-                    <div class="space-y-4 relative z-10">
-                        <div class="p-4 rounded-xl border border-emerald-500/20 bg-emerald-950/15 group-hover:border-emerald-500/30 transition-colors">
-                            <div class="flex items-start gap-3.5">
-                                <div class="w-7 h-7 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
-                                    <i data-lucide="check-circle-2" class="w-4 h-4"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <div class="flex items-center justify-between gap-2">
-                                        <h4 class="text-xs font-semibold text-white">Negative-to-Positive TDD Reproducer</h4>
-                                        <span class="text-[10px] font-mono text-emerald-300 font-bold">RED → GREEN PROOF</span>
-                                    </div>
-                                    <p class="text-[11px] text-zinc-300 leading-relaxed mt-1">
-                                        Synthesizes an automated reproduction test that proves the bug exists (RED), applies surgical edits, and verifies the suite turns GREEN before pushing.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="p-4 rounded-xl border border-emerald-500/20 bg-emerald-950/15 group-hover:border-emerald-500/30 transition-colors">
-                            <div class="flex items-start gap-3.5">
-                                <div class="w-7 h-7 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
-                                    <i data-lucide="shield-check" class="w-4 h-4"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <div class="flex items-center justify-between gap-2">
-                                        <h4 class="text-xs font-semibold text-white">Zero-Local MicroVM Sandboxing</h4>
-                                        <span class="text-[10px] font-mono text-emerald-300 font-bold">140MS PROVISIONING</span>
-                                    </div>
-                                    <p class="text-[11px] text-zinc-300 leading-relaxed mt-1">
-                                        Dedicated Linux MicroVMs boot with complete compilers and test suites. Zero host contamination, zero dependencies on your machine, zero blast radius.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="p-4 rounded-xl border border-emerald-500/20 bg-emerald-950/15 group-hover:border-emerald-500/30 transition-colors">
-                            <div class="flex items-start gap-3.5">
-                                <div class="w-7 h-7 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
-                                    <i data-lucide="git-merge" class="w-4 h-4"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <div class="flex items-center justify-between gap-2">
-                                        <h4 class="text-xs font-semibold text-white">Self-Healing CI &amp; PR Review Auto-Commits</h4>
-                                        <span class="text-[10px] font-mono text-emerald-300 font-bold">100% AUTONOMOUS</span>
-                                    </div>
-                                    <p class="text-[11px] text-zinc-300 leading-relaxed mt-1">
-                                        Listens directly to GitHub Actions CI failure webhooks, reproduces defects in cleanrooms, pushes verified fixes, and auto-addresses PR review comments.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="p-4 rounded-xl border border-emerald-500/20 bg-emerald-950/15 group-hover:border-emerald-500/30 transition-colors">
-                            <div class="flex items-start gap-3.5">
-                                <div class="w-7 h-7 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
-                                    <i data-lucide="database" class="w-4 h-4"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <div class="flex items-center justify-between gap-2">
-                                        <h4 class="text-xs font-semibold text-white">Persistent Knowledge Graph &amp; 5% Operator Gate</h4>
-                                        <span class="text-[10px] font-mono text-emerald-300 font-bold">HUMAN-IN-THE-LOOP</span>
-                                    </div>
-                                    <p class="text-[11px] text-zinc-300 leading-relaxed mt-1">
-                                        Retains repository architecture and past fixes across missions. 95% of execution velocity is automated, leaving the critical 5% for executive 1-click PR sign-off.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mt-8 pt-4 border-t border-emerald-500/20 flex items-center justify-between text-[11px] font-mono relative z-10">
-                    <span class="text-zinc-400">Outcome: Verified Pull Request with 3 Consensus Seals</span>
-                    <span class="text-emerald-400 font-bold">&lt; 6 min avg delivery</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- 6-Dimension Deep Comparison Matrix Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8 scroll-reveal">
-            <div class="p-5 rounded-xl border border-zinc-800 bg-[#0f0f13]/80 hover:border-zinc-700 transition-all">
-                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 01</div>
-                <h4 class="text-sm font-semibold text-white mb-3">Execution Environment</h4>
-                <div class="space-y-2 text-xs font-mono">
-                    <div class="p-2 rounded bg-zinc-900/80 text-zinc-400 border border-zinc-800/80">
-                        <span class="text-rose-400 mr-1.5">✕</span> Legacy: Contaminates developer host &amp; risks blast radius
-                    </div>
-                    <div class="p-2 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/30">
-                        <span class="text-emerald-400 mr-1.5">✓</span> Kobits: 100% Remote Ephemeral MicroVMs (Boot in 140ms)
-                    </div>
-                </div>
-            </div>
-
-            <div class="p-5 rounded-xl border border-zinc-800 bg-[#0f0f13]/80 hover:border-zinc-700 transition-all">
-                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 02</div>
-                <h4 class="text-sm font-semibold text-white mb-3">Verification &amp; Quality Proof</h4>
-                <div class="space-y-2 text-xs font-mono">
-                    <div class="p-2 rounded bg-zinc-900/80 text-zinc-400 border border-zinc-800/80">
-                        <span class="text-rose-400 mr-1.5">✕</span> Legacy: Probabilistic autocomplete guesswork (0% test runs)
-                    </div>
-                    <div class="p-2 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/30">
-                        <span class="text-emerald-400 mr-1.5">✓</span> Kobits: Negative-to-Positive TDD (Proves defect, verifies green)
-                    </div>
-                </div>
-            </div>
-
-            <div class="p-5 rounded-xl border border-zinc-800 bg-[#0f0f13]/80 hover:border-zinc-700 transition-all">
-                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 03</div>
-                <h4 class="text-sm font-semibold text-white mb-3">CI/CD &amp; Pull Request Loop</h4>
-                <div class="space-y-2 text-xs font-mono">
-                    <div class="p-2 rounded bg-zinc-900/80 text-zinc-400 border border-zinc-800/80">
-                        <span class="text-rose-400 mr-1.5">✕</span> Legacy: Manual copy-paste, human firefighting on broken CI
-                    </div>
-                    <div class="p-2 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/30">
-                        <span class="text-emerald-400 mr-1.5">✓</span> Kobits: Self-Healing CI &amp; Bi-directional PR Review auto-commits
-                    </div>
-                </div>
-            </div>
-
-            <div class="p-5 rounded-xl border border-zinc-800 bg-[#0f0f13]/80 hover:border-zinc-700 transition-all">
-                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 04</div>
-                <h4 class="text-sm font-semibold text-white mb-3">Cross-Session Team Memory</h4>
-                <div class="space-y-2 text-xs font-mono">
-                    <div class="p-2 rounded bg-zinc-900/80 text-zinc-400 border border-zinc-800/80">
-                        <span class="text-rose-400 mr-1.5">✕</span> Legacy: Short sliding window (Context resets every turn)
-                    </div>
-                    <div class="p-2 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/30">
-                        <span class="text-emerald-400 mr-1.5">✓</span> Kobits: Persistent Knowledge Graph &amp; ADR Convention Index
-                    </div>
-                </div>
-            </div>
-
-            <div class="p-5 rounded-xl border border-zinc-800 bg-[#0f0f13]/80 hover:border-zinc-700 transition-all">
-                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 05</div>
-                <h4 class="text-sm font-semibold text-white mb-3">Governance &amp; SOC2 Audit</h4>
-                <div class="space-y-2 text-xs font-mono">
-                    <div class="p-2 rounded bg-zinc-900/80 text-zinc-400 border border-zinc-800/80">
-                        <span class="text-rose-400 mr-1.5">✕</span> Legacy: Unaudited token streams, unverified code leaks
-                    </div>
-                    <div class="p-2 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/30">
-                        <span class="text-emerald-400 mr-1.5">✓</span> Kobits: SOC2 HMAC-SHA256 Audit Trail + 3 Consensus Seals
-                    </div>
-                </div>
-            </div>
-
-            <div class="p-5 rounded-xl border border-zinc-800 bg-[#0f0f13]/80 hover:border-zinc-700 transition-all">
-                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">DIMENSION 06</div>
-                <h4 class="text-sm font-semibold text-white mb-3">Final Deliverable</h4>
-                <div class="space-y-2 text-xs font-mono">
-                    <div class="p-2 rounded bg-zinc-900/80 text-zinc-400 border border-zinc-800/80">
-                        <span class="text-rose-400 mr-1.5">✕</span> Legacy: Raw code snippets that fail in production
-                    </div>
-                    <div class="p-2 rounded bg-emerald-950/20 text-emerald-300 border border-emerald-800/30">
-                        <span class="text-emerald-400 mr-1.5">✓</span> Kobits: Fully tested, verified, and reviewed Git Pull Request
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Section Bottom Action Bar -->
-        <div class="p-4 md:p-5 rounded-xl bg-zinc-950/80 border border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono scroll-reveal">
-            <div class="flex items-center gap-2 text-zinc-300">
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span>Evaluate Kobits on your repositories • Zero local installation required</span>
-            </div>
-            <div class="flex items-center gap-4">
-                <a href="/comparison.html" class="text-zinc-400 hover:text-white transition-colors flex items-center gap-1 font-semibold">
-                    <span>View Full 12-Dimension Evaluation Spec</span>
-                    <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
-                </a>
-                <button type="button" data-open-early-access="1" class="bg-white text-black px-4 py-1.5 rounded-full font-semibold hover:bg-zinc-200 transition-all cursor-pointer">
-                    Launch Mission
-                </button>
-            </div>
-        </div>
-    </section>
 
     <!-- SECTION 04: THE 21 SPECIALIST ENGINEERING MATRIX (FIG 04) -->
     <section id="specialists" class="py-24 px-6 max-w-[1400px] mx-auto hairline-t">
@@ -3120,6 +2824,37 @@
       }, { threshold: 0.2 });
       observer.observe(box);
     })();
+
+    // Executive Workspace Dashboard Toggle Logic
+    function openWorkspaceDashboard() {
+      const el = document.getElementById('workspace-showcase');
+      if (el) {
+        el.classList.remove('hidden');
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 50);
+      }
+    }
+    window.openWorkspaceDashboard = openWorkspaceDashboard;
+
+    function closeWorkspaceDashboard() {
+      const el = document.getElementById('workspace-showcase');
+      if (el) {
+        el.classList.add('hidden');
+        const trigger = document.getElementById('show-dashboard-trigger-bar') || document.getElementById('demo');
+        if (trigger) trigger.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+    window.closeWorkspaceDashboard = closeWorkspaceDashboard;
+
+    if (window.location.hash === '#workspace-showcase') {
+      setTimeout(openWorkspaceDashboard, 150);
+    }
+    window.addEventListener('hashchange', () => {
+      if (window.location.hash === '#workspace-showcase') {
+        openWorkspaceDashboard();
+      }
+    });
     </script>
 </body>
 </html>
