@@ -238,6 +238,22 @@
       50% { opacity: 0.4; }
     }
 
+    /* 3D Particle Orb & Thinking Orb styles */
+    .agent-orb-canvas {
+      image-rendering: auto;
+      touch-action: none;
+    }
+    #portal-thinking-orb-canvas {
+      touch-action: none;
+      user-select: none;
+    }
+    .thinking-pill {
+      transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .thinking-pill.active {
+      box-shadow: 0 0 16px rgba(204, 255, 0, 0.25);
+    }
+
     /* ================================================================
        CARDS
        ================================================================ */
@@ -874,7 +890,8 @@
       if (hash.includes('milestone')) return 'milestones';
       if (hash.includes('deliverable')) return 'deliverables';
       if (hash.includes('teamwork') || hash.includes('team')) return 'team';
-      if (hash.includes('boost') || hash.includes('report')) return 'reports';
+      if (hash.includes('report')) return 'reports';
+      if (hash.includes('boost')) return 'overview';
       return 'overview';
     }
 

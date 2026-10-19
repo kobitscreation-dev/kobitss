@@ -11,6 +11,19 @@
  * 5. Reports (Sprint Velocity, Test Coverage, SOC-2 Audit Verification, Code Quality)
  */
 import { apiFetch } from '../api.js';
+import {
+    AGENT_ORB_CONFIGS,
+    generateOrbParticles,
+    createAgentParticleOrb,
+    createThinkingOrb
+} from './particle_orb.js';
+
+export {
+    AGENT_ORB_CONFIGS,
+    generateOrbParticles,
+    createAgentParticleOrb,
+    createThinkingOrb
+};
 
 function escapeHtml(str) {
     if (str === null || str === undefined) return '';
@@ -228,7 +241,8 @@ export async function renderClientPortalView(container, params = {}) {
         if (v.includes('milestone')) return 'milestones';
         if (v.includes('deliverable')) return 'deliverables';
         if (v.includes('teamwork') || v.includes('team')) return 'team';
-        if (v.includes('boost') || v.includes('report')) return 'reports';
+        if (v.includes('report')) return 'reports';
+        if (v.includes('boost')) return 'overview';
         return 'overview';
     }
 
@@ -236,6 +250,19 @@ export async function renderClientPortalView(container, params = {}) {
     let currentDeliverableFilter = 'All';
 
     function renderPortalDOM() {
+        // Stop active 3D particle orb animators and invoke cancelAnimationFrame on tab change/re-render
+        if (container.__kbOrbAnimators && container.__kbOrbAnimators.length) {
+            container.__kbOrbAnimators.forEach(a => {
+                if (a && typeof a.stop === 'function') a.stop();
+                if (a && a.animId && typeof cancelAnimationFrame === 'function') {
+                    cancelAnimationFrame(a.animId);
+                }
+            });
+            container.__kbOrbAnimators = [];
+        } else {
+            container.__kbOrbAnimators = [];
+        }
+
         container.innerHTML = `
             <div class="min-h-screen bg-[#0d0e11] text-zinc-100 font-sans selection:bg-[#ccff00]/30 selection:text-white" id="client-portal-wrapper">
                 <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
@@ -360,6 +387,83 @@ export async function renderClientPortalView(container, params = {}) {
                                 </div>
                                 <div class="text-[11px] text-zinc-400">
                                     Est. release: Nov 12, 2026
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- INTERACTIVE 3D THINKING ORB WIDGET -->
+                        <div id="portal-thinking-orb-container" class="relative bg-gradient-to-b from-[#14151a] to-[#0f1015] border border-white/[0.08] rounded-2xl p-6 shadow-2xl overflow-hidden transition-all duration-300 hover:border-[#ccff00]/30">
+                            <!-- Background Ambient Radial Glow -->
+                            <div class="absolute -top-24 -left-24 w-72 h-72 bg-[#ccff00]/5 rounded-full blur-3xl pointer-events-none"></div>
+                            <div class="absolute -bottom-24 -right-24 w-72 h-72 bg-sky-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+                            <div class="flex flex-col lg:flex-row items-center justify-between gap-6 relative z-10">
+                                <!-- Left: Dynamic Status & Neural State Detail -->
+                                <div class="space-y-4 max-w-xl text-center lg:text-left">
+                                    <div class="flex flex-wrap items-center justify-center lg:justify-start gap-2.5">
+                                        <span class="px-2.5 py-1 text-[10px] font-mono uppercase tracking-widest rounded-full bg-[#ccff00]/10 text-[#ccff00] border border-[#ccff00]/30 flex items-center gap-1.5 shadow-sm">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-[#ccff00] animate-ping"></span>
+                                            <span id="thinking-orb-mode-badge">AUTONOMOUS THINKING ORB</span>
+                                        </span>
+                                        <span id="thinking-orb-active-agent-badge" class="px-2.5 py-1 text-[10px] font-mono uppercase rounded-full bg-sky-950/60 text-sky-300 border border-sky-800/60">
+                                            Active Agent: Forge
+                                        </span>
+                                        <span id="thinking-orb-work-status" class="px-2.5 py-1 text-[10px] font-mono text-zinc-400 border border-zinc-800 rounded-full">
+                                            Cleanroom Sandbox Active
+                                        </span>
+                                    </div>
+
+                                    <div class="space-y-1.5">
+                                        <h2 id="thinking-orb-headline" class="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center justify-center lg:justify-start gap-2">
+                                            <span>Autonomous Pod Synthesizing Sprint 4 Tasks</span>
+                                        </h2>
+                                        <p id="thinking-orb-description" class="text-xs sm:text-sm text-zinc-400 leading-relaxed font-mono">
+                                            Cleanroom microVM executing parallel verification gates. 3D particle state reflects live neural thought trace and AST dependency resolution.
+                                        </p>
+                                    </div>
+
+                                    <!-- Dynamic Status Pills -->
+                                    <div class="pt-2">
+                                        <div class="text-[10px] font-mono uppercase tracking-wider text-zinc-500 mb-2">Live Neural State &amp; Verification Pipeline</div>
+                                        <div class="flex flex-wrap items-center justify-center lg:justify-start gap-2" id="thinking-orb-status-pills">
+                                            <button type="button" class="thinking-pill active px-3 py-1 text-xs font-mono rounded-lg bg-[#ccff00]/15 text-[#ccff00] border border-[#ccff00]/40 transition flex items-center gap-1.5 cursor-pointer" data-state="thinking">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-[#ccff00] animate-pulse"></span>
+                                                <span>Thinking...</span>
+                                            </button>
+                                            <button type="button" class="thinking-pill px-3 py-1 text-xs font-mono rounded-lg bg-zinc-800/80 text-zinc-300 border border-zinc-700/60 hover:border-[#ccff00]/30 transition flex items-center gap-1.5 cursor-pointer" data-state="searching">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+                                                <span>Searching codebase...</span>
+                                            </button>
+                                            <button type="button" class="thinking-pill px-3 py-1 text-xs font-mono rounded-lg bg-zinc-800/80 text-zinc-300 border border-zinc-700/60 hover:border-[#ccff00]/30 transition flex items-center gap-1.5 cursor-pointer" data-state="synthesizing">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                                                <span>Synthesizing TDD test...</span>
+                                            </button>
+                                            <button type="button" class="thinking-pill px-3 py-1 text-xs font-mono rounded-lg bg-zinc-800/80 text-zinc-300 border border-zinc-700/60 hover:border-[#ccff00]/30 transition flex items-center gap-1.5 cursor-pointer" data-state="solving">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                                <span>Solving issue...</span>
+                                            </button>
+                                            <button type="button" class="thinking-pill px-3 py-1 text-xs font-mono rounded-lg bg-zinc-800/80 text-zinc-300 border border-zinc-700/60 hover:border-[#ccff00]/30 transition flex items-center gap-1.5 cursor-pointer" data-state="regression">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                                                <span>Running regression gate...</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Right: 3D Canvas Thinking Orb Centerpiece -->
+                                <div class="flex flex-col items-center justify-center shrink-0 relative">
+                                    <div class="relative w-56 h-56 sm:w-64 sm:h-64 rounded-full bg-[#090a0d]/90 border border-white/[0.08] shadow-[0_0_50px_rgba(204,255,0,0.12)] flex items-center justify-center overflow-hidden group">
+                                        <div id="thinking-orb-glow" class="absolute inset-0 bg-radial from-[#ccff00]/10 via-transparent to-transparent opacity-80 pointer-events-none transition-all duration-700"></div>
+                                        <canvas id="portal-thinking-orb-canvas" class="w-full h-full cursor-grab active:cursor-grabbing relative z-10" width="384" height="384"></canvas>
+                                        <div class="absolute bottom-2 text-[9px] font-mono text-zinc-500 opacity-60 pointer-events-none tracking-wider">
+                                            [ DRAG TO ROTATE &bull; HOVER TO PERTURB ]
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2 mt-3 text-[11px] font-mono text-zinc-400" id="thinking-orb-controls">
+                                        <span id="thinking-orb-geom-label" class="text-[#ccff00] font-semibold">Mobius Ribbon Loop</span>
+                                        <span class="text-zinc-600">&bull;</span>
+                                        <span id="thinking-orb-speed-label">Speed: 1.5x (Active)</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -659,6 +763,8 @@ export async function renderClientPortalView(container, params = {}) {
 
                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 ${teamAgents.map(agent => {
+                                    const agentKey = String(agent.name || 'axiom').toLowerCase();
+                                    const orbCfg = AGENT_ORB_CONFIGS[agentKey] || AGENT_ORB_CONFIGS.axiom;
                                     const isAct = (agent.status || '').toLowerCase() === 'active';
                                     const isRev = (agent.status || '').toLowerCase() === 'reviewing';
                                     let statusPill = 'bg-zinc-800 text-zinc-400 border-zinc-700';
@@ -666,20 +772,31 @@ export async function renderClientPortalView(container, params = {}) {
                                     if (isRev) statusPill = 'bg-amber-950/60 text-amber-300 border-amber-800/60';
 
                                     return `
-                                        <div class="bg-[#1a1b22] border border-white/[0.05] hover:border-[#ccff00]/40 rounded-xl p-5 space-y-4 transition flex flex-col justify-between">
+                                        <div class="agent-card-wrapper bg-[#1a1b22] border border-white/[0.05] hover:border-[#ccff00]/40 rounded-xl p-5 space-y-4 transition flex flex-col justify-between group cursor-pointer" data-agent-key="${escapeHtml(agentKey)}">
                                             <div class="space-y-3">
                                                 <div class="flex items-center justify-between">
                                                     <div class="flex items-center gap-3">
-                                                        <div class="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-700 flex items-center justify-center text-lg shadow-inner">
-                                                            ${agent.icon || '🤖'}
+                                                        <!-- 3D Particle Orb Avatar Canvas Container in front of each agent -->
+                                                        <div class="agent-orb-container relative w-12 h-12 rounded-xl bg-[#090a0d] border border-white/[0.08] shadow-inner overflow-hidden flex items-center justify-center shrink-0 group-hover:border-[#ccff00]/50 transition" title="${escapeHtml(agent.name)} 3D Particle Orb">
+                                                            <canvas class="agent-orb-canvas w-full h-full cursor-pointer" data-agent="${escapeHtml(agentKey)}" width="96" height="96"></canvas>
                                                         </div>
                                                         <div>
-                                                            <div class="text-sm font-bold text-white">${escapeHtml(agent.name)}</div>
+                                                            <div class="flex items-center gap-1.5">
+                                                                <span class="text-sm font-bold text-white">${escapeHtml(agent.name)}</span>
+                                                                <span class="text-xs">${agent.icon || ''}</span>
+                                                            </div>
                                                             <div class="text-[11px] font-mono text-zinc-400">${escapeHtml(agent.title)}</div>
                                                         </div>
                                                     </div>
-                                                    <span class="px-2 py-0.5 text-[10px] font-mono uppercase rounded-full border ${statusPill}">
+                                                    <span class="px-2.5 py-0.5 text-[10px] font-mono uppercase rounded-full border ${statusPill}">
                                                         ${escapeHtml(agent.status)}
+                                                    </span>
+                                                </div>
+
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-[10px] font-mono text-[#ccff00] bg-[#ccff00]/10 px-2 py-0.5 rounded border border-[#ccff00]/20 flex items-center gap-1">
+                                                        <span class="w-1 h-1 rounded-full bg-[#ccff00] animate-ping"></span>
+                                                        <span>${orbCfg.geometryName}</span>
                                                     </span>
                                                 </div>
 
@@ -1074,6 +1191,128 @@ export async function renderClientPortalView(container, params = {}) {
                 }, 500);
             });
         }
+
+        function updateThinkingOrbView(stateKey, orbInstance) {
+            const headline = container.querySelector('#thinking-orb-headline');
+            const desc = container.querySelector('#thinking-orb-description');
+            const agentBadge = container.querySelector('#thinking-orb-active-agent-badge');
+            const geomLabel = container.querySelector('#thinking-orb-geom-label');
+
+            const stateMap = {
+                thinking: {
+                    agent: 'axiom',
+                    title: 'Axiom Decomposing Sprint DAG Tasks',
+                    desc: 'Topological scheduling of parallel microVM cleanroom worktrees with zero-regression gates.',
+                    geom: 'Concentric Gyro Orb',
+                },
+                searching: {
+                    agent: 'nexus',
+                    title: 'Nexus Resolving AST Architectural Dependencies',
+                    desc: 'Compiler-grade symbol resolution enforcing clean modular boundaries between domain services.',
+                    geom: 'Triangular Crystalline Lattice',
+                },
+                synthesizing: {
+                    agent: 'sentinel',
+                    title: 'Sentinel Synthesizing Reproducing TDD Tests',
+                    desc: 'Generating negative-to-positive idempotency test harness and running mutation testing suite.',
+                    geom: 'Precision Radar Scan Orb',
+                },
+                solving: {
+                    agent: 'forge',
+                    title: 'Forge Building Core Multi-Currency Webhook',
+                    desc: 'Implementing idempotent async worker queue and database migrations in ephemeral sandbox.',
+                    geom: 'Mobius Ribbon Loop',
+                },
+                regression: {
+                    agent: 'sentinel',
+                    title: 'Sentinel Executing 100% Pass Rate Gate',
+                    desc: 'Verifying zero regressions across full test matrix before branch consensus seal.',
+                    geom: 'Precision Radar Scan Orb',
+                },
+            };
+
+            const info = stateMap[stateKey] || stateMap.thinking;
+            if (headline) headline.textContent = info.title;
+            if (desc) desc.textContent = info.desc;
+            if (agentBadge) {
+                const cfg = AGENT_ORB_CONFIGS[info.agent];
+                agentBadge.textContent = 'Active Agent: ' + (cfg ? cfg.name : info.agent.toUpperCase());
+            }
+            if (geomLabel) geomLabel.textContent = info.geom;
+            if (orbInstance && typeof orbInstance.setAgent === 'function') {
+                orbInstance.setAgent(info.agent, true);
+            }
+        }
+
+        // Initialize 3D Particle Orbs according to active tab
+        if (currentTab === 'overview') {
+            const thinkingCanvas = container.querySelector('#portal-thinking-orb-canvas');
+            if (thinkingCanvas) {
+                const activeTask = (currentSprint.tasks || []).find(t => {
+                    const st = (t.status_code || t.status || '').toLowerCase();
+                    return st.includes('build') || st.includes('progress') || st.includes('active');
+                });
+                let initAgent = 'forge';
+                if (activeTask) {
+                    const titleLow = (activeTask.title || '').toLowerCase();
+                    if (titleLow.includes('webhook') || titleLow.includes('payment') || titleLow.includes('checkout')) initAgent = 'forge';
+                    else if (titleLow.includes('test') || titleLow.includes('sentinel')) initAgent = 'sentinel';
+                    else if (titleLow.includes('architect') || titleLow.includes('boundary')) initAgent = 'nexus';
+                    else if (titleLow.includes('security') || titleLow.includes('sast')) initAgent = 'aegis';
+                }
+
+                const isBoost = window.location.hash.toLowerCase().includes('boost');
+                const thinkingOrb = createThinkingOrb(thinkingCanvas, {
+                    agentKey: initAgent,
+                    speed: isBoost ? 2.0 : (activeTask ? 1.5 : 1.1)
+                });
+
+                if (thinkingOrb) {
+                    container.__kbThinkingOrb = thinkingOrb;
+                    container.__kbOrbAnimators.push(thinkingOrb);
+                }
+
+                // Dynamic status pills click listeners
+                container.querySelectorAll('.thinking-pill').forEach(pill => {
+                    pill.addEventListener('click', () => {
+                        const st = pill.getAttribute('data-state') || 'thinking';
+                        container.querySelectorAll('.thinking-pill').forEach(p => {
+                            p.className = 'thinking-pill px-3 py-1 text-xs font-mono rounded-lg bg-zinc-800/80 text-zinc-300 border border-zinc-700/60 hover:border-[#ccff00]/30 transition flex items-center gap-1.5 cursor-pointer';
+                        });
+                        pill.className = 'thinking-pill active px-3 py-1 text-xs font-mono rounded-lg bg-[#ccff00]/15 text-[#ccff00] border border-[#ccff00]/40 transition flex items-center gap-1.5 cursor-pointer';
+                        updateThinkingOrbView(st, thinkingOrb);
+                    });
+                });
+            }
+        } else if (currentTab === 'team') {
+            container.querySelectorAll('.agent-orb-canvas').forEach(canvas => {
+                const agentKey = canvas.getAttribute('data-agent') || 'axiom';
+                const orb = createAgentParticleOrb(canvas, agentKey, { speed: 1.15 });
+                if (orb) {
+                    container.__kbOrbAnimators.push(orb);
+                }
+            });
+
+            container.querySelectorAll('.agent-card-wrapper').forEach(card => {
+                card.addEventListener('click', () => {
+                    const agentKey = card.getAttribute('data-agent-key');
+                    if (agentKey) {
+                        currentTab = 'overview';
+                        renderPortalDOM();
+                        setTimeout(() => {
+                            if (container.__kbThinkingOrb) {
+                                container.__kbThinkingOrb.setAgent(agentKey, true);
+                                const agentBadge = container.querySelector('#thinking-orb-active-agent-badge');
+                                const cfg = AGENT_ORB_CONFIGS[agentKey];
+                                if (agentBadge && cfg) agentBadge.textContent = 'Active Agent: ' + cfg.name;
+                                const geomLabel = container.querySelector('#thinking-orb-geom-label');
+                                if (geomLabel && cfg) geomLabel.textContent = cfg.geometryName;
+                            }
+                        }, 50);
+                    }
+                });
+            });
+        }
     }
 
     // Initial render
@@ -1131,6 +1370,46 @@ export async function renderClientPortalView(container, params = {}) {
                                 <span class="text-zinc-300">${escapeHtml(payload.activity.message || '')}</span>
                             `;
                             feed.insertBefore(newRow, feed.firstChild);
+                        }
+
+                        // Real-time Thinking Orb reaction
+                        if (container.__kbThinkingOrb) {
+                            const msg = (payload.activity.message || '').toLowerCase();
+                            let st = 'thinking';
+                            if (msg.includes('test') || msg.includes('sentinel') || msg.includes('regression')) st = 'synthesizing';
+                            else if (msg.includes('architect') || msg.includes('nexus') || msg.includes('boundary')) st = 'searching';
+                            else if (msg.includes('webhook') || msg.includes('forge') || msg.includes('checkout') || msg.includes('payment')) st = 'solving';
+                            else if (msg.includes('security') || msg.includes('aegis') || msg.includes('cve')) st = 'solving';
+
+                            const headline = container.querySelector('#thinking-orb-headline');
+                            const desc = container.querySelector('#thinking-orb-description');
+                            const agentBadge = container.querySelector('#thinking-orb-active-agent-badge');
+                            const geomLabel = container.querySelector('#thinking-orb-geom-label');
+
+                            const stateMap = {
+                                thinking: { agent: 'axiom', title: 'Axiom Decomposing Sprint DAG Tasks', desc: 'Topological scheduling of parallel microVM cleanroom worktrees.', geom: 'Concentric Gyro Orb' },
+                                searching: { agent: 'nexus', title: 'Nexus Resolving AST Architectural Dependencies', desc: 'Compiler-grade symbol resolution enforcing modular boundaries.', geom: 'Triangular Crystalline Lattice' },
+                                synthesizing: { agent: 'sentinel', title: 'Sentinel Synthesizing Reproducing TDD Tests', desc: 'Generating negative-to-positive test harness and running mutation testing.', geom: 'Precision Radar Scan Orb' },
+                                solving: { agent: 'forge', title: 'Forge Building Core Multi-Currency Webhook', desc: 'Implementing idempotent async worker queue in ephemeral sandbox.', geom: 'Mobius Ribbon Loop' },
+                            };
+                            const info = stateMap[st] || stateMap.thinking;
+                            if (headline) headline.textContent = info.title;
+                            if (desc) desc.textContent = info.desc;
+                            if (agentBadge) {
+                                const cfg = AGENT_ORB_CONFIGS[info.agent];
+                                agentBadge.textContent = 'Active Agent: ' + (cfg ? cfg.name : info.agent.toUpperCase());
+                            }
+                            if (geomLabel) geomLabel.textContent = info.geom;
+                            container.__kbThinkingOrb.setAgent(info.agent, true);
+                            container.__kbThinkingOrb.triggerPulse();
+
+                            container.querySelectorAll('.thinking-pill').forEach(p => {
+                                if (p.getAttribute('data-state') === st) {
+                                    p.className = 'thinking-pill active px-3 py-1 text-xs font-mono rounded-lg bg-[#ccff00]/15 text-[#ccff00] border border-[#ccff00]/40 transition flex items-center gap-1.5 cursor-pointer';
+                                } else {
+                                    p.className = 'thinking-pill px-3 py-1 text-xs font-mono rounded-lg bg-zinc-800/80 text-zinc-300 border border-zinc-700/60 hover:border-[#ccff00]/30 transition flex items-center gap-1.5 cursor-pointer';
+                                }
+                            });
                         }
                     }
                 } catch (_) {}

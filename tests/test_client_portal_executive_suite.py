@@ -318,9 +318,48 @@ def test_frontend_js_and_portal_html_integrity():
         # Check electric neon-lime palette token
         assert "#ccff00" in code
 
+        # Check 3D Particle Orb & Thinking Orb exports and DOM structures
+        assert "AGENT_ORB_CONFIGS" in code
+        assert "createAgentParticleOrb" in code
+        assert "createThinkingOrb" in code
+        assert "portal-thinking-orb-container" in code
+        assert "portal-thinking-orb-canvas" in code
+        assert "agent-orb-container" in code
+        assert "agent-orb-canvas" in code
+        assert "thinking-pill" in code
+        assert "Thinking..." in code
+        assert "Searching codebase..." in code
+        assert "Synthesizing TDD test..." in code
+        assert "Solving issue..." in code
+        assert "Running regression gate..." in code
+        assert "cancelAnimationFrame" in code
+
         # Run LSP syntax validation
         diag = HeadlessLSPService.get_diagnostics(file_path=p, repo_path=repo_root)
         assert diag["error_count"] == 0, f"LSP Diagnostics errors in {p}: {diag['diagnostics']}"
+
+    # Also verify particle_orb.js helper modules in js/ and web/js/
+    orb_js_paths = [
+        os.path.join(repo_root, "js", "views", "particle_orb.js"),
+        os.path.join(repo_root, "web", "js", "views", "particle_orb.js"),
+    ]
+    for op in orb_js_paths:
+        assert os.path.exists(op), f"Missing particle orb module: {op}"
+        with open(op, "r", encoding="utf-8") as f:
+            orb_code = f.read()
+        assert "export const AGENT_ORB_CONFIGS" in orb_code
+        assert "export function generateOrbParticles" in orb_code
+        assert "export function createAgentParticleOrb" in orb_code
+        assert "export function createThinkingOrb" in orb_code
+        assert "axiom" in orb_code and "gyro" in orb_code
+        assert "nexus" in orb_code and "lattice" in orb_code
+        assert "sentinel" in orb_code and "radar" in orb_code
+        assert "aegis" in orb_code and "meridian" in orb_code
+        assert "forge" in orb_code and "torus" in orb_code
+        assert "pixel" in orb_code and "liquid" in orb_code
+        assert "vanguard" in orb_code and "swarm" in orb_code
+        orb_diag = HeadlessLSPService.get_diagnostics(file_path=op, repo_path=repo_root)
+        assert orb_diag["error_count"] == 0, f"LSP Diagnostics errors in {op}: {orb_diag['diagnostics']}"
 
     # Run LSP syntax validation on backend client_portal.py as well
     be_diag = HeadlessLSPService.get_diagnostics(file_path="backend/api/v1/client_portal.py", repo_path=repo_root)
@@ -339,6 +378,8 @@ def test_frontend_js_and_portal_html_integrity():
     assert "Operator Login" in html
     assert "getPortalInitialTab" in html
     assert "isClientPortalRoute" in html
+    assert "agent-orb-canvas" in html
+    assert "portal-thinking-orb-canvas" in html
 
 
 @pytest.mark.asyncio

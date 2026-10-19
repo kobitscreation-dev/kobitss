@@ -126,14 +126,16 @@ def isolate_test_state():
 
     from backend.main import app
     orig_overrides = dict(app.dependency_overrides)
-
     yield
     os.environ.clear()
     for k, v in orig_env.items():
-        if len(v) < 32760:
-            os.environ[k] = v
-        else:
-            os.environ[k] = v[:32750]
+        try:
+            if len(v) < 32000:
+                os.environ[k] = v
+            else:
+                os.environ[k] = v[:32000]
+        except (ValueError, OSError):
+            pass
     settings.LLM_PROVIDER = orig_llm
     settings.ANTHROPIC_API_KEY = orig_anthropic_key
     settings.DEEPSEEK_API_KEY = orig_deepseek_key
