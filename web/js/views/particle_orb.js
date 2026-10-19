@@ -748,7 +748,9 @@ export function createAgentParticleOrb(canvas, agentKey, options) {
             canvas.removeEventListener('touchstart', onTouchStart);
             canvas.removeEventListener('touchend', onTouchEnd);
         },
-        setSpeed: (s) => { speedMultiplier = s; }
+        setSpeed: (s) => { speedMultiplier = s; },
+        triggerPulse: onClick,
+        get animId() { return animId; }
     };
 }
 
@@ -945,6 +947,7 @@ export function createThinkingOrb(canvas, options) {
             }
         },
         setSpeed: (s) => { speedMultiplier = s; },
+        get animId() { return animId; },
         triggerPulse: () => {
             rippleTime = 0;
             speedMultiplier = 2.2;

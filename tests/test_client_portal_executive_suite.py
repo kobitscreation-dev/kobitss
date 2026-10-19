@@ -325,6 +325,7 @@ def test_frontend_js_and_portal_html_integrity():
         assert "agent-orb-container" in code
         assert "agent-orb-canvas" in code
         assert "cancelAnimationFrame" in code
+        assert "__kbTeamAgentOrbs" in code
 
         # Overview tab must NOT contain thinking orb card, canvas, or status pills ("i dont need hear anithink")
         assert "portal-thinking-orb-container" not in code
@@ -342,7 +343,7 @@ def test_frontend_js_and_portal_html_integrity():
         diag = HeadlessLSPService.get_diagnostics(file_path=p, repo_path=repo_root)
         assert diag["error_count"] == 0, f"LSP Diagnostics errors in {p}: {diag['diagnostics']}"
 
-    # Verify app.js and web/js/app.js triad surface routing for #boost
+    # Verify app.js and web/js/app.js triad surface routing for #boost and #team
     app_js_paths = [
         os.path.join(repo_root, "js", "app.js"),
         os.path.join(repo_root, "web", "js", "app.js"),
@@ -353,6 +354,8 @@ def test_frontend_js_and_portal_html_integrity():
             app_code = f.read()
         assert "baseRoute === 'boost'" in app_code
         assert "params.tab = 'overview'" in app_code
+        assert "baseRoute === 'team'" in app_code
+        assert "params.tab = 'team'" in app_code
 
     # Also verify particle_orb.js helper modules in js/ and web/js/
     orb_js_paths = [
@@ -367,6 +370,8 @@ def test_frontend_js_and_portal_html_integrity():
         assert "export function generateOrbParticles" in orb_code
         assert "export function createAgentParticleOrb" in orb_code
         assert "export function createThinkingOrb" in orb_code
+        assert "triggerPulse: onClick" in orb_code or "triggerPulse:" in orb_code
+        assert "get animId()" in orb_code
         assert "axiom" in orb_code and "gyro" in orb_code
         assert "nexus" in orb_code and "lattice" in orb_code
         assert "sentinel" in orb_code and "radar" in orb_code

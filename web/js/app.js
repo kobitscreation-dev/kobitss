@@ -320,6 +320,8 @@ async function dispatchTriadSurfaceRoute(routeStr) {
     } else if (baseRoute === 'boost') {
       params.tab = 'overview';
       params.boost = true;
+    } else if (baseRoute === 'team' || baseRoute === 'teamwork' || baseRoute === 'teamwork-preview') {
+      params.tab = 'team';
     } else if (baseRoute === 'reports') {
       params.tab = 'reports';
     } else if (baseRoute === 'milestones' || baseRoute === 'deliverables') {

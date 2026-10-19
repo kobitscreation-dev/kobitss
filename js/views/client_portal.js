@@ -261,6 +261,7 @@ export async function renderClientPortalView(container, params = {}) {
         } else {
             container.__kbOrbAnimators = [];
         }
+        container.__kbTeamAgentOrbs = null;
 
         const isBoost = window.location.hash.toLowerCase().includes('boost') || params.boost === true || params.tab === 'boost';
 
@@ -1118,12 +1119,25 @@ export async function renderClientPortalView(container, params = {}) {
 
         // Initialize 3D Particle Orbs in Team tab (one orb per agent avatar)
         if (currentTab === 'team') {
+            container.__kbTeamAgentOrbs = new Map();
             container.querySelectorAll('.agent-orb-canvas').forEach(canvas => {
                 const agentKey = canvas.getAttribute('data-agent') || 'axiom';
                 const orb = createAgentParticleOrb(canvas, agentKey, { speed: isBoost ? 2.0 : 1.15 });
                 if (orb) {
                     container.__kbOrbAnimators.push(orb);
+                    container.__kbTeamAgentOrbs.set(agentKey, orb);
                 }
+            });
+
+            container.querySelectorAll('.agent-card-wrapper').forEach(card => {
+                card.addEventListener('click', (e) => {
+                    if (e.target && e.target.classList && e.target.classList.contains('agent-orb-canvas')) return;
+                    const agentKey = card.getAttribute('data-agent-key');
+                    const orb = container.__kbTeamAgentOrbs ? container.__kbTeamAgentOrbs.get(agentKey) : null;
+                    if (orb && typeof orb.triggerPulse === 'function') {
+                        orb.triggerPulse();
+                    }
+                });
             });
         }
     }
@@ -1183,6 +1197,16 @@ export async function renderClientPortalView(container, params = {}) {
                                 <span class="text-zinc-300">${escapeHtml(payload.activity.message || '')}</span>
                             `;
                             feed.insertBefore(newRow, feed.firstChild);
+                        }
+
+                        // Pulse matching agent's 3D particle orb in Team tab if active
+                        if (container.__kbTeamAgentOrbs) {
+                            const msg = (payload.activity.message || '').toLowerCase();
+                            for (const [key, orb] of container.__kbTeamAgentOrbs.entries()) {
+                                if (msg.includes(key) && orb && typeof orb.triggerPulse === 'function') {
+                                    orb.triggerPulse();
+                                }
+                            }
                         }
                     }
                 } catch (_) {}
