@@ -1536,11 +1536,10 @@
                 </div>
             </div>
 
-            <!-- Step 3 (Glowing Border) -->
-            <div class="rounded-2xl border-2 border-[#d4ff33]/40 bg-[#0c0d11] p-6 sm:p-8 flex flex-col justify-between shadow-[0_0_30px_rgba(204,255,0,0.1)] relative overflow-hidden group">
-                <div class="absolute -top-16 -right-16 w-32 h-32 bg-[#d4ff33]/10 rounded-full blur-2xl pointer-events-none"></div>
+            <!-- Step 3 -->
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 sm:p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden group hover:border-zinc-700 transition-all">
                 <div>
-                    <div class="w-10 h-10 rounded-xl bg-[#d4ff33]/10 border border-[#d4ff33]/30 flex items-center justify-center text-[#d4ff33] mb-6">
+                    <div class="w-10 h-10 rounded-xl bg-white/[0.05] border border-white/[0.1] flex items-center justify-center text-[#d4ff33] mb-6">
                         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                     </div>
                     <div class="text-[11px] font-mono text-[#d4ff33] uppercase tracking-wider mb-2">STEP_03</div>
@@ -1653,10 +1652,9 @@
             </div>
 
             <!-- Pillar 6 -->
-            <div class="rounded-2xl border-2 border-[#d4ff33]/40 bg-[#0c0d11] p-6 sm:p-8 flex flex-col justify-between shadow-[0_0_30px_rgba(204,255,0,0.1)] relative overflow-hidden group">
-                <div class="absolute -top-16 -right-16 w-32 h-32 bg-[#d4ff33]/10 rounded-full blur-2xl pointer-events-none"></div>
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 sm:p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden group hover:border-[#d4ff33]/40 transition-all">
                 <div>
-                    <div class="w-10 h-10 rounded-xl bg-[#d4ff33]/10 border border-[#d4ff33]/30 flex items-center justify-center text-[#d4ff33] mb-5">
+                    <div class="w-10 h-10 rounded-xl bg-white/[0.05] border border-white/[0.1] flex items-center justify-center text-[#d4ff33] mb-5">
                         <i data-lucide="shield-check" class="w-5 h-5"></i>
                     </div>
                     <div class="text-[11px] font-mono text-[#d4ff33] uppercase tracking-wider mb-2">ENTERPRISE GOVERNANCE</div>
@@ -1716,7 +1714,7 @@
                 </div>
                 <div>
                     <div class="text-xs font-mono text-white font-bold mb-0.5 inline-flex items-center gap-1">Sentinel</div>
-                    <div class="text-[10px] font-mono text-[#d4ff33] uppercase tracking-wider mb-2">TDD &amp; QA Gate</div>
+                    <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">TDD &amp; QA Gate</div>
                     <div class="text-[10px] font-mono text-zinc-400 leading-relaxed">Synthesizes negative reproduction tests and enforces green AST passes.</div>
                 </div>
             </div>
@@ -1733,7 +1731,7 @@
                 </div>
                 <div>
                     <div class="text-xs font-mono text-white font-bold mb-0.5 inline-flex items-center gap-1">Aegis</div>
-                    <div class="text-[10px] font-mono text-[#d4ff33] uppercase tracking-wider mb-2">Security Engineer</div>
+                    <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">Security Engineer</div>
                     <div class="text-[10px] font-mono text-zinc-400 leading-relaxed">Audits attack surface, OWASP Top 10 vulnerabilities, &amp; secret leakage.</div>
                 </div>
             </div>
@@ -1821,10 +1819,10 @@
                 <p class="text-[10px] text-zinc-500 mt-2 font-mono">149 Python • 21 JS • 3 CSS</p>
             </div>
 
-            <div class="rounded-2xl border-2 border-[#d4ff33]/40 bg-[#0c0d11] p-6 sm:p-8 text-center shadow-[0_0_30px_rgba(204,255,0,0.1)] relative overflow-hidden stagger-2">
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 sm:p-8 text-center shadow-xl hover:border-white/20 transition-all stagger-2">
                 <div class="text-4xl md:text-5xl font-extrabold text-[#d4ff33] tracking-tighter mb-2 font-mono">100%</div>
-                <div class="text-[11px] font-mono text-[#d4ff33] uppercase tracking-widest">Pytest Pass Rate</div>
-                <p class="text-[10px] text-zinc-400 mt-2 font-mono">183 Unit • 60 Algo • 18 Concurrency/WAL</p>
+                <div class="text-[11px] font-mono text-zinc-400 uppercase tracking-widest">Pytest Pass Rate</div>
+                <p class="text-[10px] text-zinc-500 mt-2 font-mono">183 Unit • 60 Algo • 18 Concurrency/WAL</p>
             </div>
 
             <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 sm:p-8 text-center shadow-xl hover:border-white/20 transition-all stagger-3">
@@ -1938,11 +1936,7 @@
                     </a>
                 </div>
                 
-                <div class="mt-6 text-[11px] font-mono text-zinc-500 flex items-center justify-center gap-3">
-                    <span class="inline-flex items-center gap-1.5"><i data-lucide="zap" class="w-3.5 h-3.5 text-[#d4ff33]"></i> Launch Mission in &lt;150ms</span>
-                    <span>•</span>
-                    <span>Zero local setup required</span>
-                </div>
+
             </div>
         </div>
     </section>
