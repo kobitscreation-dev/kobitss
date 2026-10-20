@@ -75,37 +75,35 @@
         
         .fig-label {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
+            font-size: 11px;
             letter-spacing: 0.12em;
             text-transform: uppercase;
-            color: #71717a;
+            color: #d4ff33;
             display: inline-flex;
             align-items: center;
             gap: 6px;
         }
 
         .fig-container {
-            border: 1px solid #24242c;
-            background: linear-gradient(180deg, rgba(20,20,25,0.4) 0%, rgba(12,12,16,0.85) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: #0c0d11;
             position: relative;
             overflow: hidden;
             transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
         }
         .fig-container:hover {
-            border-color: rgba(255, 255, 255, 0.22);
-            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.6), 0 0 25px rgba(255, 255, 255, 0.04);
+            border-color: rgba(212, 255, 51, 0.3);
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.6), 0 0 25px rgba(212, 255, 51, 0.04);
         }
         
         .technical-grid {
-            background-image: linear-gradient(to right, #1f1f27 1px, transparent 1px),
-                              linear-gradient(to bottom, #1f1f27 1px, transparent 1px);
-            background-size: 32px 32px;
+            display: none;
         }
 
-        .hairline-b { border-bottom: 1px solid #24242c; }
-        .hairline-t { border-top: 1px solid #24242c; }
-        .hairline-l { border-left: 1px solid #24242c; }
-        .hairline-r { border-right: 1px solid #24242c; }
+        .hairline-b { border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+        .hairline-t { border-top: 1px solid rgba(255, 255, 255, 0.08); }
+        .hairline-l { border-left: 1px solid rgba(255, 255, 255, 0.08); }
+        .hairline-r { border-right: 1px solid rgba(255, 255, 255, 0.08); }
 
         /* Subtle reveal animations */
         @keyframes fadeUp {
@@ -1557,109 +1555,138 @@
 
     <!-- SECTION 02: THE 6 PILLARS OF AUTONOMOUS ENGINEERING -->
     <section id="architecture" class="py-24 px-6 max-w-[1400px] mx-auto hairline-t">
-        <div class="mb-16 scroll-reveal">
-            <div class="fig-label mb-3">FIG. 02 — ARCHITECTURAL PILLARS</div>
-            <h2 class="text-3xl md:text-5xl font-medium tracking-tight text-white mb-4">
+        <div class="mb-14 scroll-reveal text-left max-w-4xl">
+            <div class="text-xs font-mono text-[#d4ff33] uppercase tracking-widest mb-3">// ARCHITECTURAL_PILLARS</div>
+            <h2 class="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
                 Engineered for 100% Autonomy.<br>
                 <span class="text-zinc-500">Built to replace copilot guesswork.</span>
             </h2>
-            <p class="text-zinc-400 text-sm max-w-2xl font-normal leading-relaxed">
+            <p class="text-zinc-400 text-sm max-w-2xl font-normal leading-relaxed mt-4">
                 Traditional AI assistants generate unverified code snippets that break your local repo. Kobits provides a complete autonomous software engineering lifecycle with remote MicroVM isolation, negative-to-positive TDD verification, and self-healing CI loops.
             </p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 scroll-reveal">
             <!-- Pillar 1 -->
-            <div class="fig-container p-6 rounded-xl card-interactive scroll-reveal stagger-1">
-                <div class="fig-label text-[#d4ff33] mb-3"><i data-lucide="server" class="w-3.5 h-3.5"></i> ZERO-LOCAL FOOTPRINT</div>
-                <h3 class="text-lg font-medium text-white mb-2">Remote Ephemeral MicroVMs</h3>
-                <p class="text-xs text-zinc-400 leading-relaxed mb-4">
-                    All code execution occurs in dedicated Linux MicroVMs (E2B Firecracker fleet) provisioned in &lt;150ms. Zero software installations or local dependencies on your developer machine, with zero host blast radius.
-                </p>
-                <div class="text-[11px] font-mono text-zinc-500 flex items-center gap-2">
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 sm:p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden group hover:border-[#d4ff33]/40 transition-all">
+                <div>
+                    <div class="w-10 h-10 rounded-xl bg-white/[0.05] border border-white/[0.1] flex items-center justify-center text-[#d4ff33] mb-5">
+                        <i data-lucide="server" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-[11px] font-mono text-[#d4ff33] uppercase tracking-wider mb-2">ZERO-LOCAL FOOTPRINT</div>
+                    <h3 class="text-xl font-bold text-white mb-2">Remote Ephemeral MicroVMs</h3>
+                    <p class="text-xs text-zinc-400 leading-relaxed font-sans mb-6">
+                        All code execution occurs in dedicated Linux MicroVMs (E2B Firecracker fleet) provisioned in &lt;150ms. Zero software installations or local dependencies on your developer machine, with zero host blast radius.
+                    </p>
+                </div>
+                <div class="text-[11px] font-mono text-zinc-500 flex items-center gap-2 pt-4 border-t border-white/[0.06]">
                     <span class="text-[#d4ff33]">✓</span> 100% Hardware Virtualization
                 </div>
             </div>
 
             <!-- Pillar 2 -->
-            <div class="fig-container p-6 rounded-xl card-interactive scroll-reveal stagger-2">
-                <div class="fig-label text-[#d4ff33] mb-3"><i data-lucide="flask-conical" class="w-3.5 h-3.5"></i> TDD REPRODUCER</div>
-                <h3 class="text-lg font-medium text-white mb-2">Negative-to-Positive TDD</h3>
-                <p class="text-xs text-zinc-400 leading-relaxed mb-4">
-                    Before writing any fix, Kobits synthesizes a reproduction test that fails against the current codebase (proves the bug exists). It applies minimal surgical code, then verifies the test turns green before opening a PR.
-                </p>
-                <div class="text-[11px] font-mono text-zinc-500 flex items-center gap-2">
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 sm:p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden group hover:border-[#d4ff33]/40 transition-all">
+                <div>
+                    <div class="w-10 h-10 rounded-xl bg-white/[0.05] border border-white/[0.1] flex items-center justify-center text-[#d4ff33] mb-5">
+                        <i data-lucide="flask-conical" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-[11px] font-mono text-[#d4ff33] uppercase tracking-wider mb-2">TDD REPRODUCER</div>
+                    <h3 class="text-xl font-bold text-white mb-2">Negative-to-Positive TDD</h3>
+                    <p class="text-xs text-zinc-400 leading-relaxed font-sans mb-6">
+                        Before writing any fix, Kobits synthesizes a reproduction test that fails against the current codebase (proves the bug exists). It applies minimal surgical code, then verifies the test turns green before opening a PR.
+                    </p>
+                </div>
+                <div class="text-[11px] font-mono text-zinc-500 flex items-center gap-2 pt-4 border-t border-white/[0.06]">
                     <span class="text-[#d4ff33]">✓</span> Automated Red-to-Green Proof
                 </div>
             </div>
 
             <!-- Pillar 3 -->
-            <div class="fig-container p-6 rounded-xl card-interactive scroll-reveal stagger-3">
-                <div class="fig-label text-[#d4ff33] mb-3"><i data-lucide="git-pull-request" class="w-3.5 h-3.5"></i> BI-DIRECTIONAL SCM</div>
-                <h3 class="text-lg font-medium text-white mb-2">Self-Healing CI Pipelines</h3>
-                <p class="text-xs text-zinc-400 leading-relaxed mb-4">
-                    Listens directly to GitHub Actions CI failure webhooks (<code class="text-zinc-300">check_run</code> / <code class="text-zinc-300">workflow_run</code>). Ingests failure logs, reproduces the defect in a MicroVM, commits a verified patch, and updates the PR.
-                </p>
-                <div class="text-[11px] font-mono text-zinc-500 flex items-center gap-2">
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 sm:p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden group hover:border-[#d4ff33]/40 transition-all">
+                <div>
+                    <div class="w-10 h-10 rounded-xl bg-white/[0.05] border border-white/[0.1] flex items-center justify-center text-[#d4ff33] mb-5">
+                        <i data-lucide="git-pull-request" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-[11px] font-mono text-[#d4ff33] uppercase tracking-wider mb-2">BI-DIRECTIONAL SCM</div>
+                    <h3 class="text-xl font-bold text-white mb-2">Self-Healing CI Pipelines</h3>
+                    <p class="text-xs text-zinc-400 leading-relaxed font-sans mb-6">
+                        Listens directly to GitHub Actions CI failure webhooks (<code class="text-zinc-300">check_run</code> / <code class="text-zinc-300">workflow_run</code>). Ingests failure logs, reproduces the defect in a MicroVM, commits a verified patch, and updates the PR.
+                    </p>
+                </div>
+                <div class="text-[11px] font-mono text-zinc-500 flex items-center gap-2 pt-4 border-t border-white/[0.06]">
                     <span class="text-[#d4ff33]">✓</span> Automated CI Triage &amp; PR Bot
                 </div>
             </div>
 
             <!-- Pillar 4 -->
-            <div class="fig-container p-6 rounded-xl card-interactive scroll-reveal stagger-4">
-                <div class="fig-label text-[#d4ff33] mb-3"><i data-lucide="layout" class="w-3.5 h-3.5"></i> DEV SERVER TUNNEL</div>
-                <h3 class="text-lg font-medium text-white mb-2">Ephemeral Web Preview &amp; HMR</h3>
-                <p class="text-xs text-zinc-400 leading-relaxed mb-4">
-                    Spins up dev servers (Vite, Next.js, FastAPI, Flask) and establishes real-time WebSocket reverse proxy tunnels directly to the dashboard. Preview your running web application live with Hot Module Reloading in seconds.
-                </p>
-                <div class="text-[11px] font-mono text-zinc-500 flex items-center gap-2">
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 sm:p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden group hover:border-[#d4ff33]/40 transition-all">
+                <div>
+                    <div class="w-10 h-10 rounded-xl bg-white/[0.05] border border-white/[0.1] flex items-center justify-center text-[#d4ff33] mb-5">
+                        <i data-lucide="layout" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-[11px] font-mono text-[#d4ff33] uppercase tracking-wider mb-2">DEV SERVER TUNNEL</div>
+                    <h3 class="text-xl font-bold text-white mb-2">Ephemeral Web Preview &amp; HMR</h3>
+                    <p class="text-xs text-zinc-400 leading-relaxed font-sans mb-6">
+                        Spins up dev servers (Vite, Next.js, FastAPI, Flask) and establishes real-time WebSocket reverse proxy tunnels directly to the dashboard. Preview your running web application live with Hot Module Reloading in seconds.
+                    </p>
+                </div>
+                <div class="text-[11px] font-mono text-zinc-500 flex items-center gap-2 pt-4 border-t border-white/[0.06]">
                     <span class="text-[#d4ff33]">✓</span> In-Browser Live Preview
                 </div>
             </div>
 
             <!-- Pillar 5 -->
-            <div class="fig-container p-6 rounded-xl card-interactive scroll-reveal stagger-5">
-                <div class="fig-label text-[#d4ff33] mb-3"><i data-lucide="database" class="w-3.5 h-3.5"></i> PERSISTENT GRAPH</div>
-                <h3 class="text-lg font-medium text-white mb-2">Team Memory &amp; Knowledge Graph</h3>
-                <p class="text-xs text-zinc-400 leading-relaxed mb-4">
-                    Indexes architectural decision records (ADR), repository conventions, type signatures, and defect fixes in online vector memory. Kobits retains context across missions and never repeats the same error twice.
-                </p>
-                <div class="text-[11px] font-mono text-zinc-500 flex items-center gap-2">
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 sm:p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden group hover:border-[#d4ff33]/40 transition-all">
+                <div>
+                    <div class="w-10 h-10 rounded-xl bg-white/[0.05] border border-white/[0.1] flex items-center justify-center text-[#d4ff33] mb-5">
+                        <i data-lucide="database" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-[11px] font-mono text-[#d4ff33] uppercase tracking-wider mb-2">PERSISTENT GRAPH</div>
+                    <h3 class="text-xl font-bold text-white mb-2">Team Memory &amp; Knowledge Graph</h3>
+                    <p class="text-xs text-zinc-400 leading-relaxed font-sans mb-6">
+                        Indexes architectural decision records (ADR), repository conventions, type signatures, and defect fixes in online vector memory. Kobits retains context across missions and never repeats the same error twice.
+                    </p>
+                </div>
+                <div class="text-[11px] font-mono text-zinc-500 flex items-center gap-2 pt-4 border-t border-white/[0.06]">
                     <span class="text-[#d4ff33]">✓</span> Cross-Session Continuity
                 </div>
             </div>
 
             <!-- Pillar 6 -->
-            <div class="fig-container p-6 rounded-xl card-interactive scroll-reveal stagger-6">
-                <div class="fig-label text-[#d4ff33] mb-3"><i data-lucide="shield-check" class="w-3.5 h-3.5"></i> ENTERPRISE GOVERNANCE</div>
-                <h3 class="text-lg font-medium text-white mb-2">The 5% Operator Gate</h3>
-                <p class="text-xs text-zinc-400 leading-relaxed mb-4">
-                    Kobits executes 95% of the mechanical coding autonomously, leaving the remaining 5% for executive human review. Backed by tamper-evident HMAC-SHA256 SOC2 audit logs and 3 consensus review seals.
-                </p>
-                <div class="text-[11px] font-mono text-zinc-500 flex items-center gap-2">
+            <div class="rounded-2xl border-2 border-[#d4ff33]/40 bg-[#0c0d11] p-6 sm:p-8 flex flex-col justify-between shadow-[0_0_30px_rgba(204,255,0,0.1)] relative overflow-hidden group">
+                <div class="absolute -top-16 -right-16 w-32 h-32 bg-[#d4ff33]/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div>
+                    <div class="w-10 h-10 rounded-xl bg-[#d4ff33]/10 border border-[#d4ff33]/30 flex items-center justify-center text-[#d4ff33] mb-5">
+                        <i data-lucide="shield-check" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-[11px] font-mono text-[#d4ff33] uppercase tracking-wider mb-2">ENTERPRISE GOVERNANCE</div>
+                    <h3 class="text-xl font-bold text-white mb-2">The 5% Operator Gate</h3>
+                    <p class="text-xs text-zinc-400 leading-relaxed font-sans mb-6">
+                        Kobits executes 95% of the mechanical coding autonomously, leaving the remaining 5% for executive human review. Backed by tamper-evident HMAC-SHA256 SOC2 audit logs and 3 consensus review seals.
+                    </p>
+                </div>
+                <div class="text-[11px] font-mono text-zinc-500 flex items-center gap-2 pt-4 border-t border-white/[0.06]">
                     <span class="text-[#d4ff33]">✓</span> SOC2 Audit &amp; 3 Consensus Seals
                 </div>
             </div>
         </div>
     </section>
 
-
-
-    <!-- SECTION 04: THE 21 SPECIALIST ENGINEERING MATRIX (FIG 04) -->
+    <!-- SECTION 04: THE 21 SPECIALIST ENGINEERING MATRIX -->
     <section id="specialists" class="py-24 px-6 max-w-[1400px] mx-auto hairline-t">
-        <div class="mb-12 scroll-reveal">
-            <div class="fig-label mb-3">FIG. 04 — MULTI-AGENT POD ARCHITECTURE</div>
-            <h2 class="text-3xl md:text-5xl font-medium tracking-tight text-white mb-4">
+        <div class="mb-14 scroll-reveal text-left max-w-4xl">
+            <div class="text-xs font-mono text-[#d4ff33] uppercase tracking-widest mb-3">// MULTI_AGENT_POD_ARCHITECTURE</div>
+            <h2 class="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
                 21 Autonomous Domain Specialists.
             </h2>
-            <p class="text-zinc-400 text-sm max-w-2xl font-normal leading-relaxed">
+            <p class="text-zinc-400 text-sm max-w-2xl font-normal leading-relaxed mt-4">
                 Rather than asking a single generalist model to write frontend React, tune PostgreSQL indexes, verify AST compilation, and audit OWASP vulnerabilities in one turn, Kobits coordinates specialized autonomous agents in parallel cleanrooms.
             </p>
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <!-- Axiom -->
-            <div class="fig-container p-4 rounded-lg card-interactive scroll-reveal stagger-1 group">
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-5 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-[#d4ff33]/40 transition-all scroll-reveal stagger-1">
                 <div class="agent-orb-badge mb-3">
                     <svg class="agent-orb-svg" viewBox="0 0 36 36" fill="none">
                         <circle cx="18" cy="18" r="16" stroke="rgba(255,255,255,0.2)" stroke-width="1" stroke-dasharray="3 3"/>
@@ -1669,13 +1696,15 @@
                         <circle cx="18" cy="18" r="3.5" fill="white" class="animate-pulse"/>
                     </svg>
                 </div>
-                <div class="text-xs font-mono text-white font-bold mb-0.5 inline-flex items-center gap-1">Axiom</div>
-                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">DAG Orchestrator</div>
-                <div class="text-[10px] font-mono text-zinc-400 leading-relaxed">Decomposes objectives into topological dependency DAGs.</div>
+                <div>
+                    <div class="text-xs font-mono text-white font-bold mb-0.5 inline-flex items-center gap-1">Axiom</div>
+                    <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">DAG Orchestrator</div>
+                    <div class="text-[10px] font-mono text-zinc-400 leading-relaxed">Decomposes objectives into topological dependency DAGs.</div>
+                </div>
             </div>
 
             <!-- Sentinel -->
-            <div class="fig-container p-4 rounded-lg card-interactive scroll-reveal stagger-2 group">
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-5 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-[#d4ff33]/40 transition-all scroll-reveal stagger-2">
                 <div class="agent-orb-badge mb-3">
                     <svg class="agent-orb-svg" viewBox="0 0 36 36" fill="none">
                         <circle cx="18" cy="18" r="16" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
@@ -1685,13 +1714,15 @@
                         <circle cx="28" cy="12" r="1.8" fill="white" class="animate-ping"/>
                     </svg>
                 </div>
-                <div class="text-xs font-mono text-white font-bold mb-0.5 inline-flex items-center gap-1">Sentinel</div>
-                <div class="text-[10px] font-mono text-[#d4ff33] uppercase tracking-wider mb-2">TDD &amp; QA Gate</div>
-                <div class="text-[10px] font-mono text-zinc-400 leading-relaxed">Synthesizes negative reproduction tests and enforces green AST passes.</div>
+                <div>
+                    <div class="text-xs font-mono text-white font-bold mb-0.5 inline-flex items-center gap-1">Sentinel</div>
+                    <div class="text-[10px] font-mono text-[#d4ff33] uppercase tracking-wider mb-2">TDD &amp; QA Gate</div>
+                    <div class="text-[10px] font-mono text-zinc-400 leading-relaxed">Synthesizes negative reproduction tests and enforces green AST passes.</div>
+                </div>
             </div>
 
             <!-- Aegis -->
-            <div class="fig-container p-4 rounded-lg card-interactive scroll-reveal stagger-3 group">
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-5 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-[#d4ff33]/40 transition-all scroll-reveal stagger-3">
                 <div class="agent-orb-badge mb-3">
                     <svg class="agent-orb-svg" viewBox="0 0 36 36" fill="none">
                         <circle cx="18" cy="18" r="16" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
@@ -1700,13 +1731,15 @@
                         <circle cx="18" cy="18" r="2.5" fill="white"/>
                     </svg>
                 </div>
-                <div class="text-xs font-mono text-white font-bold mb-0.5 inline-flex items-center gap-1">Aegis</div>
-                <div class="text-[10px] font-mono text-[#d4ff33] uppercase tracking-wider mb-2">Security Engineer</div>
-                <div class="text-[10px] font-mono text-zinc-400 leading-relaxed">Audits attack surface, OWASP Top 10 vulnerabilities, &amp; secret leakage.</div>
+                <div>
+                    <div class="text-xs font-mono text-white font-bold mb-0.5 inline-flex items-center gap-1">Aegis</div>
+                    <div class="text-[10px] font-mono text-[#d4ff33] uppercase tracking-wider mb-2">Security Engineer</div>
+                    <div class="text-[10px] font-mono text-zinc-400 leading-relaxed">Audits attack surface, OWASP Top 10 vulnerabilities, &amp; secret leakage.</div>
+                </div>
             </div>
 
             <!-- Forge -->
-            <div class="fig-container p-4 rounded-lg card-interactive scroll-reveal stagger-4 group">
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-5 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-[#d4ff33]/40 transition-all scroll-reveal stagger-4">
                 <div class="agent-orb-badge mb-3">
                     <svg class="agent-orb-svg" viewBox="0 0 36 36" fill="none">
                         <circle cx="18" cy="18" r="16" stroke="rgba(255,255,255,0.2)" stroke-width="1" stroke-dasharray="2 4"/>
@@ -1716,13 +1749,15 @@
                         <circle cx="18" cy="18" r="2" fill="white" class="animate-pulse"/>
                     </svg>
                 </div>
-                <div class="text-xs font-mono text-white font-bold mb-0.5 inline-flex items-center gap-1">Forge</div>
-                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">Backend MicroVM</div>
-                <div class="text-[10px] font-mono text-zinc-400 leading-relaxed">Builds high-throughput microservices, WAL storage, and APIs.</div>
+                <div>
+                    <div class="text-xs font-mono text-white font-bold mb-0.5 inline-flex items-center gap-1">Forge</div>
+                    <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">Backend MicroVM</div>
+                    <div class="text-[10px] font-mono text-zinc-400 leading-relaxed">Builds high-throughput microservices, WAL storage, and APIs.</div>
+                </div>
             </div>
 
             <!-- Muse -->
-            <div class="fig-container p-4 rounded-lg card-interactive scroll-reveal stagger-5 group">
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-5 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-[#d4ff33]/40 transition-all scroll-reveal stagger-5">
                 <div class="agent-orb-badge mb-3">
                     <svg class="agent-orb-svg" viewBox="0 0 36 36" fill="none">
                         <circle cx="18" cy="18" r="16" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
@@ -1731,13 +1766,15 @@
                         <circle cx="18" cy="18" r="2.8" fill="white"/>
                     </svg>
                 </div>
-                <div class="text-xs font-mono text-white font-bold mb-0.5 inline-flex items-center gap-1">Muse</div>
-                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">Frontend &amp; Preview</div>
-                <div class="text-[10px] font-mono text-zinc-400 leading-relaxed">Synthesizes responsive UI components and configures HMR preview tunnels.</div>
+                <div>
+                    <div class="text-xs font-mono text-white font-bold mb-0.5 inline-flex items-center gap-1">Muse</div>
+                    <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">Frontend &amp; Preview</div>
+                    <div class="text-[10px] font-mono text-zinc-400 leading-relaxed">Synthesizes responsive UI components and configures HMR preview tunnels.</div>
+                </div>
             </div>
 
             <!-- Atlas -->
-            <div class="fig-container p-4 rounded-lg card-interactive scroll-reveal stagger-6 group">
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-5 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-[#d4ff33]/40 transition-all scroll-reveal stagger-6">
                 <div class="agent-orb-badge mb-3">
                     <svg class="agent-orb-svg" viewBox="0 0 36 36" fill="none">
                         <circle cx="18" cy="18" r="16" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
@@ -1748,13 +1785,15 @@
                         <circle cx="18" cy="18" r="2.5" fill="white"/>
                     </svg>
                 </div>
-                <div class="text-xs font-mono text-white font-bold mb-0.5 inline-flex items-center gap-1">Atlas</div>
-                <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">Database Engine</div>
-                <div class="text-[10px] font-mono text-zinc-400 leading-relaxed">Designs ACID schemas, Alembic migrations, &amp; query optimization.</div>
+                <div>
+                    <div class="text-xs font-mono text-white font-bold mb-0.5 inline-flex items-center gap-1">Atlas</div>
+                    <div class="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">Database Engine</div>
+                    <div class="text-[10px] font-mono text-zinc-400 leading-relaxed">Designs ACID schemas, Alembic migrations, &amp; query optimization.</div>
+                </div>
             </div>
         </div>
 
-        <div class="mt-4 p-4 fig-container rounded-lg flex flex-col sm:flex-row items-center justify-between text-xs font-mono text-zinc-500 gap-4 scroll-reveal">
+        <div class="mt-6 p-4 rounded-2xl border border-white/[0.08] bg-[#0c0d11] flex flex-col sm:flex-row items-center justify-between text-xs font-mono text-zinc-400 gap-4 scroll-reveal">
             <span>+ 15 ADDITIONAL DOMAIN SPECIALISTS (CHRONOS CI/CD, NEXUS ARCHITECT, SRE, CODE REVIEW, ACCESSIBILITY, ETC.)</span>
             <a href="/portal" class="text-white hover:text-[#d4ff33] transition-colors flex items-center gap-1 font-medium">
                 <span>Explore Executive Portal</span>
@@ -1765,37 +1804,37 @@
 
     <!-- SECTION 05: GROUND TRUTH PLATFORM TELEMETRY -->
     <section id="evidence" class="py-24 px-6 max-w-[1400px] mx-auto hairline-t">
-        <div class="mb-12 scroll-reveal">
-            <div class="fig-label mb-3">FIG. 05 — PLATFORM TELEMETRY &amp; PROOF</div>
-            <h2 class="text-3xl md:text-5xl font-medium tracking-tight text-white mb-4">
+        <div class="mb-14 scroll-reveal text-left max-w-4xl">
+            <div class="text-xs font-mono text-[#d4ff33] uppercase tracking-widest mb-3">// PLATFORM_TELEMETRY</div>
+            <h2 class="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
                 Verified Platform Telemetry.
             </h2>
-            <p class="text-zinc-400 text-sm max-w-2xl font-normal leading-relaxed">
+            <p class="text-zinc-400 text-sm max-w-2xl font-normal leading-relaxed mt-4">
                 Measured facts directly extracted from the codebase filesystem, autonomous microVM executions, and persistent database.
             </p>
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div class="fig-container p-6 rounded-xl text-center card-interactive scroll-reveal stagger-1">
-                <div class="text-4xl md:text-5xl font-semibold text-white tracking-tighter mb-2">45,509</div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6 scroll-reveal">
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 sm:p-8 text-center shadow-xl hover:border-white/20 transition-all stagger-1">
+                <div class="text-4xl md:text-5xl font-extrabold text-white tracking-tighter mb-2 font-mono">45,509</div>
                 <div class="text-[11px] font-mono text-zinc-400 uppercase tracking-widest">Platform LOC</div>
                 <p class="text-[10px] text-zinc-500 mt-2 font-mono">149 Python • 21 JS • 3 CSS</p>
             </div>
 
-            <div class="fig-container p-6 rounded-xl text-center card-interactive scroll-reveal stagger-2">
-                <div class="text-4xl md:text-5xl font-semibold text-[#d4ff33] tracking-tighter mb-2">100%</div>
-                <div class="text-[11px] font-mono text-zinc-400 uppercase tracking-widest">Pytest Pass Rate</div>
-                <p class="text-[10px] text-zinc-500 mt-2 font-mono">183 Unit • 60 Algo • 18 Concurrency/WAL</p>
+            <div class="rounded-2xl border-2 border-[#d4ff33]/40 bg-[#0c0d11] p-6 sm:p-8 text-center shadow-[0_0_30px_rgba(204,255,0,0.1)] relative overflow-hidden stagger-2">
+                <div class="text-4xl md:text-5xl font-extrabold text-[#d4ff33] tracking-tighter mb-2 font-mono">100%</div>
+                <div class="text-[11px] font-mono text-[#d4ff33] uppercase tracking-widest">Pytest Pass Rate</div>
+                <p class="text-[10px] text-zinc-400 mt-2 font-mono">183 Unit • 60 Algo • 18 Concurrency/WAL</p>
             </div>
 
-            <div class="fig-container p-6 rounded-xl text-center card-interactive scroll-reveal stagger-3">
-                <div class="text-4xl md:text-5xl font-semibold text-white tracking-tighter mb-2">0</div>
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 sm:p-8 text-center shadow-xl hover:border-white/20 transition-all stagger-3">
+                <div class="text-4xl md:text-5xl font-extrabold text-white tracking-tighter mb-2 font-mono">0</div>
                 <div class="text-[11px] font-mono text-zinc-400 uppercase tracking-widest">Local Footprint</div>
                 <p class="text-[10px] text-zinc-500 mt-2 font-mono">100% Ephemeral MicroVMs</p>
             </div>
 
-            <div class="fig-container p-6 rounded-xl text-center card-interactive scroll-reveal stagger-4">
-                <div class="text-4xl md:text-5xl font-semibold text-white tracking-tighter mb-2">16,086</div>
+            <div class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 sm:p-8 text-center shadow-xl hover:border-white/20 transition-all stagger-4">
+                <div class="text-4xl md:text-5xl font-extrabold text-white tracking-tighter mb-2 font-mono">16,086</div>
                 <div class="text-[11px] font-mono text-zinc-400 uppercase tracking-widest">Agent Executions</div>
                 <p class="text-[10px] text-zinc-500 mt-2 font-mono">22 Completed Autonomous Missions</p>
             </div>
@@ -1804,63 +1843,65 @@
 
     <!-- SECTION 06: ENTERPRISE SECURITY & FREQUENTLY ASKED QUESTIONS -->
     <section id="security-faq" class="py-24 px-6 max-w-[1200px] mx-auto hairline-t">
-        <div class="mb-12 scroll-reveal text-center">
-            <div class="fig-label mb-3">FIG. 06 — SECURITY &amp; FREQUENTLY ASKED QUESTIONS</div>
-            <h2 class="text-3xl md:text-5xl font-medium tracking-tight text-white mb-4">
+        <div class="mb-14 scroll-reveal text-center max-w-2xl mx-auto">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/[0.08] bg-[#0c0d11] text-xs font-mono text-[#d4ff33] mb-4">
+                <span>// ENTERPRISE_SECURITY_FAQ</span>
+            </div>
+            <h2 class="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
                 Enterprise-Grade Security by Design.
             </h2>
-            <p class="text-zinc-400 text-sm max-w-xl mx-auto font-normal leading-relaxed">
+            <p class="text-zinc-400 text-sm max-w-xl mx-auto font-normal leading-relaxed mt-4">
                 Everything you need to know about remote MicroVM sandboxing, data privacy, and the 5% operator gate.
             </p>
         </div>
 
         <div class="space-y-4 max-w-3xl mx-auto scroll-reveal">
-            <details class="fig-container p-5 rounded-xl group cursor-pointer">
+            <details class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 group cursor-pointer hover:border-white/20 transition-all">
                 <summary class="flex items-center justify-between font-mono text-sm text-white font-medium list-none">
                     <span>How does Kobits run without installing anything on my local computer?</span>
                     <i data-lucide="chevron-down" class="w-4 h-4 text-zinc-400 group-open:rotate-180 transition-transform"></i>
                 </summary>
-                <p class="text-xs text-zinc-400 mt-3 font-sans leading-relaxed">
+                <p class="text-xs text-zinc-400 mt-4 font-sans leading-relaxed">
                     Kobits executes 100% in remote isolated MicroVMs (E2B Firecracker container fleet). When you assign a mission, a dedicated microVM boots in under 150ms with its own Linux kernel, compiler toolchains, package managers, and test runners. Your local workstation requires zero dependencies and has zero host blast radius.
                 </p>
             </details>
 
-            <details class="fig-container p-5 rounded-xl group cursor-pointer">
+            <details class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 group cursor-pointer hover:border-white/20 transition-all">
                 <summary class="flex items-center justify-between font-mono text-sm text-white font-medium list-none">
                     <span>What is the Negative-to-Positive TDD Reproducer and why is it superior?</span>
                     <i data-lucide="chevron-down" class="w-4 h-4 text-zinc-400 group-open:rotate-180 transition-transform"></i>
                 </summary>
-                <p class="text-xs text-zinc-400 mt-3 font-sans leading-relaxed">
+                <p class="text-xs text-zinc-400 mt-4 font-sans leading-relaxed">
                     Traditional AI copilots guess at code fixes without proving whether the bug existed or whether their proposed fix worked. Kobits first synthesizes an automated reproduction test that fails on the current codebase (proving the defect). It applies minimal surgical code, then verifies that the test turns green and that all existing regression suites continue to pass at 100%.
                 </p>
             </details>
 
-            <details class="fig-container p-5 rounded-xl group cursor-pointer">
+            <details class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 group cursor-pointer hover:border-white/20 transition-all">
                 <summary class="flex items-center justify-between font-mono text-sm text-white font-medium list-none">
                     <span>How does Kobits self-heal CI pipelines and address PR reviews?</span>
                     <i data-lucide="chevron-down" class="w-4 h-4 text-zinc-400 group-open:rotate-180 transition-transform"></i>
                 </summary>
-                <p class="text-xs text-zinc-400 mt-3 font-sans leading-relaxed">
+                <p class="text-xs text-zinc-400 mt-4 font-sans leading-relaxed">
                     Kobits connects as a GitHub App and listens to <code class="text-zinc-200">check_run</code> webhook events and PR review comments. When a CI build fails or a human reviewer requests adjustments, Kobits automatically reproduces the failure in a remote MicroVM, pushes a verified fix directly to the PR branch, and responds with explanatory notes.
                 </p>
             </details>
 
-            <details class="fig-container p-5 rounded-xl group cursor-pointer">
+            <details class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 group cursor-pointer hover:border-white/20 transition-all">
                 <summary class="flex items-center justify-between font-mono text-sm text-white font-medium list-none">
                     <span>Is my proprietary source code used to train AI models?</span>
                     <i data-lucide="chevron-down" class="w-4 h-4 text-zinc-400 group-open:rotate-180 transition-transform"></i>
                 </summary>
-                <p class="text-xs text-zinc-400 mt-3 font-sans leading-relaxed">
+                <p class="text-xs text-zinc-400 mt-4 font-sans leading-relaxed">
                     Strictly NO. Kobits operates on enterprise zero-data-retention (ZDR) APIs. Your code is processed in isolated ephemeral microVMs that are destroyed upon mission completion. Every action is cryptographically signed into an HMAC-SHA256 audit log for SOC2 Type II compliance.
                 </p>
             </details>
 
-            <details class="fig-container p-5 rounded-xl group cursor-pointer">
+            <details class="rounded-2xl border border-white/[0.08] bg-[#0c0d11] p-6 group cursor-pointer hover:border-white/20 transition-all">
                 <summary class="flex items-center justify-between font-mono text-sm text-white font-medium list-none">
                     <span>What is the 5% Operator Gate?</span>
                     <i data-lucide="chevron-down" class="w-4 h-4 text-zinc-400 group-open:rotate-180 transition-transform"></i>
                 </summary>
-                <p class="text-xs text-zinc-400 mt-3 font-sans leading-relaxed">
+                <p class="text-xs text-zinc-400 mt-4 font-sans leading-relaxed">
                     Kobits is designed for 95% autonomous execution velocity with a 5% high-leverage operator review gate. Before code is merged into client repositories, human operators or tech leads can inspect the cleanroom diff, verify the 3 consensus seals (Aegis Security, Sentinel QA, Nexus Architecture), and approve the pull request with a single click.
                 </p>
             </details>
@@ -1868,35 +1909,46 @@
     </section>
 
     <!-- SECTION 07: FINAL HIGH-CONVERSION CTA -->
-    <section id="cta" class="py-40 hairline-t relative overflow-hidden bg-zinc-950">
-        <div class="absolute inset-0 technical-grid opacity-15"></div>
-        <div class="max-w-[1400px] mx-auto px-6 text-center relative z-10 scroll-reveal">
-            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-800 bg-zinc-900/80 text-xs font-mono text-zinc-400 mb-6">
-                <span class="w-1.5 h-1.5 rounded-full bg-[#d4ff33] animate-pulse"></span>
-                <span>AUTONOMOUS SOFTWARE ENGINEERING</span>
-            </div>
-            <h2 class="text-[3.8rem] md:text-[6.2rem] tracking-tighter leading-[0.9] font-semibold mb-8 text-white">
-                Stop reviewing hallucinations.<br>
-                <span class="text-zinc-500">Start merging verified PRs.</span>
-            </h2>
-            <p class="text-base md:text-lg text-zinc-400 mb-12 font-normal tracking-wide max-w-xl mx-auto leading-relaxed">
-                Connect your GitHub repository, assign an outcome, and let Kobits' MicroVM fleet deliver tested, verified Pull Requests in minutes.
-            </p>
+    <section id="cta" class="py-24 px-6 max-w-[1200px] mx-auto">
+        <div class="relative rounded-3xl border border-white/[0.08] bg-[#0c0d11] p-10 md:p-16 text-center overflow-hidden shadow-2xl scroll-reveal">
+            <div class="absolute -top-32 left-1/2 -translate-x-1/2 w-96 h-96 bg-[#d4ff33]/10 rounded-full blur-[100px] pointer-events-none"></div>
             
-            <div class="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-md mx-auto">
-                <button type="button" data-open-early-access="1" class="bg-white text-black px-8 py-3.5 rounded-full text-xs font-bold hover:bg-zinc-200 transition-all w-full sm:w-auto flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(255,255,255,0.25)] hover:scale-[1.02] cursor-pointer">
-                    <span>Launch Mission Now</span> <i data-lucide="arrow-right" class="w-4 h-4"></i>
-                </button>
-                <a href="/portal.html#login" class="text-zinc-300 hover:text-white text-xs font-mono transition-colors border border-zinc-800 bg-zinc-900/60 px-6 py-3.5 rounded-full w-full sm:w-auto hover:border-zinc-600 flex items-center justify-center gap-2">
-                    <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/></svg>
-                    <span>Connect GitHub</span>
-                </a>
+            <div class="relative z-10">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/[0.08] bg-[#14151a] text-xs font-mono text-[#d4ff33] mb-6">
+                    <span class="w-1.5 h-1.5 rounded-full bg-[#d4ff33] animate-pulse"></span>
+                    <span>// GET_STARTED</span>
+                </div>
+                
+                <h2 class="text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-tight leading-tight font-extrabold mb-6 text-white">
+                    Stop reviewing hallucinations.<br>
+                    <span class="text-zinc-500">Start merging verified PRs.</span>
+                </h2>
+                
+                <p class="text-sm md:text-base text-zinc-400 mb-8 max-w-xl mx-auto leading-relaxed">
+                    Connect your GitHub repository, assign an outcome, and let Kobits' MicroVM fleet deliver tested, verified Pull Requests in minutes.
+                </p>
+                
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-md mx-auto">
+                    <button type="button" data-open-early-access="1" onclick="openEarlyAccessModal()" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full bg-[#d4ff33] text-black font-bold text-xs tracking-wide uppercase transition-all duration-300 hover:bg-[#e4ff66] hover:shadow-[0_0_28px_rgba(212,255,51,0.35)] hover:scale-[1.02] cursor-pointer">
+                        <span>Apply for Early Access →</span>
+                    </button>
+                    <a href="/portal.html#login" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full border border-white/[0.12] bg-white/[0.04] text-white font-mono text-xs hover:border-[#d4ff33]/50 hover:bg-white/[0.08] transition-all">
+                        <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/></svg>
+                        <span>Connect GitHub</span>
+                    </a>
+                </div>
+                
+                <div class="mt-6 text-[11px] font-mono text-zinc-500 flex items-center justify-center gap-3">
+                    <span class="inline-flex items-center gap-1.5"><i data-lucide="zap" class="w-3.5 h-3.5 text-[#d4ff33]"></i> Launch Mission in &lt;150ms</span>
+                    <span>•</span>
+                    <span>Zero local setup required</span>
+                </div>
             </div>
         </div>
     </section>
 
     <!-- FOOTER -->
-    <footer class="py-12 hairline-t text-center text-zinc-500 text-[10px] font-mono tracking-widest bg-kb-bg flex flex-col sm:flex-row items-center justify-between px-8 max-w-[1400px] mx-auto gap-4">
+    <footer class="py-12 border-t border-white/[0.08] text-center text-zinc-500 text-[10px] font-mono tracking-widest bg-[#08080a] flex flex-col sm:flex-row items-center justify-between px-8 max-w-[1400px] mx-auto gap-4">
         <a href="/" class="flex items-center gap-2.5 text-zinc-400 hover:text-white transition-colors">
             <div class="w-4 h-4 text-zinc-400">
                 <svg viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1908,14 +1960,14 @@
             <span>KOBITS AUTONOMOUS SE</span>
         </a>
         <div class="flex flex-wrap items-center justify-center gap-6 text-zinc-400 text-[11px]">
-            <a href="/product.html" class="hover:text-white transition-colors">PRODUCT</a>
-            <a href="/engineering.html" class="hover:text-white transition-colors">ARCHITECTURE</a>
-            <a href="/how-it-works.html" class="hover:text-white transition-colors">HOW IT WORKS</a>
-            <a href="/comparison.html" class="hover:text-white transition-colors">COMPARISON</a>
-            <a href="/security.html" class="hover:text-white transition-colors">SECURITY &amp; SOC2</a>
-            <a href="/pricing.html" class="hover:text-white transition-colors">PRICING</a>
-            <a href="/portal" class="hover:text-white transition-colors">EXECUTIVE PORTAL</a>
-            <a href="mailto:kobitscreation@gmail.com" class="hover:text-white underline transition-colors">CONTACT</a>
+            <a href="/product.html" class="hover:text-[#d4ff33] transition-colors">PRODUCT</a>
+            <a href="/engineering.html" class="hover:text-[#d4ff33] transition-colors">ENGINEERING</a>
+            <a href="/how-it-works.html" class="hover:text-[#d4ff33] transition-colors">HOW IT WORKS</a>
+            <a href="/comparison.html" class="hover:text-[#d4ff33] transition-colors">COMPARISON</a>
+            <a href="/security.html" class="hover:text-[#d4ff33] transition-colors">SECURITY</a>
+            <a href="/pricing.html" class="hover:text-[#d4ff33] transition-colors">PRICING</a>
+            <a href="/portal" class="hover:text-[#d4ff33] transition-colors">EXECUTIVE PORTAL</a>
+            <a href="mailto:kobitscreation@gmail.com" class="hover:text-[#d4ff33] underline transition-colors">CONTACT</a>
         </div>
         <div class="flex flex-col sm:flex-row items-center gap-2 text-zinc-500">
             <span>&copy; 2026 KOBITS. All rights reserved.</span>
