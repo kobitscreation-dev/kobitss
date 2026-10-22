@@ -794,6 +794,7 @@ async def github_webhook(
                 if pr:
                     pr.review_status = "changes_requested"
                     pr.status = PullRequestStatus.CHANGES_REQUESTED
+                    pr.checks_status = "remediating"
 
                 if mission:
                     mission.status = MissionStatus.ACTIVE

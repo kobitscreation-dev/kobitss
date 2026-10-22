@@ -110,6 +110,11 @@ class Task(Base):
     def assigned_agent(self) -> Optional[str]:
         return self.assigned_agent_id
 
+    @assigned_agent.setter
+    def assigned_agent(self, value: Optional[str]) -> None:
+        self.assigned_agent_id = value
+
+
 
 class ActivityType(str, enum.Enum):
     PROJECT_CREATED = "PROJECT_CREATED"

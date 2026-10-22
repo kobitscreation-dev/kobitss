@@ -14,11 +14,14 @@ Provides a zero-jargon, high-trust executive interface for agency retainer clien
 
 import hashlib
 import json
+import logging
 import os
 import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger("kobits.api.client_portal")
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -986,8 +989,10 @@ def _build_showcase_portal_summary(
     billing_tier: str = "Executive Retainer",
     sla_status: str = "99.9% On-Time SLA",
     monthly_retainer_usd: float = 6500.0,
+    org_slug: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Constructs a showcase Executive Client Portal summary for unauthenticated prospective/invited stakeholders."""
+    effective_slug = org_slug or re.sub(r'[^a-z0-9_-]+', '-', (org_name or org_id).lower()).strip('-') or "acme-corp"
     try:
         auditor = CodebaseAuditor(repo_path=".", project_name=project_name)
         audit_res = auditor.audit()
@@ -1013,7 +1018,7 @@ def _build_showcase_portal_summary(
         "organization": {
             "id": org_id,
             "name": org_name,
-            "slug": "acme-corp",
+            "slug": effective_slug,
             "role": OrgRole.READ_ONLY_REVIEWER.value,
             "role_display": "Client Stakeholder (Guest Preview)",
             "monthly_retainer_usd": monthly_retainer_usd,
@@ -1215,9 +1220,9 @@ def _build_showcase_portal_summary(
         "team_agents": _build_default_team_agents(),
         "executive_reports": _build_default_executive_reports(),
         "slack_connect": {
-            "channel": f"#kobits-{re.sub(r'[^a-z0-9_-]+', '-', org_name.lower()).strip('-') or 'client'}",
+            "channel": f"#kobits-{effective_slug}",
             "status": "connected",
-            "direct_url": f"https://slack.com/app_redirect?channel=kobits-{re.sub(r'[^a-z0-9_-]+', '-', org_name.lower()).strip('-') or 'client'}",
+            "direct_url": f"https://slack.com/app_redirect?channel=kobits-{effective_slug}",
             "members_count": 5,
         },
         "weekly_sync": _SYNC_SCHEDULES.get(org_id) or _SYNC_SCHEDULES.get("default") or dict(DEFAULT_SYNC_SCHEDULE),
@@ -1275,6 +1280,7 @@ async def get_client_portal_summary(
                     billing_tier=meta.get("billing_tier", "Executive Retainer"),
                     sla_status=meta.get("sla_status", "99.9% On-Time SLA"),
                     monthly_retainer_usd=float(meta.get("monthly_retainer_usd", 6500.0)),
+                    org_slug=org_rec.slug or target_org_id,
                 )
             else:
                 formatted_name = target_org_id.replace("-", " ").title()
@@ -1282,6 +1288,7 @@ async def get_client_portal_summary(
                     org_id=target_org_id,
                     org_name=formatted_name,
                     project_name=f"{formatted_name} Core Platform",
+                    org_slug=target_org_id,
                 )
         return _build_showcase_portal_summary()
 

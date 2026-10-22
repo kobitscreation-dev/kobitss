@@ -644,3 +644,81 @@ def test_exact_file_parity_and_static_html_checks():
     for js_p in [js1, js2]:
         diag = HeadlessLSPService.get_diagnostics(file_path=js_p, repo_path=repo_root)
         assert diag["error_count"] == 0, f"LSP errors found in {js_p}: {diag['diagnostics']}"
+
+
+# ==============================================================================
+# DEEP REGRESSION & EDGE-CASE HARDENING
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_pillar1_apply_endpoint_slack_failure_graceful_recovery():
+    """
+    Verify that if notify_slack encounters an unexpected error / network exception,
+    the apply endpoint catches it, logs via logger, and returns HTTP 201 without
+    crashing on undefined names or uncaught exceptions.
+    """
+    transport = ASGITransport(app=app)
+    uid = uuid.uuid4().hex[:6]
+    test_email = f"resilient_{uid}@startup.ai"
+
+    payload = {
+        "email": test_email,
+        "name": "Grace Hopper",
+        "company": "Compiler Systems",
+        "stack": "Rust, Python, WASM",
+        "repo_url": "https://github.com/compiler/nanosec",
+        "brief": "We need resilient compiler optimizations and automated benchmark regression checking."
+    }
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with patch("backend.api.v1.client_portal.notify_slack", side_effect=RuntimeError("Slack webhook unreachable")):
+            res = await client.post("/api/v1/client-portal/apply", json=payload)
+            assert res.status_code == 201, res.text
+            data = res.json()
+            assert data["status"] == "ok"
+            assert data["application_id"] is not None
+
+
+def test_pillar1_and_models_property_setters():
+    """
+    Verify WaitlistLead and Task models support property setters for alias fields:
+    - WaitlistLead(name="...") and lead.name = "..."
+    - Task(assigned_agent="Forge") and task.assigned_agent = "..."
+    """
+    lead = WaitlistLead(
+        email="test_prop@example.com",
+        name="Ada Lovelace",
+        company="Analytical Engine",
+        brief="Computing pioneer"
+    )
+    assert lead.name == "Ada Lovelace"
+    assert lead.full_name == "Ada Lovelace"
+    lead.name = "Augusta Ada King"
+    assert lead.name == "Augusta Ada King"
+    assert lead.full_name == "Augusta Ada King"
+
+    task = Task(
+        title="Test Task",
+        assigned_agent="Sentinel"
+    )
+    assert task.assigned_agent == "Sentinel"
+    assert task.assigned_agent_id == "Sentinel"
+    task.assigned_agent = "Forge"
+    assert task.assigned_agent == "Forge"
+    assert task.assigned_agent_id == "Forge"
+
+
+@pytest.mark.asyncio
+async def test_pillar5_showcase_dynamic_slug_in_summary():
+    """
+    Verify that unauthenticated / prospective client viewing the portal with ?org=[slug]
+    has both organization.slug and slack_connect.channel populated with the dynamic slug.
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.get("/api/v1/client-portal/portal-summary?org=spacex-orbit")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["organization"]["slug"] == "spacex-orbit"
+        assert data["slack_connect"]["channel"] == "#kobits-spacex-orbit"
+

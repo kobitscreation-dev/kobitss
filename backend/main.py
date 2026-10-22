@@ -151,6 +151,15 @@ async def lifespan(app: FastAPI):
                         sync_conn.exec_driver_sql("PRAGMA foreign_keys=ON")
                         _startup_logger.info("SQLite changesets table migration complete.")
                 await conn.run_sync(_check_and_migrate_changesets)
+
+            # Ensure PostgreSQL waitlist_leads table has stack, repo_url, brief columns
+            if "postgresql" in settings.DATABASE_URL.lower():
+                from sqlalchemy import text
+                for col_name, col_type in [("stack", "VARCHAR"), ("repo_url", "VARCHAR"), ("brief", "TEXT")]:
+                    try:
+                        await conn.execute(text(f"ALTER TABLE waitlist_leads ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                    except Exception as _col_err:
+                        _startup_logger.warning(f"Column migration notice ({col_name}): {_col_err}")
     except Exception as _schema_err:
         _startup_logger.warning(f"Schema init notice (likely initialized by peer worker): {_schema_err}")
 

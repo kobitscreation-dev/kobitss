@@ -24,3 +24,8 @@ class WaitlistLead(Base):
     @property
     def name(self) -> Optional[str]:
         return self.full_name
+
+    @name.setter
+    def name(self, value: Optional[str]) -> None:
+        self.full_name = value
+
