@@ -1147,6 +1147,100 @@ def notify_mission_event(
     }
 
 
+def notify_slack(
+    channel: str,
+    message: str,
+    webhook_url: Optional[str] = None,
+    secret: Optional[str] = None,
+    allow_http: bool = True,
+    task_transition: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """
+    Direct Slack notification dispatcher supporting channel routing, text messages,
+    and task state transitions (Queued -> Building -> Review -> Done).
+    """
+    url = webhook_url or SLACK_WEBHOOK_URL or os.getenv("SLACK_WEBHOOK_URL")
+
+    blocks: List[Dict[str, Any]] = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": message,
+            },
+        }
+    ]
+
+    if task_transition:
+        from_state = task_transition.get("from_state") or task_transition.get("from") or "Queued"
+        to_state = task_transition.get("to_state") or task_transition.get("to") or "Building"
+        task_title = task_transition.get("task_title") or task_transition.get("title") or "Sprint Deliverable"
+        task_id = task_transition.get("task_id", "")
+
+        status_emoji = {
+            "queued": "⏳",
+            "building": "🔨",
+            "review": "🔍",
+            "done": "✅",
+        }.get(str(to_state).lower(), "⚡")
+
+        blocks.append({
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"{status_emoji} *State Transition:* `{task_title}` {f'(`{task_id[:8]}`)' if task_id else ''} | *Status:* `{from_state}` ➔ *`{to_state}`*",
+                }
+            ],
+        })
+
+    payload = {
+        "channel": channel,
+        "text": message,
+        "blocks": blocks,
+    }
+
+    if not url:
+        logger.info(f"notify_slack: [dry-run/no webhook URL] channel={channel} text={message[:80]}")
+        return True
+
+    success, _, _ = dispatch_notification_http(
+        url, payload, provider="slack", secret=secret, allow_http_for_testing=allow_http
+    )
+    return success
+
+
+def notify_task_transition(
+    task_title: str,
+    from_state: str,
+    to_state: str,
+    channel: str = "#kobits-updates",
+    task_id: Optional[str] = None,
+    webhook_url: Optional[str] = None,
+    secret: Optional[str] = None,
+    allow_http: bool = True,
+) -> bool:
+    """
+    Helper for task state transitions (Queued -> Building -> Review -> Done) emitting
+    formatted Slack webhook payloads.
+    """
+    msg = f"Task `{task_title}` moved from *{from_state}* to *{to_state}*"
+    transition = {
+        "task_title": task_title,
+        "from_state": from_state,
+        "to_state": to_state,
+        "task_id": task_id,
+    }
+    return notify_slack(
+        channel=channel,
+        message=msg,
+        webhook_url=webhook_url,
+        secret=secret,
+        allow_http=allow_http,
+        task_transition=transition,
+    )
+
+
 # ===========================================================================
 # In-Place Message Updating Helper
 # ===========================================================================

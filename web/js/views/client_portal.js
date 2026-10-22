@@ -338,6 +338,20 @@ export async function renderClientPortalView(container, params = {}) {
     const repSec = reports.security_audit || {};
     const repCode = reports.code_quality || {};
 
+    const slackConn = data.slack_connect || {
+        channel: `#kobits-${(org.slug || 'client')}`,
+        status: 'connected',
+        direct_url: `https://slack.com/app_redirect?channel=kobits-${(org.slug || 'client')}`,
+        members_count: 5,
+    };
+    const weeklySync = data.weekly_sync || {
+        next_sync: 'Tuesday, 10:00 AM EST',
+        status: 'scheduled',
+        booking_url: 'https://cal.com/kobits/30min',
+        duration_minutes: 30,
+        notes: 'Regular scheduled call to scope out upcoming sprint deliverables.',
+    };
+
     if (org.role) window.__kobitsActiveOrgRole = org.role;
     window.__kobitsIsGuestPreview = Boolean(data.is_public_preview);
     window.__kobitsActiveClientBrand = clientName;
@@ -383,13 +397,19 @@ export async function renderClientPortalView(container, params = {}) {
                     <header class="space-y-3 bg-[#14151a] border border-white/[0.08] rounded-2xl p-6 shadow-2xl relative overflow-hidden">
                         <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
                             <div class="space-y-1">
-                                <div class="flex items-center gap-2.5">
+                                <div class="flex flex-wrap items-center gap-2.5">
                                     <span class="px-3 py-1 text-xs font-semibold rounded-full bg-[#ccff00]/10 text-[#ccff00] border border-[#ccff00]/30 tracking-normal">
                                         ${escapeHtml(org.billing_tier || 'Executive Retainer')}
                                     </span>
                                     <span class="px-2.5 py-1 text-xs font-medium text-zinc-300 border border-zinc-800 rounded-full bg-zinc-900/60">
                                         ${escapeHtml(org.sla_status || '99.9% On-Time SLA')}
                                     </span>
+                                    <!-- Direct Founder Slack Connect Channel Badge -->
+                                    <a href="${escapeHtml(slackConn.direct_url || 'https://slack.com')}" target="_blank" rel="noopener noreferrer" id="slack-connect-pill" class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-mono font-medium rounded-full bg-zinc-900 border border-emerald-500/40 text-emerald-400 hover:border-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer" title="Direct Founder Slack Connect Channel">
+                                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                        <span>Slack Connect: ${escapeHtml(slackConn.channel || '#kobits-' + (org.slug || 'client'))}</span>
+                                        <span class="text-zinc-500 text-[10px] ml-1">[Open Slack Channel]</span>
+                                    </a>
                                 </div>
                                 <h1 class="text-3xl font-extrabold tracking-tight text-white mt-1" id="portal-client-name">
                                     ${escapeHtml(clientName)}
@@ -492,6 +512,35 @@ export async function renderClientPortalView(container, params = {}) {
                                 <div class="text-[11px] text-zinc-400">
                                     Est. release: Nov 12, 2026
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- DEDICATED WEEKLY 30-MIN SYNC CARD -->
+                        <div class="bg-[#14151a] border border-white/[0.08] hover:border-[#ccff00]/40 rounded-xl p-5 space-y-3 transition" id="weekly-sync-card-overview">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-base">📅</span>
+                                    <span class="text-[10px] font-mono uppercase tracking-widest text-[#ccff00]">WEEKLY 30-MIN SYNC</span>
+                                </div>
+                                <span class="px-2.5 py-0.5 text-[10px] font-mono uppercase rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 font-semibold" id="weekly-sync-badge-overview">
+                                    ${escapeHtml(weeklySync.status || 'Scheduled')}
+                                </span>
+                            </div>
+                            <div class="space-y-1">
+                                <div class="text-base font-bold text-white tracking-tight" id="weekly-sync-time-overview">
+                                    Next Weekly Sync: ${escapeHtml(weeklySync.next_sync || 'Tuesday, 10:00 AM EST')}
+                                </div>
+                                <p class="text-xs text-zinc-400 leading-relaxed">
+                                    Regular scheduled 30-min call to scope out upcoming sprint deliverables, adjust roadmap priorities, and unblock autonomous pod features.
+                                </p>
+                            </div>
+                            <div class="pt-2 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-2">
+                                <button type="button" class="open-reschedule-modal-trigger px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-white text-zinc-950 hover:bg-zinc-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm">
+                                    <span>📅 Schedule / Reschedule 30-Min Sync</span>
+                                </button>
+                                <a href="${escapeHtml(weeklySync.booking_url || 'https://cal.com/kobits/30min')}" target="_blank" rel="noopener noreferrer" class="text-xs font-mono text-[#ccff00] hover:underline flex items-center gap-1">
+                                    <span>Cal.com Booking Link ↗</span>
+                                </a>
                             </div>
                         </div>
 
@@ -898,6 +947,44 @@ export async function renderClientPortalView(container, params = {}) {
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- Report 5: Weekly 30-Min Sync Schedule -->
+                                <div class="bg-[#1a1b22] border border-white/[0.05] rounded-xl p-5 space-y-3 md:col-span-2" id="weekly-sync-card-reports">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-base">📅</span>
+                                            <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400">// WEEKLY_30MIN_SYNC_SCHEDULE</h3>
+                                        </div>
+                                        <span class="px-2.5 py-0.5 text-[10px] font-mono uppercase rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 font-semibold" id="weekly-sync-badge-reports">
+                                            ${escapeHtml(weeklySync.status || 'Scheduled')}
+                                        </span>
+                                    </div>
+                                    <div class="text-lg font-bold font-mono text-white" id="weekly-sync-time-reports">
+                                        Next Weekly Sync: ${escapeHtml(weeklySync.next_sync || 'Tuesday, 10:00 AM EST')}
+                                    </div>
+                                    <div class="space-y-1 text-xs text-zinc-300">
+                                        <div class="flex justify-between py-1 border-b border-zinc-800">
+                                            <span>Meeting Duration:</span>
+                                            <span class="font-mono text-[#ccff00]">${weeklySync.duration_minutes || 30} Minutes</span>
+                                        </div>
+                                        <div class="flex justify-between py-1 border-b border-zinc-800">
+                                            <span>Cadence:</span>
+                                            <span class="font-mono text-white">Regular Scheduled Sprint Deliverables Call</span>
+                                        </div>
+                                        <div class="flex justify-between py-1">
+                                            <span>Scope &amp; Agenda:</span>
+                                            <span class="font-mono text-zinc-400">${escapeHtml(weeklySync.notes || 'Scope out upcoming sprint deliverables')}</span>
+                                        </div>
+                                    </div>
+                                    <div class="pt-2 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-2">
+                                        <button type="button" class="open-reschedule-modal-trigger px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-white text-zinc-950 hover:bg-zinc-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm">
+                                            <span>📅 Schedule / Reschedule 30-Min Sync</span>
+                                        </button>
+                                        <a href="${escapeHtml(weeklySync.booking_url || 'https://cal.com/kobits/30min')}" target="_blank" rel="noopener noreferrer" class="text-xs font-mono text-[#ccff00] hover:underline flex items-center gap-1">
+                                            <span>Cal.com Booking Link ↗</span>
+                                        </a>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -999,6 +1086,55 @@ export async function renderClientPortalView(container, params = {}) {
                             <div class="overflow-y-auto flex-1 bg-[#0d0e11] border border-zinc-800 rounded-xl p-4">
                                 <pre class="text-xs font-mono text-zinc-200 whitespace-pre-wrap leading-relaxed">${escapeHtml(arch.markdown_report || '# Executive Architecture Audit\nAll systems verified.')}</pre>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- MODAL 3: SCHEDULE / RESCHEDULE 30-MIN SYNC MODAL -->
+                    <div id="modal-reschedule-sync" class="hidden fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Schedule or Reschedule 30-Min Sync">
+                        <div class="bg-[#14151a] border border-zinc-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+                            <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+                                <div>
+                                    <div class="text-xs font-mono text-[#ccff00]">Sprint Deliverables Cadence</div>
+                                    <h3 class="text-base font-semibold text-white">Schedule 30-Min Sync</h3>
+                                </div>
+                                <button id="close-reschedule-sync-modal" type="button" class="text-zinc-400 hover:text-white text-sm cursor-pointer" aria-label="Close modal">✕</button>
+                            </div>
+                            <form id="form-reschedule-sync" class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-zinc-300 mb-1">Target Date &amp; Time (EST/UTC)</label>
+                                    <input
+                                        type="text"
+                                        id="sync-input-datetime"
+                                        required
+                                        value="${escapeHtml(weeklySync.next_sync || 'Tuesday, 10:00 AM EST')}"
+                                        placeholder="e.g. Wednesday, 2:00 PM EST"
+                                        class="w-full px-3.5 py-2 text-sm bg-[#0d0e11] border border-zinc-700 rounded-xl text-white font-mono focus:outline-none focus:border-[#ccff00]"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-zinc-300 mb-1">Agenda &amp; Scope Adjustments</label>
+                                    <textarea
+                                        id="sync-input-notes"
+                                        rows="3"
+                                        placeholder="Describe sprint deliverables, blockers, or specific scope adjustments to discuss..."
+                                        class="w-full px-3.5 py-2 text-sm bg-[#0d0e11] border border-zinc-700 rounded-xl text-white focus:outline-none focus:border-[#ccff00]"
+                                    >${escapeHtml(weeklySync.notes || '')}</textarea>
+                                </div>
+                                <div id="sync-modal-msg" class="hidden text-xs font-mono p-3 rounded-lg"></div>
+                                <div class="flex items-center justify-between pt-1">
+                                    <a href="${escapeHtml(weeklySync.booking_url || 'https://cal.com/kobits/30min')}" target="_blank" rel="noopener noreferrer" class="text-[11px] font-mono text-zinc-400 hover:text-[#ccff00] underline">
+                                        Cal.com calendar ↗
+                                    </a>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" id="cancel-reschedule-sync-btn" class="px-4 py-2 text-xs rounded-xl bg-zinc-800 text-zinc-300 hover:bg-zinc-700 cursor-pointer">
+                                            Cancel
+                                        </button>
+                                        <button type="submit" id="submit-reschedule-sync-btn" class="px-4 py-2 text-xs font-semibold rounded-xl bg-[#ccff00] hover:bg-[#b8e600] text-zinc-950 font-mono cursor-pointer">
+                                            Confirm Schedule
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
                         </div>
                     </div>
 
@@ -1129,6 +1265,93 @@ export async function renderClientPortalView(container, params = {}) {
                         feedbackEl.classList.remove('hidden');
                     }
                     if (submitBtn) submitBtn.disabled = false;
+                }
+            });
+        }
+
+        // Weekly 30-Min Sync Modal Handlers
+        const syncModal = container.querySelector('#modal-reschedule-sync');
+        const closeSyncBtn = container.querySelector('#close-reschedule-sync-modal');
+        const cancelSyncBtn = container.querySelector('#cancel-reschedule-sync-btn');
+        const syncForm = container.querySelector('#form-reschedule-sync');
+        const syncMsg = container.querySelector('#sync-modal-msg');
+
+        container.querySelectorAll('.open-reschedule-modal-trigger').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (syncModal) {
+                    syncModal.classList.remove('hidden');
+                    if (syncMsg) syncMsg.classList.add('hidden');
+                    const dtInput = syncModal.querySelector('#sync-input-datetime');
+                    if (dtInput) setTimeout(() => dtInput.focus(), 80);
+                }
+            });
+        });
+
+        const closeSyncModal = () => {
+            if (syncModal) syncModal.classList.add('hidden');
+        };
+        if (closeSyncBtn) closeSyncBtn.addEventListener('click', closeSyncModal);
+        if (cancelSyncBtn) cancelSyncBtn.addEventListener('click', closeSyncModal);
+
+        if (syncForm) {
+            syncForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const dtInput = syncModal.querySelector('#sync-input-datetime');
+                const notesInput = syncModal.querySelector('#sync-input-notes');
+                const submitBtn = syncModal.querySelector('#submit-reschedule-sync-btn');
+                const dtVal = dtInput && dtInput.value ? dtInput.value.trim() : '';
+                const notesVal = notesInput && notesInput.value ? notesInput.value.trim() : '';
+
+                if (!dtVal) return;
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Saving Schedule...';
+                }
+
+                try {
+                    const res = await apiFetch('/client-portal/sync-schedule', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            datetime: dtVal,
+                            notes: notesVal,
+                            organization_id: org.id || org.slug || undefined
+                        })
+                    });
+
+                    if (res && (res.status === 'ok' || res.next_sync)) {
+                        weeklySync.next_sync = res.next_sync || dtVal;
+                        weeklySync.notes = res.notes || notesVal;
+                        weeklySync.status = 'scheduled';
+
+                        const timeOverview = container.querySelector('#weekly-sync-time-overview');
+                        if (timeOverview) timeOverview.textContent = `Next Weekly Sync: ${weeklySync.next_sync}`;
+                        const timeReports = container.querySelector('#weekly-sync-time-reports');
+                        if (timeReports) timeReports.textContent = `Next Weekly Sync: ${weeklySync.next_sync}`;
+
+                        if (syncMsg) {
+                            syncMsg.textContent = '✓ Weekly 30-Min Sync scheduled successfully!';
+                            syncMsg.className = 'text-xs font-mono p-3 rounded-lg bg-emerald-950/60 border border-emerald-800 text-emerald-300';
+                            syncMsg.classList.remove('hidden');
+                        }
+                        setTimeout(() => {
+                            closeSyncModal();
+                        }, 1000);
+                    } else {
+                        const errDetail = res && res.detail ? res.detail : 'Scheduling failed';
+                        throw new Error(errDetail);
+                    }
+                } catch (err) {
+                    if (syncMsg) {
+                        const errText = err && err.message ? err.message : 'Unable to update sync schedule';
+                        syncMsg.textContent = `Error: ${errText}`;
+                        syncMsg.className = 'text-xs font-mono p-3 rounded-lg bg-red-950/60 border border-red-800 text-red-300';
+                        syncMsg.classList.remove('hidden');
+                    }
+                } finally {
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Confirm Schedule';
+                    }
                 }
             });
         }

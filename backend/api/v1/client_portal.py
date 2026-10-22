@@ -15,12 +15,13 @@ Provides a zero-jargon, high-trust executive interface for agency retainer clien
 import hashlib
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -57,16 +58,65 @@ from backend.models.project import (
     Task,
     TaskStatus,
 )
+from backend.models.waitlist import WaitlistLead
+from backend.services.notifications import notify_slack
 from backend.services.codebase_auditor import CodebaseAuditor
 from backend.services.soc2_audit_service import AuditEvent, SOC2AuditService
 from app.ai.sanitizer import PromptSanitizer
 
 router = APIRouter(tags=["client-portal"])
 
+# ---------------------------------------------------------------------------
+# In-Memory & Default Sync Schedules
+# ---------------------------------------------------------------------------
+DEFAULT_SYNC_SCHEDULE: Dict[str, Any] = {
+    "next_sync": "Tuesday, 10:00 AM EST",
+    "status": "scheduled",
+    "booking_url": "https://cal.com/kobits/30min",
+    "duration_minutes": 30,
+    "notes": "Regular scheduled call to scope out upcoming sprint deliverables.",
+}
+
+_SYNC_SCHEDULES: Dict[str, Dict[str, Any]] = {
+    "default": dict(DEFAULT_SYNC_SCHEDULE),
+}
+
 
 # ---------------------------------------------------------------------------
 # Pydantic Schemas
 # ---------------------------------------------------------------------------
+
+class ClientApplyRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=255, description="Work email of the applicant")
+    name: Optional[str] = Field(default=None, max_length=255, description="Full name")
+    full_name: Optional[str] = Field(default=None, max_length=255, description="Alias for full name")
+    company: Optional[str] = Field(default=None, max_length=255, description="Company or project name")
+    stack: Optional[str] = Field(default=None, max_length=500, description="Primary tech stack")
+    repo_url: Optional[str] = Field(default=None, max_length=1000, description="GitHub repository link")
+    brief: Optional[str] = Field(default=None, max_length=10000, description="The outcome brief - tell us what you're building")
+    use_case: Optional[str] = Field(default=None, max_length=10000, description="Alias for brief")
+
+    @field_validator("email")
+    @classmethod
+    def validate_email_format(cls, v: str) -> str:
+        s = v.strip().lower()
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", s):
+            raise ValueError("Invalid email format. Please provide a valid work email address.")
+        return s
+
+    @model_validator(mode="after")
+    def validate_brief_present(self) -> "ClientApplyRequest":
+        b = (self.brief or self.use_case or "").strip()
+        if not b or len(b) < 3:
+            raise ValueError("Outcome brief ('Tell us what you're building') is required (min 3 characters).")
+        return self
+
+
+class SyncScheduleRequest(BaseModel):
+    datetime: str = Field(..., min_length=3, max_length=255, description="Target sync date and time")
+    notes: Optional[str] = Field(default=None, max_length=2000, description="Scope adjustments or sprint agenda")
+    organization_id: Optional[str] = Field(default=None, description="Optional target organization ID")
+
 
 class ClientIntakeRequest(BaseModel):
     title: str = Field(..., min_length=2, max_length=255, description="Short title of the feature request or bug report")
@@ -160,7 +210,9 @@ async def _resolve_authorized_tenant(
 
     if target_org_id:
         org = (
-            await db.execute(select(Organization).where(Organization.id == target_org_id))
+            await db.execute(
+                select(Organization).where((Organization.id == target_org_id) | (Organization.slug == target_org_id))
+            )
         ).scalar_one_or_none()
         if not org:
             raise HTTPException(
@@ -1162,6 +1214,13 @@ def _build_showcase_portal_summary(
         "deliverables_catalog": _build_default_deliverables_catalog(),
         "team_agents": _build_default_team_agents(),
         "executive_reports": _build_default_executive_reports(),
+        "slack_connect": {
+            "channel": f"#kobits-{re.sub(r'[^a-z0-9_-]+', '-', org_name.lower()).strip('-') or 'client'}",
+            "status": "connected",
+            "direct_url": f"https://slack.com/app_redirect?channel=kobits-{re.sub(r'[^a-z0-9_-]+', '-', org_name.lower()).strip('-') or 'client'}",
+            "members_count": 5,
+        },
+        "weekly_sync": _SYNC_SCHEDULES.get(org_id) or _SYNC_SCHEDULES.get("default") or dict(DEFAULT_SYNC_SCHEDULE),
     }
 
 
@@ -1174,6 +1233,7 @@ def _build_showcase_portal_summary(
 @router.get("/overview")
 async def get_client_portal_summary(
     organization_id: Optional[str] = Query(default=None, description="Target client organization ID"),
+    org: Optional[str] = Query(default=None, description="Target client organization slug or ID"),
     project_id: Optional[str] = Query(default=None, description="Target project ID"),
     x_organization_id: Optional[str] = Header(default=None, alias="X-Organization-Id"),
     db: AsyncSession = Depends(get_db),
@@ -1199,29 +1259,36 @@ async def get_client_portal_summary(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Project '{project_id}' not found.",
                 )
-        target_org_id = organization_id or x_organization_id
+        target_org_id = organization_id or org or x_organization_id
         if target_org_id:
-            org = (await db.execute(select(Organization).where(Organization.id == target_org_id))).scalar_one_or_none()
-            if not org:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Organization '{target_org_id}' not found.",
+            org_rec = (
+                await db.execute(
+                    select(Organization).where((Organization.id == target_org_id) | (Organization.slug == target_org_id))
                 )
-            meta = _extract_retainer_metadata(org)
-            return _build_showcase_portal_summary(
-                org_id=org.id,
-                org_name=org.name,
-                project_name=f"{org.name} Core Platform",
-                billing_tier=meta.get("billing_tier", "Executive Retainer"),
-                sla_status=meta.get("sla_status", "99.9% On-Time SLA"),
-                monthly_retainer_usd=float(meta.get("monthly_retainer_usd", 6500.0)),
-            )
+            ).scalar_one_or_none()
+            if org_rec:
+                meta = _extract_retainer_metadata(org_rec)
+                return _build_showcase_portal_summary(
+                    org_id=org_rec.id,
+                    org_name=org_rec.name,
+                    project_name=f"{org_rec.name} Core Platform",
+                    billing_tier=meta.get("billing_tier", "Executive Retainer"),
+                    sla_status=meta.get("sla_status", "99.9% On-Time SLA"),
+                    monthly_retainer_usd=float(meta.get("monthly_retainer_usd", 6500.0)),
+                )
+            else:
+                formatted_name = target_org_id.replace("-", " ").title()
+                return _build_showcase_portal_summary(
+                    org_id=target_org_id,
+                    org_name=formatted_name,
+                    project_name=f"{formatted_name} Core Platform",
+                )
         return _build_showcase_portal_summary()
 
     org, membership, project = await _resolve_authorized_tenant(
         db=db,
         current_user=current_user,
-        requested_org_id=organization_id,
+        requested_org_id=organization_id or org,
         requested_project_id=project_id,
         x_organization_id=x_organization_id,
     )
@@ -1764,6 +1831,13 @@ async def get_client_portal_summary(
         "deliverables_catalog": deliverables_catalog,
         "team_agents": _build_default_team_agents(),
         "executive_reports": _build_default_executive_reports(),
+        "slack_connect": {
+            "channel": f"#kobits-{org.slug or 'client'}",
+            "status": "connected",
+            "direct_url": f"https://slack.com/app_redirect?channel=kobits-{org.slug or 'client'}",
+            "members_count": 5,
+        },
+        "weekly_sync": _SYNC_SCHEDULES.get(org.id) or _SYNC_SCHEDULES.get(org.slug or "") or _SYNC_SCHEDULES.get("default") or dict(DEFAULT_SYNC_SCHEDULE),
     }
 
 
@@ -2014,4 +2088,202 @@ async def get_client_audit_report(
         "mermaid_diagram": result.mermaid_diagram,
         "markdown_report": result.markdown_report,
         "milestones": result.milestones,
+    }
+
+
+# ===========================================================================
+# Pillar 1 & 2 & 3: Application Intake, Weekly 30-Min Sync, & Direct Slack
+# ===========================================================================
+
+@router.post("/apply", status_code=status.HTTP_201_CREATED)
+async def client_portal_apply(
+    payload: ClientApplyRequest,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Website Application Form intake endpoint:
+    - Accepts email, name, company, stack, repo_url, brief.
+    - Persists application to waitlist_leads database table.
+    - Dispatches formatted Slack notification via notify_slack.
+    - Returns 201 with status="ok", application_id, tracking_url.
+    """
+    norm_email = payload.email.strip().lower()
+    full_name = (payload.name or payload.full_name or "").strip() or None
+    company = (payload.company or "").strip() or None
+    stack = (payload.stack or "").strip() or None
+    repo_url = (payload.repo_url or "").strip() or None
+    brief = (payload.brief or payload.use_case or "").strip() or None
+
+    import re
+    if company:
+        org_slug = re.sub(r'[^a-z0-9_-]+', '-', company.lower()).strip('-') or "preview"
+    else:
+        org_slug = "preview"
+    tracking_url = f"/portal?org={org_slug}"
+
+    stmt = select(WaitlistLead).where(WaitlistLead.email == norm_email)
+    res = await db.execute(stmt)
+    lead = res.scalars().first()
+
+    if lead:
+        if full_name:
+            lead.full_name = full_name
+        if company:
+            lead.company = company
+        if stack:
+            lead.stack = stack
+        if repo_url:
+            lead.repo_url = repo_url
+        if brief:
+            lead.brief = brief
+            lead.use_case = brief
+        await db.commit()
+        await db.refresh(lead)
+    else:
+        lead = WaitlistLead(
+            id=str(uuid.uuid4()),
+            email=norm_email,
+            full_name=full_name,
+            company=company,
+            use_case=brief,
+            github_handle=repo_url,
+            status="PENDING",
+            stack=stack,
+            repo_url=repo_url,
+            brief=brief,
+        )
+        db.add(lead)
+        await db.commit()
+        await db.refresh(lead)
+
+    try:
+        slack_msg = (
+            f"🚀 *New Client Application Received*:\n"
+            f"• *Name:* {full_name or 'Anonymous'}\n"
+            f"• *Email:* `{norm_email}`\n"
+            f"• *Company:* {company or 'Independent'}\n"
+            f"• *Primary Stack:* `{stack or 'Not specified'}`\n"
+            f"• *Repository:* {repo_url or 'None provided'}\n"
+            f"• *Brief:* {brief or 'None provided'}\n"
+            f"• *Tracking Portal:* `{tracking_url}`"
+        )
+        notify_slack(channel="#kobits-applications", message=slack_msg)
+    except Exception as exc:
+        logger.warning(f"Failed to emit slack notification for application: {exc}")
+
+    return {
+        "status": "ok",
+        "application_id": str(lead.id),
+        "tracking_url": tracking_url,
+        "message": "Application received and queued for autonomous pod onboarding.",
+    }
+
+
+@router.get("/sync-schedule")
+async def get_sync_schedule(
+    organization_id: Optional[str] = Query(default=None),
+    org: Optional[str] = Query(default=None),
+    x_organization_id: Optional[str] = Header(default=None, alias="X-Organization-Id"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+) -> Dict[str, Any]:
+    """
+    Returns the scheduled weekly 30-min sync meeting details for the organization.
+    """
+    target_key = organization_id or org or x_organization_id or "default"
+    sched = _SYNC_SCHEDULES.get(target_key) or _SYNC_SCHEDULES.get("default") or dict(DEFAULT_SYNC_SCHEDULE)
+    return {
+        "next_sync": sched.get("next_sync", "Tuesday, 10:00 AM EST"),
+        "status": sched.get("status", "scheduled"),
+        "booking_url": sched.get("booking_url", "https://cal.com/kobits/30min"),
+        "duration_minutes": sched.get("duration_minutes", 30),
+        "notes": sched.get("notes", "Regular scheduled call to scope out upcoming sprint deliverables."),
+    }
+
+
+@router.post("/sync-schedule", status_code=status.HTTP_200_OK)
+async def update_sync_schedule(
+    payload: SyncScheduleRequest,
+    x_organization_id: Optional[str] = Header(default=None, alias="X-Organization-Id"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+) -> Dict[str, Any]:
+    """
+    Updates or reschedules the weekly 30-min sprint planning sync.
+    """
+    target_key = payload.organization_id or x_organization_id or "default"
+    updated = {
+        "next_sync": payload.datetime.strip(),
+        "status": "scheduled",
+        "booking_url": "https://cal.com/kobits/30min",
+        "duration_minutes": 30,
+        "notes": payload.notes.strip() if payload.notes else "Regular scheduled call to scope out upcoming sprint deliverables.",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _SYNC_SCHEDULES[target_key] = updated
+    _SYNC_SCHEDULES["default"] = updated
+    if payload.organization_id:
+        _SYNC_SCHEDULES[payload.organization_id] = updated
+
+    try:
+        notify_slack(
+            channel="#kobits-syncs",
+            message=f"📅 *Weekly 30-Min Sync Updated*: Scheduled for `{updated['next_sync']}`\n*Agenda/Notes:* {updated['notes']}"
+        )
+    except Exception:
+        pass
+
+    try:
+        from backend.services.websocket_manager import manager
+        await manager.broadcast(
+            "client_portal",
+            {
+                "type": "sync_schedule_updated",
+                "sync_schedule": updated,
+            },
+        )
+    except Exception:
+        pass
+
+    return {
+        "status": "ok",
+        "next_sync": updated["next_sync"],
+        "sync_status": "scheduled",
+        "booking_url": updated["booking_url"],
+        "duration_minutes": updated["duration_minutes"],
+        "notes": updated["notes"],
+        "message": "Weekly 30-Min Sync scheduled successfully.",
+    }
+
+
+@router.get("/slack-status")
+async def get_slack_status(
+    organization_id: Optional[str] = Query(default=None),
+    org: Optional[str] = Query(default=None),
+    x_organization_id: Optional[str] = Header(default=None, alias="X-Organization-Id"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+) -> Dict[str, Any]:
+    """
+    Returns the Direct Founder Slack Connect channel status for the client organization.
+    """
+    target_key = organization_id or org or x_organization_id or ""
+    org_slug = "client"
+    if target_key:
+        org_obj = (await db.execute(
+            select(Organization).where((Organization.id == target_key) | (Organization.slug == target_key))
+        )).scalar_one_or_none()
+        if org_obj and org_obj.slug:
+            org_slug = org_obj.slug
+        else:
+            import re
+            org_slug = re.sub(r'[^a-z0-9_-]+', '-', target_key.lower()).strip('-') or "client"
+
+    channel = f"#kobits-{org_slug}"
+    direct_url = f"https://slack.com/app_redirect?channel=kobits-{org_slug}"
+    return {
+        "channel": channel,
+        "status": "connected",
+        "direct_url": direct_url,
+        "members_count": 5,
     }

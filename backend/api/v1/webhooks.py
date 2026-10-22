@@ -19,6 +19,7 @@ from backend.models.project import (
 )
 from backend.services.mission_runtime import MissionRuntime
 from backend.services.github_service import GitHubService
+from backend.services.notifications import notify_slack
 from app.ai.sanitizer import PromptSanitizer
 
 logger = logging.getLogger("kobits.security.webhooks")
@@ -511,10 +512,13 @@ async def github_webhook(
             is_correction=True,
             priority=TaskPriority.HIGH,
             phase=WorkflowPhase.IMPLEMENTATION,
+            assigned_agent_id="Forge",
             created_by=existing_mission.created_by or "system_automator",
             metadata_json=json.dumps({
                 "source": "pr_review_comment",
-                "agent_role": "BACKEND_ENGINEER",
+                "agent_role": "SENTINEL",
+                "secondary_agent_role": "FORGE",
+                "assigned_agents": ["Sentinel", "Forge"],
                 "comment_id": comment_id,
                 "pr_number": pr_number,
                 "file_path": file_path,
@@ -527,16 +531,48 @@ async def github_webhook(
         )
         db.add(correction_task)
 
+        if tracked_pr:
+            tracked_pr.checks_status = "remediating"
+            tracked_pr.status = PullRequestStatus.OPEN
+            db.add(tracked_pr)
+
         activity = Activity(
             organization_id=existing_mission.organization_id,
             project_id=existing_mission.project_id,
             type=ActivityType.TASK_CREATED,
             title=f"PR Review Feedback Received: PR #{pr_number}",
-            description=f"Queued correction task {task_id[:8]} for review feedback on `{file_path}`.",
+            description=f"Queued correction task {task_id[:8]} [Sentinel/Forge pod] for review feedback on `{file_path}`.",
         )
         db.add(activity)
         await db.commit()
         await db.refresh(correction_task)
+
+        try:
+            from backend.services.websocket_manager import manager
+            await manager.broadcast(
+                "client_portal",
+                {
+                    "type": "activity",
+                    "activity": {
+                        "id": f"act-{uuid.uuid4().hex[:6]}",
+                        "timestamp": datetime.now(timezone.utc).strftime("%H:%M"),
+                        "time": datetime.now(timezone.utc).strftime("%H:%M"),
+                        "message": f"[Sentinel/Forge Pod] PR #{pr_number} review auto-fix queued for {os.path.basename(file_path or 'code')}",
+                        "type": "pr_review_remediation",
+                        "dot_color": "emerald",
+                    },
+                },
+            )
+        except Exception:
+            pass
+
+        try:
+            notify_slack(
+                channel="#kobits-deliverables",
+                message=f"🧪 *[Sentinel / Forge Pod]* PR #{pr_number} Review Comment on `{file_path}`: Auto-fix synthesized and queued for branch `{pr_head_branch}`"
+            )
+        except Exception:
+            pass
 
         try:
             from backend.services.durable_queue import DurableQueue
@@ -781,19 +817,59 @@ async def github_webhook(
                         is_correction=True,
                         priority=TaskPriority.HIGH,
                         phase=WorkflowPhase.IMPLEMENTATION,
+                        assigned_agent_id="Sentinel",
                         created_by=mission.created_by or "system_automator",
                         metadata_json=json.dumps({
                             "source": "pr_changes_requested",
-                            "agent_role": "BACKEND_ENGINEER",
+                            "agent_role": "SENTINEL",
+                            "secondary_agent_role": "FORGE",
+                            "assigned_agents": ["Sentinel", "Forge"],
                             "tdd_mode": True,
                             "best_of_n": True,
                         }),
                     )
                     db.add(correction_task)
+
+                    activity = Activity(
+                        organization_id=mission.organization_id,
+                        project_id=mission.project_id,
+                        type=ActivityType.TASK_CREATED,
+                        title=f"PR #{pr_number} Changes Requested",
+                        description=f"Human reviewer requested changes on PR #{pr_number}. Queued Sentinel/Forge auto-remediation task {task_id[:8]}.",
+                    )
+                    db.add(activity)
                     await db.commit()
+
+                    try:
+                        from backend.services.websocket_manager import manager
+                        await manager.broadcast(
+                            "client_portal",
+                            {
+                                "type": "activity",
+                                "activity": {
+                                    "id": f"act-{uuid.uuid4().hex[:6]}",
+                                    "timestamp": datetime.now(timezone.utc).strftime("%H:%M"),
+                                    "time": datetime.now(timezone.utc).strftime("%H:%M"),
+                                    "message": f"[Sentinel/Forge Pod] PR #{pr_number} Changes Requested: Synthesizing automated patch",
+                                    "type": "pr_review_remediation",
+                                    "dot_color": "amber",
+                                },
+                            },
+                        )
+                    except Exception:
+                        pass
+
+                    try:
+                        notify_slack(
+                            channel="#kobits-deliverables",
+                            message=f"🔍 *[Sentinel / Forge Pod]* PR #{pr_number} Changes Requested: Auto-remediation task `{task_id[:8]}` queued."
+                        )
+                    except Exception:
+                        pass
+
                     background_tasks.add_task(MissionRuntime.run_mission_background, mission.id)
 
-                return {"status": "changes_requested_dispatched"}
+                return {"status": "changes_requested_dispatched", "task_id": task_id, "mission_id": mission.id}
 
     # ─────────────────────────────────────────────────────────────────
     # 6. PULL_REQUEST LIFECYCLE

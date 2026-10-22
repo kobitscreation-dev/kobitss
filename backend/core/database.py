@@ -72,6 +72,22 @@ if is_sqlite:
                         added = True
                 if added:
                     dbapi_connection.commit()
+
+            wl_res = cursor.execute("PRAGMA table_info(waitlist_leads)").fetchall()
+            if wl_res:
+                existing_wl_cols = {row[1] for row in wl_res}
+                wl_cols = [
+                    ("stack", "VARCHAR"),
+                    ("repo_url", "VARCHAR"),
+                    ("brief", "TEXT"),
+                ]
+                wl_added = False
+                for col_name, col_type in wl_cols:
+                    if col_name not in existing_wl_cols:
+                        cursor.execute(f"ALTER TABLE waitlist_leads ADD COLUMN {col_name} {col_type}")
+                        wl_added = True
+                if wl_added:
+                    dbapi_connection.commit()
             cursor.close()
         except Exception:
             pass

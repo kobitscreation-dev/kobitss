@@ -1994,7 +1994,7 @@
                         <input type="text" id="ea-name" placeholder="Alex Chen" class="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors">
                     </div>
                     <div>
-                        <label class="block text-xs font-mono text-zinc-400 mb-1.5">COMPANY / TEAM</label>
+                        <label class="block text-xs font-mono text-zinc-400 mb-1.5">COMPANY / PROJECT NAME</label>
                         <input type="text" id="ea-company" placeholder="Acme Inc." class="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors">
                     </div>
                 </div>
@@ -2003,8 +2003,12 @@
                     <input type="text" id="ea-stack" placeholder="e.g. Python / FastAPI / PostgreSQL / React" class="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors">
                 </div>
                 <div>
-                    <label class="block text-xs font-mono text-zinc-400 mb-1.5">WHAT WOULD YOU LIKE KOBITS TO SOLVE?</label>
-                    <textarea id="ea-usecase" rows="2" placeholder="e.g. TDD bug reproduction, self-healing CI workflows, microservices refactoring..." class="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors"></textarea>
+                    <label class="block text-xs font-mono text-zinc-400 mb-1.5">CODEBASE ACCESS (GITHUB REPO LINK)</label>
+                    <input type="url" id="ea-repo" placeholder="https://github.com/org/repo" class="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors font-mono">
+                </div>
+                <div>
+                    <label class="block text-xs font-mono text-zinc-400 mb-1.5">TELL US WHAT YOU'RE BUILDING</label>
+                    <textarea id="ea-brief" rows="3" placeholder="Describe the feature, refactor, or product you need shipped..." class="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white transition-colors"></textarea>
                 </div>
                 <button type="submit" id="btn-submit-early-access" class="w-full py-2.5 bg-white text-black font-semibold text-xs rounded-lg hover:bg-zinc-200 transition-colors shadow-[0_0_15px_rgba(255,255,255,0.18)] flex items-center justify-center gap-2 cursor-pointer">
                     <span>Submit &amp; Provision Access</span>
@@ -2022,6 +2026,11 @@
                 <p class="text-xs text-zinc-400 mt-2 leading-relaxed">
                     You're registered for the private early access rollout. Our team reviews submissions daily and will send your workspace invitation and API credentials shortly.
                 </p>
+                <div class="mt-4">
+                    <a id="ea-tracking-link" href="/portal" class="hidden inline-flex items-center gap-2 px-4 py-2 bg-[#d4ff33] text-black font-semibold text-xs rounded-lg hover:bg-[#bceb2b] transition-colors">
+                        <span>View Executive Progress Dashboard ↗</span>
+                    </a>
+                </div>
                 <div class="text-[11px] text-zinc-500 mt-3 font-mono">
                     Questions? Reach us at <a href="mailto:kobitscreation@gmail.com" class="text-zinc-300 underline font-sans">kobitscreation@gmail.com</a>
                 </div>
@@ -2740,7 +2749,8 @@
         const fullName = document.getElementById('ea-name')?.value?.trim();
         const company = document.getElementById('ea-company')?.value?.trim();
         const stack = document.getElementById('ea-stack')?.value?.trim();
-        const useCase = document.getElementById('ea-usecase')?.value?.trim();
+        const repoUrl = document.getElementById('ea-repo')?.value?.trim();
+        const brief = (document.getElementById('ea-brief')?.value || document.getElementById('ea-usecase')?.value || '')?.trim();
 
         if (!email) return;
         if (submitBtn) {
@@ -2749,21 +2759,27 @@
         }
 
         try {
-          const combinedUseCase = stack ? `${useCase ? useCase + ' | ' : ''}Stack: ${stack}` : useCase;
-          const res = await fetch('/api/v1/waitlist/apply', {
+          const res = await fetch('/api/v1/client-portal/apply', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               email: email,
-              full_name: fullName,
+              name: fullName,
               company: company,
-              use_case: combinedUseCase
+              stack: stack,
+              repo_url: repoUrl,
+              brief: brief
             })
           });
           const data = await res.json().catch(() => ({}));
           if (res.ok) {
             form.classList.add('hidden');
             successView.classList.remove('hidden');
+            const trackingLink = document.getElementById('ea-tracking-link');
+            if (trackingLink && data.tracking_url) {
+              trackingLink.href = data.tracking_url;
+              trackingLink.classList.remove('hidden');
+            }
             if (window.lucide) lucide.createIcons();
           } else {
             const errEl = document.getElementById('ea-error');

@@ -106,6 +106,10 @@ class Task(Base):
 
     project: Mapped["Project"] = relationship(back_populates="tasks")
 
+    @property
+    def assigned_agent(self) -> Optional[str]:
+        return self.assigned_agent_id
+
 
 class ActivityType(str, enum.Enum):
     PROJECT_CREATED = "PROJECT_CREATED"

@@ -17,3 +17,10 @@ class WaitlistLead(Base):
     use_case: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     github_handle: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="PENDING")  # PENDING | APPROVED | INVITED
+    stack: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    repo_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    brief: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+    @property
+    def name(self) -> Optional[str]:
+        return self.full_name
