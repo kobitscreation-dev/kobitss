@@ -2837,9 +2837,28 @@ async function openGitHubModal() {
         </div>
 
         <div class="ky-modal-body">
-          <p style="margin:0 0 16px;color:var(--text-2);font-size:13px;line-height:1.5">
-            Connect your GitHub account with a Personal Access Token (PAT). This enables Kobits autonomous agents to clone repositories, execute cleanroom sandbox builds, and publish Pull Requests.
-          </p>
+          <div style="margin-bottom:18px;padding:14px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div>
+                <div style="font-size:13.5px;font-weight:600;color:var(--text-1);display:flex;align-items:center;gap:6px">
+                  <span>1-Click GitHub App Connection</span>
+                  <span class="ky-badge ky-badge-done" style="font-size:10px;padding:1px 6px">Recommended</span>
+                </div>
+                <div style="font-size:12px;color:var(--text-2);margin-top:3px">
+                  Install Kobits directly on your GitHub organization or personal repositories with one click. No tokens required.
+                </div>
+              </div>
+              <a href="https://github.com/apps/kobits-autonomous-swe/installations/new" target="_blank" rel="noopener noreferrer" class="ky-btn ky-btn-primary ky-btn-sm" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;padding:7px 14px;text-decoration:none">
+                <span>Install GitHub App ↗</span>
+              </a>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin:16px 0;color:var(--text-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">
+            <div style="flex:1;height:1px;background:var(--border)"></div>
+            <span>Or Connect with Personal Access Token (PAT)</span>
+            <div style="flex:1;height:1px;background:var(--border)"></div>
+          </div>
 
           ${isConnected ? `
             <div style="padding:14px 16px;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:8px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">

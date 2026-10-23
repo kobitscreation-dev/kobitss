@@ -81,6 +81,18 @@ async def get_github_connection_status(
         return {"connected": True, "username": conn.github_username}
     return {"connected": False}
 
+@router.get("/app/install-url")
+async def get_github_app_install_url():
+    """Returns the direct 1-click installation link for the Kobits GitHub App."""
+    from backend.core.config import settings
+    app_slug = os.environ.get("GITHUB_APP_SLUG") or os.environ.get("GITHUB_APP_NAME") or "kobits-autonomous-swe"
+    is_configured = bool(os.environ.get("GITHUB_APP_ID") or getattr(settings, "GITHUB_APP_ID", None))
+    return {
+        "install_url": f"https://github.com/apps/{app_slug}/installations/new",
+        "app_slug": app_slug,
+        "is_configured": is_configured,
+    }
+
 @router.post("/disconnect")
 async def disconnect_github(
     db: AsyncSession = Depends(get_db),
