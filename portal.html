@@ -77,6 +77,12 @@
        ================================================================ */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    button {
+      background: transparent;
+      border: none;
+      font-family: inherit;
+    }
+
     html { height: 100%; }
 
     body {
@@ -451,6 +457,16 @@
     }
     .kb-tab:hover { color: var(--kb-text-1); }
     .kb-tab.active { color: var(--kb-text-1); border-bottom-color: var(--kb-text-1); font-weight: 500; }
+
+    .portal-nav-tab {
+      background: transparent !important;
+      border-top: none !important;
+      border-left: none !important;
+      border-right: none !important;
+      outline: none !important;
+      cursor: pointer;
+      font-family: var(--kb-font-mono), monospace;
+    }
 
     /* ================================================================
        DIVIDER

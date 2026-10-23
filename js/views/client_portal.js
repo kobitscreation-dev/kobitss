@@ -398,15 +398,16 @@ export async function renderClientPortalView(container, params = {}) {
                         <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
                             <div class="space-y-1">
                                 <div class="flex flex-wrap items-center gap-2.5">
-                                    <span class="px-3 py-1 text-xs font-semibold rounded-full bg-[#ccff00]/10 text-[#ccff00] border border-[#ccff00]/30 tracking-normal">
-                                        ${escapeHtml(org.billing_tier || 'Executive Retainer')}
+                                    <span class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-zinc-900 border border-white/10 text-zinc-200 tracking-normal shadow-sm">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-[#d4ff33]"></span>
+                                        <span>${escapeHtml(org.billing_tier || 'Executive Retainer')}</span>
                                     </span>
                                     <span class="px-2.5 py-1 text-xs font-medium text-zinc-300 border border-zinc-800 rounded-full bg-zinc-900/60">
                                         ${escapeHtml(org.sla_status || '99.9% On-Time SLA')}
                                     </span>
                                     <!-- Direct Founder Slack Connect Channel Badge -->
-                                    <a href="${escapeHtml(slackConn.direct_url || 'https://slack.com')}" target="_blank" rel="noopener noreferrer" id="slack-connect-pill" class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-mono font-medium rounded-full bg-zinc-900 border border-emerald-500/40 text-emerald-400 hover:border-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer" title="Direct Founder Slack Connect Channel">
-                                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                    <a href="${escapeHtml(slackConn.direct_url || 'https://slack.com')}" target="_blank" rel="noopener noreferrer" id="slack-connect-pill" class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-mono font-medium rounded-full bg-zinc-900/90 border border-emerald-500/30 text-emerald-400 hover:border-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer shadow-sm" title="Direct Founder Slack Connect Channel">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                                         <span>Slack Connect: ${escapeHtml(slackConn.channel || '#kobits-' + (org.slug || 'client'))}</span>
                                         <span class="text-zinc-500 text-[10px] ml-1">[Open Slack Channel]</span>
                                     </a>
@@ -420,7 +421,7 @@ export async function renderClientPortalView(container, params = {}) {
                             </div>
 
                             <div class="text-right">
-                                <div class="text-3xl font-extrabold font-mono text-[#ccff00] tracking-tight leading-none" id="portal-overall-pct">
+                                <div class="text-3xl font-extrabold font-mono text-[#d4ff33] tracking-tight leading-none" id="portal-overall-pct">
                                     ${overallPct}%
                                 </div>
                                 <div class="text-[10px] font-mono text-zinc-400 uppercase tracking-widest mt-1">
@@ -429,31 +430,31 @@ export async function renderClientPortalView(container, params = {}) {
                             </div>
                         </div>
 
-                        <!-- Electric Neon-Lime Progress Bar Spanning Full Width -->
-                        <div class="w-full h-2 bg-[#1c1d24] rounded-full overflow-hidden mt-4">
+                        <!-- Precision Progress Bar Spanning Full Width -->
+                        <div class="w-full h-1.5 bg-zinc-900/90 border border-white/[0.04] rounded-full overflow-hidden mt-4">
                             <div
                                 id="portal-header-progress-fill"
-                                class="h-full bg-[#ccff00] rounded-full transition-all duration-700 ease-out"
-                                style="width: ${overallPct}%; box-shadow: 0 0 14px rgba(204, 255, 0, 0.45);"
+                                class="h-full bg-gradient-to-r from-emerald-400 via-[#a3e635] to-[#d4ff33] rounded-full transition-all duration-700 ease-out"
+                                style="width: ${overallPct}%; box-shadow: 0 0 10px rgba(163, 230, 53, 0.35);"
                             ></div>
                         </div>
                     </header>
 
                     <!-- 5 NAVIGATION TABS: Overview, Milestones, Deliverables, Team, Reports -->
-                    <nav class="flex items-center gap-2 border-b border-white/[0.08] overflow-x-auto no-scrollbar pt-2" role="tablist" aria-label="Portal Views">
-                        <button class="portal-nav-tab ${currentTab === 'overview' ? 'active text-[#ccff00] border-b-2 border-[#ccff00]' : 'text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent'} px-4 py-2.5 text-sm font-medium transition flex items-center gap-2 shrink-0 cursor-pointer" data-tab="overview">
+                    <nav class="flex items-center gap-1.5 border-b border-white/[0.08] overflow-x-auto no-scrollbar pt-2" role="tablist" aria-label="Portal Views">
+                        <button class="portal-nav-tab ${currentTab === 'overview' ? 'active text-zinc-100 border-b-2 border-[#d4ff33] bg-white/[0.05]' : 'text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent hover:bg-white/[0.02]'} px-4 py-2.5 text-xs font-mono uppercase tracking-wider transition-all duration-150 flex items-center gap-2 shrink-0 cursor-pointer rounded-t-lg bg-transparent border-0" data-tab="overview" style="background: transparent; border-top: none; border-left: none; border-right: none;">
                             <span>Overview</span>
                         </button>
-                        <button class="portal-nav-tab ${currentTab === 'milestones' ? 'active text-[#ccff00] border-b-2 border-[#ccff00]' : 'text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent'} px-4 py-2.5 text-sm font-medium transition flex items-center gap-2 shrink-0 cursor-pointer" data-tab="milestones">
+                        <button class="portal-nav-tab ${currentTab === 'milestones' ? 'active text-zinc-100 border-b-2 border-[#d4ff33] bg-white/[0.05]' : 'text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent hover:bg-white/[0.02]'} px-4 py-2.5 text-xs font-mono uppercase tracking-wider transition-all duration-150 flex items-center gap-2 shrink-0 cursor-pointer rounded-t-lg bg-transparent border-0" data-tab="milestones" style="background: transparent; border-top: none; border-left: none; border-right: none;">
                             <span>Milestones</span>
                         </button>
-                        <button class="portal-nav-tab ${currentTab === 'deliverables' ? 'active text-[#ccff00] border-b-2 border-[#ccff00]' : 'text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent'} px-4 py-2.5 text-sm font-medium transition flex items-center gap-2 shrink-0 cursor-pointer" data-tab="deliverables">
+                        <button class="portal-nav-tab ${currentTab === 'deliverables' ? 'active text-zinc-100 border-b-2 border-[#d4ff33] bg-white/[0.05]' : 'text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent hover:bg-white/[0.02]'} px-4 py-2.5 text-xs font-mono uppercase tracking-wider transition-all duration-150 flex items-center gap-2 shrink-0 cursor-pointer rounded-t-lg bg-transparent border-0" data-tab="deliverables" style="background: transparent; border-top: none; border-left: none; border-right: none;">
                             <span>Deliverables</span>
                         </button>
-                        <button class="portal-nav-tab ${currentTab === 'team' ? 'active text-[#ccff00] border-b-2 border-[#ccff00]' : 'text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent'} px-4 py-2.5 text-sm font-medium transition flex items-center gap-2 shrink-0 cursor-pointer" data-tab="team">
+                        <button class="portal-nav-tab ${currentTab === 'team' ? 'active text-zinc-100 border-b-2 border-[#d4ff33] bg-white/[0.05]' : 'text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent hover:bg-white/[0.02]'} px-4 py-2.5 text-xs font-mono uppercase tracking-wider transition-all duration-150 flex items-center gap-2 shrink-0 cursor-pointer rounded-t-lg bg-transparent border-0" data-tab="team" style="background: transparent; border-top: none; border-left: none; border-right: none;">
                             <span>Team</span>
                         </button>
-                        <button class="portal-nav-tab ${currentTab === 'reports' ? 'active text-[#ccff00] border-b-2 border-[#ccff00]' : 'text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent'} px-4 py-2.5 text-sm font-medium transition flex items-center gap-2 shrink-0 cursor-pointer" data-tab="reports">
+                        <button class="portal-nav-tab ${currentTab === 'reports' ? 'active text-zinc-100 border-b-2 border-[#d4ff33] bg-white/[0.05]' : 'text-zinc-400 hover:text-zinc-200 border-b-2 border-transparent hover:bg-white/[0.02]'} px-4 py-2.5 text-xs font-mono uppercase tracking-wider transition-all duration-150 flex items-center gap-2 shrink-0 cursor-pointer rounded-t-lg bg-transparent border-0" data-tab="reports" style="background: transparent; border-top: none; border-left: none; border-right: none;">
                             <span>Reports</span>
                         </button>
                     </nav>
@@ -467,7 +468,7 @@ export async function renderClientPortalView(container, params = {}) {
                                 <div class="text-[11px] font-mono uppercase tracking-wider text-zinc-400">
                                     ${escapeHtml(kpiComp.label || 'COMPLETE')}
                                 </div>
-                                <div class="text-3xl font-extrabold font-mono text-[#ccff00] tracking-tight">
+                                <div class="text-3xl font-extrabold font-mono text-[#d4ff33] tracking-tight">
                                     ${escapeHtml(kpiComp.value || `${overallPct}%`)}
                                 </div>
                                 <div class="text-[11px] text-zinc-400">
@@ -535,10 +536,10 @@ export async function renderClientPortalView(container, params = {}) {
                                 </p>
                             </div>
                             <div class="pt-2 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-2">
-                                <button type="button" class="open-reschedule-modal-trigger px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-white text-zinc-950 hover:bg-zinc-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm">
+                                <button type="button" class="open-reschedule-modal-trigger px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-100 border border-zinc-700/80 hover:border-zinc-500 transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm">
                                     <span>📅 Schedule / Reschedule 30-Min Sync</span>
                                 </button>
-                                <a href="${escapeHtml(weeklySync.booking_url || 'https://cal.com/kobits/30min')}" target="_blank" rel="noopener noreferrer" class="text-xs font-mono text-[#ccff00] hover:underline flex items-center gap-1">
+                                <a href="${escapeHtml(weeklySync.booking_url || 'https://cal.com/kobits/30min')}" target="_blank" rel="noopener noreferrer" class="text-xs font-mono text-[#d4ff33] hover:underline flex items-center gap-1">
                                     <span>Cal.com Booking Link ↗</span>
                                 </a>
                             </div>
@@ -551,7 +552,7 @@ export async function renderClientPortalView(container, params = {}) {
                                     <span class="text-[10px] font-mono uppercase tracking-widest text-[#ccff00]">CURRENT SPRINT</span>
                                     <h2 class="text-lg font-bold text-white mt-0.5">${escapeHtml(currentSprint.title || 'Sprint 4 — Payment System')}</h2>
                                 </div>
-                                <span class="px-2.5 py-1 text-xs font-mono font-medium rounded-full bg-[#ccff00]/10 text-[#ccff00] border border-[#ccff00]/30">
+                                <span class="px-2.5 py-1 text-xs font-mono font-medium rounded-full bg-zinc-900 border border-white/10 text-zinc-300">
                                     ${escapeHtml(currentSprint.badge || '2/5 done')}
                                 </span>
                             </div>
@@ -599,7 +600,7 @@ export async function renderClientPortalView(container, params = {}) {
                         <div class="space-y-3">
                             <div class="flex items-center justify-between">
                                 <h3 class="text-xs font-mono uppercase tracking-wider text-zinc-400">// RECENT_DELIVERABLES</h3>
-                                <button class="portal-nav-tab text-xs font-mono text-[#ccff00] hover:underline" data-tab="deliverables">
+                                <button class="portal-nav-tab text-xs font-mono text-[#d4ff33] hover:underline cursor-pointer bg-transparent border-0" data-tab="deliverables" style="background: transparent; border: none;">
                                     View all deliverables →
                                 </button>
                             </div>
