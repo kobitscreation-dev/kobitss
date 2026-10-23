@@ -901,6 +901,7 @@ async def jira_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     """
     Webhook listener for Jira.
     Multi-tenant isolation: Requires project mapping by key or id, otherwise returns 404.
+    Supports bidirectional issue state sync, priority mapping, and plan comments.
     """
     try:
         payload = await request.json()
@@ -909,10 +910,6 @@ async def jira_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         
     issue = payload.get("issue", {})
     fields = issue.get("fields", {})
-    
-    title = PromptSanitizer.sanitize(str(fields.get("summary", "Jira Issue") or "Jira Issue"), strict=False)
-    raw_body = str(fields.get("description", "") or "")
-    body = PromptSanitizer.wrap_user_instruction(raw_body or title, source="jira_issue")
     
     jira_proj = fields.get("project", {})
     jira_proj_key = jira_proj.get("key") or jira_proj.get("id") or payload.get("project_key")
@@ -931,24 +928,17 @@ async def jira_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         )
         raise HTTPException(status_code=404, detail="Project not found for Jira issue")
     
-    m = Mission(
-        id=str(uuid.uuid4()),
-        organization_id=project.organization_id,
-        project_id=project.id,
-        repository_id=getattr(project, "repository_id", None),
-        created_by=project.created_by,
-        title=f"[Jira] {title}",
-        objective=body,
-        status=MissionStatus.ACTIVE,
-        phase=WorkflowPhase.INTAKE
-    )
-    db.add(m)
-    await db.commit()
-    
-    runtime = MissionRuntime(m.id)
-    asyncio.create_task(runtime.execute())
-    
-    return {"status": "success", "mission_id": m.id}
+    from backend.services.integrations.linear_jira import LinearJiraService
+    m = await LinearJiraService.sync_jira_issue(payload, project.id, db, project.created_by)
+    if not m:
+        return {"status": "ignored"}
+
+    if m.status == MissionStatus.ACTIVE and m.phase == WorkflowPhase.INTAKE:
+        runtime = MissionRuntime(m.id)
+        asyncio.create_task(runtime.execute())
+        return {"status": "success", "action": "created", "mission_id": m.id}
+
+    return {"status": "success", "action": "synced", "mission_id": m.id, "mission_status": m.status.value}
 
 
 @router.post("/linear")
@@ -956,57 +946,46 @@ async def linear_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     """
     Webhook listener for Linear.
     Multi-tenant isolation: Requires project mapping by team/project id, otherwise returns 404.
+    Supports issue creation, status transition updates, and bidirectional state sync.
     """
     try:
         payload = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON")
         
-    action = payload.get("action")
-    if action == "create" and payload.get("type") == "Issue":
-        data = payload.get("data", {})
-        title = PromptSanitizer.sanitize(str(data.get("title", "Linear Issue") or "Linear Issue"), strict=False)
-        raw_body = str(data.get("description", "") or "")
-        body = PromptSanitizer.wrap_user_instruction(raw_body or title, source="linear_issue")
-        
-        linear_team = data.get("teamId") or data.get("projectId") or (
-            data.get("team", {}).get("key") if isinstance(data.get("team"), dict) else None
+    data = payload.get("data", {})
+    if not data and "issue" in payload:
+        data = payload.get("issue", {})
+
+    linear_team = data.get("teamId") or data.get("projectId") or (
+        data.get("team", {}).get("key") if isinstance(data.get("team"), dict) else None
+    )
+    
+    project = None
+    if linear_team:
+        stmt = select(Project).where(
+            (Project.name == linear_team) | (Project.id == linear_team)
         )
-        
-        project = None
-        if linear_team:
-            stmt = select(Project).where(
-                (Project.name == linear_team) | (Project.id == linear_team)
-            )
-            result = await db.execute(stmt)
-            project = result.scalars().first()
-        
-        if not project:
-            logger.warning(
-                f"Security Audit: Linear webhook rejected. Unmapped team/project: '{linear_team}'"
-            )
-            raise HTTPException(status_code=404, detail="Project not found for Linear issue")
-        
-        m = Mission(
-            id=str(uuid.uuid4()),
-            organization_id=project.organization_id,
-            project_id=project.id,
-            repository_id=getattr(project, "repository_id", None),
-            created_by=project.created_by,
-            title=f"[Linear] {title}",
-            objective=body,
-            status=MissionStatus.ACTIVE,
-            phase=WorkflowPhase.INTAKE
+        result = await db.execute(stmt)
+        project = result.scalars().first()
+    
+    if not project:
+        logger.warning(
+            f"Security Audit: Linear webhook rejected. Unmapped team/project: '{linear_team}'"
         )
-        db.add(m)
-        await db.commit()
-        
+        raise HTTPException(status_code=404, detail="Project not found for Linear issue")
+    
+    from backend.services.integrations.linear_jira import LinearJiraService
+    m = await LinearJiraService.sync_linear_issue(payload, project.id, db, project.created_by)
+    if not m:
+        return {"status": "ignored"}
+
+    if m.status == MissionStatus.ACTIVE and m.phase == WorkflowPhase.INTAKE:
         runtime = MissionRuntime(m.id)
         asyncio.create_task(runtime.execute())
-        
-        return {"status": "success", "mission_id": m.id}
+        return {"status": "success", "action": "created", "mission_id": m.id}
 
-    return {"status": "ignored"}
+    return {"status": "success", "action": "synced", "mission_id": m.id, "mission_status": m.status.value}
 
 
 @router.post("/slack")
@@ -1073,3 +1052,112 @@ async def slack_webhook(request: Request, db: AsyncSession = Depends(get_db)):
             return {"status": "success", "mission_id": m.id}
 
     return {"status": "ignored"}
+
+
+@router.post("/slack/interactive")
+async def slack_interactive_webhook(request: Request, db: AsyncSession = Depends(get_db)):
+    """
+    Handles interactive Block Kit button clicks from Slack (ChatOps).
+    Allows lead engineers to approve or request changes on mission plans directly inside Slack.
+    """
+    content_type = request.headers.get("content-type", "")
+    payload_data = None
+    
+    if "application/x-www-form-urlencoded" in content_type:
+        form_data = await request.form()
+        raw_payload = form_data.get("payload")
+        if raw_payload:
+            try:
+                payload_data = json.loads(raw_payload)
+            except Exception:
+                raise HTTPException(status_code=400, detail="Malformed Slack payload JSON")
+    elif "application/json" in content_type:
+        try:
+            payload_data = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON")
+    else:
+        body_bytes = await request.body()
+        try:
+            payload_data = json.loads(body_bytes.decode("utf-8"))
+        except Exception:
+            pass
+
+    if not payload_data:
+        raise HTTPException(status_code=400, detail="Missing interactive payload")
+
+    actions = payload_data.get("actions", [])
+    if not actions:
+        return {"status": "ignored", "reason": "no_actions"}
+
+    action = actions[0]
+    action_id = action.get("action_id", "")
+    mission_id = action.get("value", "")
+    user_info = payload_data.get("user", {})
+    username = user_info.get("username") or user_info.get("name") or "SlackUser"
+
+    if not mission_id:
+        raise HTTPException(status_code=400, detail="Action missing mission_id value")
+
+    stmt = select(Mission).where(Mission.id == mission_id)
+    res = await db.execute(stmt)
+    mission = res.scalars().first()
+
+    if not mission:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    if action_id == "approve_mission_plan":
+        mission.approval_status = ApprovalStatus.APPROVED
+        mission.status = MissionStatus.ACTIVE
+        mission.phase = WorkflowPhase.IMPLEMENTATION
+        
+        act = Activity(
+            id=str(uuid.uuid4()),
+            organization_id=mission.organization_id,
+            project_id=mission.project_id,
+            user_id=mission.created_by,
+            type=ActivityType.MISSION_APPROVED,
+            title="Mission Plan Approved via Slack",
+            description=f"Mission [{mission.title}] plan approved via Slack interactive button by @{username}",
+        )
+        db.add(act)
+        await db.commit()
+
+        runtime = MissionRuntime(mission.id)
+        asyncio.create_task(runtime.execute())
+
+        logger.info(f"Mission {mission.id} plan approved via Slack interactive button by @{username}")
+        return {
+            "response_type": "in_channel",
+            "replace_original": True,
+            "text": f"✅ *Plan Approved by @{username}* — Kobits autonomous pod is now implementing deliverables.",
+            "status": "approved",
+            "mission_id": mission.id,
+        }
+
+    elif action_id == "reject_mission_plan":
+        mission.approval_status = ApprovalStatus.REJECTED
+        mission.status = MissionStatus.BLOCKED
+        
+        act = Activity(
+            id=str(uuid.uuid4()),
+            organization_id=mission.organization_id,
+            project_id=mission.project_id,
+            user_id=mission.created_by,
+            type=ActivityType.MISSION_REJECTED,
+            title="Mission Plan Rejected via Slack",
+            description=f"Mission [{mission.title}] plan rejected via Slack interactive button by @{username}",
+        )
+        db.add(act)
+        await db.commit()
+
+        logger.info(f"Mission {mission.id} plan rejected via Slack interactive button by @{username}")
+        return {
+            "response_type": "in_channel",
+            "replace_original": True,
+            "text": f"❌ *Plan Rejected by @{username}* — Mission execution paused awaiting updated plan.",
+            "status": "rejected",
+            "mission_id": mission.id,
+        }
+
+    return {"status": "unhandled_action", "action_id": action_id}

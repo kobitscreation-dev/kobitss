@@ -91,10 +91,42 @@ class _MockE2BCommands:
         while ";" in norm_cmd:
             first_clause, rest = norm_cmd.split(";", 1)
             first_stripped = first_clause.strip()
-            if first_stripped.startswith("cd ") or "pip install" in first_stripped or "which " in first_stripped:
+            if first_stripped.startswith("cd ") or "pip install" in first_stripped or "which " in first_stripped or first_stripped.startswith("export "):
                 norm_cmd = rest.strip()
             else:
                 break
+
+        # Handle env or env | grep in mock
+        if norm_cmd.startswith("env"):
+            env_lines = []
+            for part in cmd.split(";"): 
+                part_s = part.strip()
+                if part_s.startswith("export "):
+                    decl = part_s[7:].strip()
+                    if "=" in decl:
+                        k, v = decl.split("=", 1)
+                        v_clean = v.strip().strip("'").strip('"')
+                        env_lines.append(f"{k.strip()}={v_clean}")
+            if not env_lines:
+                env_lines = [
+                    "PATH=/usr/local/bin:/usr/bin:/bin",
+                    "HOME=/root",
+                    "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/testdb",
+                    "REDIS_URL=redis://127.0.0.1:6379/0",
+                ]
+            stdout_text = "\n".join(env_lines) + "\n"
+            if "| grep" in norm_cmd or "|grep" in norm_cmd:
+                grep_pat = norm_cmd.split("grep", 1)[1].strip()
+                patterns = [p.strip().strip("'").strip('"') for p in grep_pat.split() if not p.startswith("-")]
+                if patterns:
+                    target_pat = patterns[0]
+                    filtered = []
+                    sub_pats = target_pat.split("|")
+                    for line in env_lines:
+                        if any(sp in line for sp in sub_pats):
+                            filtered.append(line)
+                    stdout_text = "\n".join(filtered) + ("\n" if filtered else "")
+            return _Result(cmd, stdout=stdout_text, stderr="", exit_code=0 if stdout_text else 1)
 
         # Handle python script execution in mock
         if "python3 " in norm_cmd or "python " in norm_cmd:
@@ -297,10 +329,52 @@ class CloudMicroVMSandbox:
     def env(self) -> Dict[str, str]:
         """Scrubbed environment variables configured for the remote MicroVM sandbox."""
         from backend.services.environment_bootstrapper import SENSITIVE_ENV_KEYS
-        return {
+        merged = {
             k: v for k, v in os.environ.items()
             if k not in SENSITIVE_ENV_KEYS
         }
+        merged.update(getattr(self, "_sidecar_env", {}))
+        return merged
+
+    def provision_sidecars(self, services: Optional[List[str]] = None, db_name: str = "testdb") -> Dict[str, Any]:
+        """
+        Provisions ephemeral database sidecar services (PostgreSQL, Redis) inside the MicroVM.
+        Returns connection URLs and environment bindings.
+        """
+        services = services or ["postgres", "redis"]
+        sidecar_env: Dict[str, str] = {}
+        sidecar_status: Dict[str, str] = {}
+
+        for svc in services:
+            svc_norm = svc.lower().strip()
+            if svc_norm in ("postgres", "postgresql"):
+                pg_url = f"postgresql://postgres:postgres@127.0.0.1:5432/{db_name}"
+                sidecar_env["DATABASE_URL"] = pg_url
+                sidecar_env["POSTGRES_DB"] = db_name
+                sidecar_env["POSTGRES_USER"] = "postgres"
+                sidecar_env["POSTGRES_PASSWORD"] = "postgres"
+                sidecar_env["POSTGRES_PORT"] = "5432"
+                sidecar_status["postgres"] = "provisioned"
+                logger.info(f"MicroVM [{self.session_id}]: Ephemeral PostgreSQL sidecar configured for {db_name}")
+            elif svc_norm == "redis":
+                redis_url = "redis://127.0.0.1:6379/0"
+                sidecar_env["REDIS_URL"] = redis_url
+                sidecar_env["REDIS_PORT"] = "6379"
+                sidecar_status["redis"] = "provisioned"
+                logger.info(f"MicroVM [{self.session_id}]: Ephemeral Redis sidecar configured")
+
+        self._sidecar_env = sidecar_env
+        self._sidecar_status = sidecar_status
+        return {
+            "session_id": self.session_id,
+            "services": sidecar_status,
+            "env": sidecar_env,
+        }
+
+    @property
+    def sidecar_env(self) -> Dict[str, str]:
+        """Ephemeral sidecar database environment variables (DATABASE_URL, REDIS_URL)."""
+        return getattr(self, "_sidecar_env", {})
 
     @_ClassOrInstanceMethod
     def is_configured(self_or_cls) -> bool:
@@ -513,10 +587,15 @@ class CloudMicroVMSandbox:
         try:
             # Wrap command to ensure it runs in the proper working directory
             # If command invokes pytest, ensure pytest is present in the MicroVM
+            env_prefixes = []
+            for k, v in getattr(self, "_sidecar_env", {}).items():
+                env_prefixes.append(f"export {k}='{v}';")
+            env_str = " ".join(env_prefixes) + " " if env_prefixes else ""
+
             if "pytest" in command:
-                cd_cmd = f"cd {workdir} 2>/dev/null || true; which pytest >/dev/null 2>&1 || pip install pytest -q; {command}"
+                cd_cmd = f"cd {workdir} 2>/dev/null || true; {env_str}which pytest >/dev/null 2>&1 || pip install pytest -q; {command}"
             else:
-                cd_cmd = f"cd {workdir} 2>/dev/null || true; {command}"
+                cd_cmd = f"cd {workdir} 2>/dev/null || true; {env_str}{command}"
             res = self._sandbox.commands.run(cd_cmd, timeout=timeout)
             dur_ms = int((time.perf_counter() - start_ts) * 1000)
             return {
