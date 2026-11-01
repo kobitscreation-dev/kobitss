@@ -284,6 +284,77 @@ async def build_agent_context(
         except Exception:
             pass
 
+    # 8E. Biologically Inspired 3-Tier Memory OS (Episodic, Semantic, Procedural)
+    if project and getattr(project, "id", None) and organization_id:
+        try:
+            from backend.services.memory_os_service import MemoryOSService
+
+            # 1) Episodic Memory: filter out decayed memories below R(t) = 0.15
+            ep_hits = await MemoryOSService.query_episodic(
+                db=db,
+                org_id=organization_id,
+                project_id=project.id,
+                query_text=search_query or None,
+                min_retention=0.15,
+                limit=8,
+            )
+            if ep_hits:
+                context_parts.append("\n==================================================")
+                context_parts.append("## BIOLOGICALLY INSPIRED EPISODIC MEMORY (HIGH RETENTION & STABILITY)")
+                context_parts.append("==================================================")
+                for ep_rec, live_r in ep_hits:
+                    ep_tags = ep_rec.get_tags() if hasattr(ep_rec, "get_tags") else (ep_rec.tags or [])
+                    tag_str = f" [tags: {', '.join(str(t) for t in ep_tags)}]" if ep_tags else ""
+                    context_parts.append(
+                        f"- [R(t)={live_r:.2f}, S={float(ep_rec.stability):.0f}s, recalls={int(ep_rec.recall_count or 0)}]{tag_str} {ep_rec.content}"
+                    )
+
+            # 2) Semantic Memory: strictly ACTIVE architectural invariants & domain constraints
+            sem_hits = await MemoryOSService.query_semantic(
+                db=db,
+                org_id=organization_id,
+                project_id=project.id,
+                status="ACTIVE",
+                limit=15,
+            )
+            if sem_hits:
+                context_parts.append("\n==================================================")
+                context_parts.append("## ACTIVE SEMANTIC ARCHITECTURAL INVARIANTS & DOMAIN CONSTRAINTS")
+                context_parts.append("==================================================")
+                for sem_rec in sem_hits:
+                    context_parts.append(
+                        f"- [{sem_rec.subject} :: {sem_rec.key}] (confidence={float(sem_rec.confidence):.2f}): {sem_rec.statement}"
+                    )
+
+            # 3) Procedural Memory: Laplace-smoothed reliability-ranked execution playbooks
+            pb_hits = await MemoryOSService.query_playbooks(
+                db=db,
+                org_id=organization_id,
+                project_id=project.id,
+                context_query=search_query or None,
+                limit=5,
+            )
+            if pb_hits:
+                context_parts.append("\n==================================================")
+                context_parts.append("## MATCHING PROCEDURAL EXECUTION PLAYBOOKS")
+                context_parts.append("==================================================")
+                for pb in pb_hits:
+                    steps_list = pb.steps or []
+                    fmt_steps = []
+                    for idx_s, st in enumerate(steps_list, start=1):
+                        if isinstance(st, dict):
+                            st_txt = st.get("command") or st.get("action") or st.get("description") or json.dumps(st)
+                        else:
+                            st_txt = str(st)
+                        fmt_steps.append(f"{idx_s}. {st_txt}")
+                    steps_summary = " -> ".join(fmt_steps) if fmt_steps else "(no steps)"
+                    context_parts.append(
+                        f"- Playbook '{pb.name}' (v{pb.version}, reliability={pb.reliability:.2f}, runs={pb.total_runs}): "
+                        f"{pb.description or ''} | Steps: {steps_summary}"
+                    )
+        except Exception:
+            pass
+
     # 9. Task Context (Sanitized & Delimited with <user_instruction> Boundary Tags)
     from app.ai.sanitizer import PromptSanitizer
     safe_title = PromptSanitizer.wrap_user_instruction(task.title or "", source="task_title", strict=False)

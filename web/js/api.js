@@ -426,7 +426,71 @@ index 0000000..9b62a4f
       return FAKE_TEAM;
     }
 
-    // 8. Memory entries
+    // 8. Memory OS (3-Tier Biologically Inspired + Legacy Memory entries)
+    if (path.includes('/memory/')) {
+      if (path.includes('/episodic') && method === 'POST') {
+        if (path.includes('/recall') || path.includes('/reinforce')) {
+          return { id: "demo-ep-1", content: "Reinforced episode", stability: 129600, retention: 1.0, recall_count: 3, last_recalled_at: new Date().toISOString(), tags: ["wal", "sqlite"] };
+        }
+        if (path.includes('/prune')) {
+          return { pruned_count: 0, min_retention: 0.05 };
+        }
+        return { id: "demo-ep-" + Date.now(), content: (body && body.content) || "Stored episode", stability: (body && body.stability) || 86400, retention: 1.0, recall_count: 0, last_recalled_at: new Date().toISOString(), tags: (body && body.tags) || [] };
+      }
+      if (path.includes('/episodic')) {
+        return {
+          results: [
+            { id: "demo-ep-1", content: "Resolved SQLite concurrent reader contention by enabling PRAGMA journal_mode=WAL and busy_timeout=30000.", stability: 172800, retention: 0.96, recall_count: 2, last_recalled_at: new Date(Date.now() - 3600000 * 2).toISOString(), tags: ["sqlite", "wal", "concurrency"] },
+            { id: "demo-ep-2", content: "Eliminated FastAPI trailing-slash 307 redirect on stateless MCP JSON-RPC endpoint by registering dual route decorators.", stability: 86400, retention: 0.89, recall_count: 1, last_recalled_at: new Date(Date.now() - 3600000 * 3).toISOString(), tags: ["fastapi", "mcp", "jsonrpc"] }
+          ],
+          count: 2
+        };
+      }
+      if (path.includes('/semantic') && method === 'POST') {
+        if (path.includes('/resolve')) {
+          return { winning_id: (body && body.winning_id) || "demo-sem-1", superseded_id: (body && body.superseded_id) || "demo-sem-0", belief_propagation: { affected_count: 1, iterations: 1, converged: true } };
+        }
+        if (path.includes('/propagate')) {
+          return { root_id: "demo-sem-1", affected_count: 0, iterations: 1, converged: true };
+        }
+        return { id: "demo-sem-" + Date.now(), subject: (body && body.subject) || "architecture", key: (body && body.key) || "rule", statement: (body && body.statement) || "", confidence: 1.0, base_confidence: 1.0, status: "ACTIVE", conflict: null };
+      }
+      if (path.includes('/semantic')) {
+        return {
+          results: [
+            { id: "demo-sem-1", subject: "architecture", key: "tenant_isolation", statement: "All long-term memory records must enforce composite (organization_id, project_id) row-level isolation.", confidence: 1.0, base_confidence: 1.0, status: "ACTIVE", depends_on_ids: [] },
+            { id: "demo-sem-2", subject: "security", key: "audit_ledger", statement: "Every memory mutation must append a SHA-256 hash-chained MemoryLedgerEntry anchored to GENESIS_HASH.", confidence: 0.98, base_confidence: 0.98, status: "ACTIVE", depends_on_ids: ["demo-sem-1"] }
+          ],
+          count: 2
+        };
+      }
+      if ((path.includes('/playbooks') || path.includes('/procedural')) && method === 'POST') {
+        if (path.includes('/execute') || path.includes('/record-execution')) {
+          return { id: "demo-pb-1", name: "Cleanroom Verification Pipeline", version: 1, success_count: 9, failure_count: 0, reliability: 0.9091, steps: ["pytest -q", "python -m scripts.verify_parity"] };
+        }
+        return { id: "demo-pb-" + Date.now(), name: (body && body.name) || "Playbook", description: (body && body.description) || "", steps: (body && body.steps) || [], trigger_tags: (body && body.trigger_tags) || [], preconditions: (body && body.preconditions) || [], version: 1, success_count: 0, failure_count: 0, reliability: 0.5 };
+      }
+      if (path.includes('/playbooks') || path.includes('/procedural')) {
+        return {
+          results: [
+            { id: "demo-pb-1", name: "Cleanroom Sandbox Verification", description: "Executes AST compiler diagnostics, hermetic pytest suite, and static parity checks.", version: 2, trigger_tags: ["ci", "pytest", "cleanroom"], preconditions: ["isolated git worktree"], steps: ["py -3.12 -m pytest tests/test_memory_os_suite.py -q", "Verify 0 HeadlessLSPService diagnostics"], success_count: 8, failure_count: 0, total_runs: 8, reliability: 0.9 }
+          ],
+          count: 1
+        };
+      }
+      if (path.includes('/ledger/verify') || path.includes('/integrity/verify')) {
+        return { is_valid: true, valid: true, corrupted_entry_id: null, error_message: null, entry_count: 5, latest_sequence: 5, head_hash: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08" };
+      }
+      if (path.includes('/ledger') || path.includes('/audit-trail')) {
+        return {
+          entries: [
+            { id: "led-5", sequence_number: 5, mutation_type: "PLAYBOOK_EXECUTED", record_id: "demo-pb-1", previous_hash: "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a", entry_hash: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", timestamp: new Date(Date.now() - 1800000).toISOString() },
+            { id: "led-4", sequence_number: 4, mutation_type: "SEMANTIC_CREATED", record_id: "demo-sem-2", previous_hash: "0000000000000000000000000000000000000000000000000000000000000000", entry_hash: "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a", timestamp: new Date(Date.now() - 3600000).toISOString() }
+          ],
+          count: 2
+        };
+      }
+    }
     if (path.includes('/memory')) {
       return {
         memories: [

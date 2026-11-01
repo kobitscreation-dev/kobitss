@@ -61,7 +61,22 @@ __all__ = [
     "AuditCategory",
     "AuditSeverity",
     "GENESIS_HASH",
+    "EpisodicMemoryRecord",
+    "SemanticConstraintStatus",
+    "SemanticConstraintRecord",
+    "ProceduralPlaybook",
+    "MemoryLedgerEntry",
+    "LedgerEntry",
 ]
+
+from backend.models.memory_os import (
+    EpisodicMemoryRecord,
+    SemanticConstraintStatus,
+    SemanticConstraintRecord,
+    ProceduralPlaybook,
+    MemoryLedgerEntry,
+    LedgerEntry,
+)
 
 from backend.models.intelligence import TaskContract, ProcessMemory, IntelligenceTrace, MemoryUsefulness, HumanFeedback
 

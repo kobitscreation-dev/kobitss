@@ -27,6 +27,7 @@ from backend.models.debate_log import DebateLog
 from backend.models.communication import *
 from backend.models.intelligence import *
 from backend.models.memory import *
+from backend.models.memory_os import *
 from backend.models.audit_log import AuditLog
 from backend.models.password_reset import PasswordResetToken
 from backend.models.waitlist import WaitlistLead
@@ -511,7 +512,7 @@ app.add_middleware(
     RateLimiterMiddleware,
     max_requests=100,
     window_seconds=60,
-    exempt_paths=("/api/health", "/health"),
+    exempt_paths=("/api/health", "/health", "/api/v1/mcp", "/api/v1/mcp/"),
 )
 
 # Enterprise HTTP security headers middleware (Layer 2)
@@ -924,8 +925,9 @@ app.include_router(billing.router, prefix="/api/v1/billing", tags=["Billing & Le
 
 app.include_router(missions.router, prefix="/api/v1/missions", tags=["Missions"])
 
-from backend.api.v1 import memory
+from backend.api.v1 import memory, mcp
 app.include_router(memory.router, prefix="/api/v1/memory", tags=["Knowledge & Memory"])
+app.include_router(mcp.router, prefix="/api/v1/mcp", tags=["Model Context Protocol (MCP)"])
 app.include_router(tools.router, prefix="/api/v1/tools", tags=["Tools"])
 
 from backend.api.v1 import builder

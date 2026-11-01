@@ -201,6 +201,7 @@ function syncTriadNavBar(activeSurface, explicitRole, orgData) {
   const navPortal = document.getElementById('ky-nav-portal');
   const navAdmin = document.getElementById('ky-nav-admin');
   const navConsole = document.getElementById('ky-nav-console');
+  const navMemory = document.getElementById('ky-nav-memory');
   const btnNewProject = document.getElementById('ky-topbar-new-project');
   const btnTour = document.getElementById('ky-topbar-tour');
   const btnNewMission = document.getElementById('ky-topbar-new');
@@ -278,6 +279,9 @@ function syncTriadNavBar(activeSurface, explicitRole, orgData) {
     if (navConsole) {
       navConsole.style.display = isOperator ? '' : 'none';
       navConsole.classList.toggle('ky-surface-nav-active', activeSurface === 'console');
+    }
+    if (navMemory) {
+      navMemory.classList.toggle('ky-surface-nav-active', activeSurface === 'memory');
     }
     if (navPortal) {
       navPortal.classList.toggle('ky-surface-nav-active', activeSurface === 'portal');
@@ -393,7 +397,7 @@ async function fetchDashboard(silent = false) {
     return;
   }
   const isMissionRoute = initialCurH.startsWith('missions') || initialCurH.startsWith('mission');
-  if (!silent && !state.dashboard && !isMissionRoute && initialCurH !== 'settings' && initialCurH !== 'new-project') {
+  if (!silent && !state.dashboard && !isMissionRoute && initialCurH !== 'settings' && initialCurH !== 'new-project' && initialCurH !== 'memory') {
     view.innerHTML = `<div class="ky-card" style="text-align:center;padding:48px 24px;max-width:540px;margin:40px auto">
       <div class="ky-eyebrow" style="color:var(--text-3);margin-bottom:8px">LOADING WORKSPACE</div>
       <h2 style="font-size:18px;margin:0 0 10px;font-weight:700">Connecting to Engineering Control Plane…</h2>
@@ -443,6 +447,9 @@ async function fetchDashboard(silent = false) {
     }
     if (curH === 'new-project') {
       if (!silent) renderNewProjectPage();
+      return;
+    }
+    if (curH === 'memory') {
       return;
     }
     if (curH.startsWith('missions') || curH.startsWith('mission')) {
@@ -1841,6 +1848,9 @@ function initTopBar() {
       localStorage.removeItem('kobits.projectId');
     }
     fetchDashboard();
+    if (getEffectiveTriadRoute() === 'memory') {
+      import('./views/memory.js').then(mod => mod.render());
+    }
   });
 
   const newProjBtn = document.getElementById('ky-topbar-new-project');
@@ -1891,6 +1901,12 @@ function initTopBar() {
       dispatchTriadSurfaceRoute(rawH);
       return;
     }
+    if (h === 'memory') {
+      syncTriadNavBar('memory');
+      import('./views/memory.js').then(mod => mod.render());
+      return;
+    }
+    syncTriadNavBar('');
     if (h === 'github') {
       openGitHubModal();
       return;
@@ -1915,8 +1931,8 @@ function initTopBar() {
       import('./views/missions.js').then(mod => mod.render());
       return;
     }
-    if (['overview', 'milestones', 'deliverables', 'team', 'reports'].includes(h)) {
-      state.tab = h;
+    if (['overview', 'milestones', 'deliverables', 'team', 'reports'].includes(h) || h === '') {
+      state.tab = h || 'overview';
       renderDashboard();
     }
   });
@@ -3261,6 +3277,9 @@ initLiveWebSocket();
 
 if (isTriadSurfaceRoute(initialHash)) {
   // Dispatched cleanly via fetchDashboard()
+} else if (initialHash === 'memory') {
+  syncTriadNavBar('memory');
+  import('./views/memory.js').then(mod => mod.render());
 } else if (initialHash === 'settings') {
   renderSettingsPage();
 } else if (initialHash === 'new-project') {
